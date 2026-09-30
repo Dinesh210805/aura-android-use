@@ -9,7 +9,7 @@ package com.aura.aura_ui.voice
 enum class ListeningMode {
     /**
      * Wake word detection active.
-     * Low-power Porcupine running continuously.
+     * Low-power keyword spotting running continuously.
      * Transitions to ACTIVE when wake word detected.
      */
     PASSIVE,

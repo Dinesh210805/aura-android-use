@@ -41,7 +41,6 @@ the repo.
 | ONNX Runtime for Android (`com.microsoft.onnxruntime`) | MIT |
 | Bouncy Castle PKIX (`org.bouncycastle:bcpkix-jdk18on`) | Bouncy Castle Licence (MIT-style) |
 | JSON-java (`org.json:json:20230618`) | Public Domain |
-| Porcupine Android SDK (`ai.picovoice`) | Apache-2.0 for the SDK. The engine requires a Picovoice AccessKey under Picovoice's terms. *Covered by the linking exception.* |
 | Firebase: Analytics, Auth, Firestore, Remote Config, Crashlytics (+NDK) | Google terms / Apache-2.0 per artifact. *Covered by the linking exception.* |
 | Google Play services and Sign in with Google (`googleid`, `credentials-play-services-auth`) | Google proprietary terms. *Covered by the linking exception.* |
 | Google ML Kit Text Recognition | ML Kit Terms of Service. *Covered by the linking exception.* |
@@ -65,10 +64,3 @@ runtime through the Google Fonts provider. They aren't bundled.
 - **`aura-mcp-connect/`** is licensed **MIT** (see `aura-mcp-connect/LICENSE`), not AGPL. It's
   already published to npm under MIT, and a small desktop bridge is more useful when anyone can
   embed it.
-
-## Note on Picovoice
-
-The Picovoice "Hey Aura" keyword file was removed on 2026-09-26. The wake word runs on the
-sherpa-onnx keyword spotter above. The Porcupine SDK is still linked by an unused
-`PorcupineWakeWordDetector` class. Deleting that class and the `ai.picovoice` dependency is the
-next step, and after that Picovoice can come off this list and out of `LICENSE-EXCEPTION.md`.

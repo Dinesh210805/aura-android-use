@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
  * 
  * Key features:
  * - Runs as foreground service with low-priority notification
- * - Uses Picovoice Porcupine for efficient wake word detection
+ * - Uses sherpa-onnx keyword spotting ([WakeWordDetector.create]) for the wake word
  * - Coordinates with ListeningModeController to avoid audio conflicts
  * - Battery efficient (~1% CPU usage)
  * 
@@ -313,7 +313,7 @@ class WakeWordListeningService : Service() {
             Log.i(TAG, "Wake word detector created: $detectorType")
             
             if (wakeWordDetector is StubWakeWordDetector) {
-                Log.w(TAG, "⚠️ Using stub detector - wake word will not work! Check Picovoice access key.")
+                Log.w(TAG, "⚠️ Using stub detector - wake word will not work! The sherpa-onnx engine failed to load.")
             }
             
             setupWakeWordDetector()

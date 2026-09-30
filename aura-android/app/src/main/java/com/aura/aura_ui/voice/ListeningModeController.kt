@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  * This controller ensures only one audio consumer is active at any time.
  * 
  * Flow:
- * 1. PASSIVE: Porcupine wake word detection active
+ * 1. PASSIVE: wake word detection active
  * 2. Wake word detected → transitionToActive()
  * 3. ACTIVE: STT streaming, wake word paused
  * 4. Command complete → transitionToPassive()

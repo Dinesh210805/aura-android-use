@@ -29,10 +29,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Free, fully-offline wake-word detection powered by sherpa-onnx keyword spotting
- * (Apache-2.0). Replaces the Picovoice Porcupine detector, whose free tier now
- * requires an organizational account.
+ * (Apache-2.0).
  *
- * How it differs from Porcupine under the same [WakeWordDetector] interface:
+ * How it works:
  * - The engine is a tiny streaming zipformer transducer ("open-vocabulary KWS"),
  *   so the wake phrase is just lines of BPE tokens in `assets/kws/keywords.txt` — no
  *   cloud console, no per-device `.ppn`, no access key.

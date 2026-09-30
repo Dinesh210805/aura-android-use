@@ -359,13 +359,8 @@ dependencies {
     // Static-link AAR: ONNX Runtime baked into libsherpa-onnx-jni.so, so it does
     // NOT collide with OmniParser's onnxruntime-android:1.19.0 (that runtime is
     // left untouched). Vendored in app/libs/ (git-ignored, fetched by the guard
-    // above). Replaces Picovoice Porcupine, which now gates its free tier behind
-    // an organizational account.
+    // above).
     implementation(files("libs/sherpa-onnx-static-link-onnxruntime-1.12.28.aar"))
-
-    // Wake Word Detection - Picovoice Porcupine (LEGACY — kept as fallback until
-    // the sherpa-onnx swap is verified on-device; remove once SherpaKwsWakeWordDetector ships).
-    implementation("ai.picovoice:porcupine-android:4.0.0")
     
     // Data Storage
     implementation("androidx.datastore:datastore-preferences:1.0.0")

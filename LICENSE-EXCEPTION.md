@@ -1,5 +1,7 @@
 # Additional permission under GNU AGPL version 3, section 7
 
+Copyright (C) 2026 Dinesh Kumar C
+
 AURA is licensed under the GNU Affero General Public License, version 3 or (at your option) any
 later version. The full licence text is in [`LICENSE`](LICENSE). This file grants one extra
 permission on top of that licence, as section 7 of the AGPL allows.
@@ -26,7 +28,6 @@ The libraries this permission covers:
    Google library (`com.google.android.libraries.identity.googleid:*`).
 2. **Firebase** SDKs (`com.google.firebase:*`) and the parts of Google Play services they depend on.
 3. **Google ML Kit** (`com.google.mlkit:*`) and the models it downloads or bundles.
-4. **Picovoice Porcupine** (`ai.picovoice:*`), including its native engine and keyword files.
 
 Only the libraries listed above are covered. Any other library linked with AURA must be under a
 licence compatible with the GNU AGPL version 3.
