@@ -1,124 +1,39 @@
-# Python bytecode and caches
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.pyre/
-.hypothesis/
-
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
-
-# Build and packaging artifacts
+# Dependencies and build output
+node_modules/
 build/
 dist/
 *.egg-info/
-.eggs/
+*.log
 
-# Coverage and test artifacts
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Test coverage
 .coverage
-.coverage.*
 htmlcov/
-.cache/
+coverage/
 
-# Local environment and secrets
+# Secrets and machine-local config. The *.example files show the expected shape.
 .env
 .env.*
 !.env.example
-
-# IDE/editor settings
-.vscode/
-.idea/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Project runtime artifacts
-
-terminal_logs/
-data/failure_screenshots/
-
-# Optional local tooling/workspace folders
-.kiro/
-Google-Edge-AI-gallery-main/
-logs
-code helpers
-D:\PROJECTS\Gemini Live Hackathon\aura-live\code helpers
-openclaw-main
-coding agent
-# Claude Code session transcript logs
-*.txt
-!requirements*.txt
-# The wake-word model reads these at runtime.
-!aura-android/app/src/main/assets/kws/*.txt
-# Golden-file test fixtures. These ARE the assertion — a fixture that is not committed makes
-# its test pass locally and fail on a clean checkout with "missing fixture", which reads as a
-# broken test rather than as the untracked file it is. (Found 2026-08-26, the hard way.)
-!aura-android/**/src/test/resources/golden/*.txt
-.video
-.coding agent
-# graphify generated code-graph output (regenerable; any location)
-graphify-out/
-.graphify_*
-
-# Local MCP client config — carries a one-time WebRTC pairing PIN; never commit
 .mcp.json
-
-# Claude Code local-only session/brainstorm state — never commit
-.superpowers/
-
-# Claude Code machine-specific overrides — never commit
-.claude/settings.local.json
-
-# Scratch/eval output — never commit
-_gtmp/
-
-# On-device logcat dumps. These capture the LIVE session, which means BYOK API
-# keys (AIzaSy…) and other apps' log output land in them verbatim, and they run
-# to tens of MB. Never commit — a binary/secret blob in history is unfixable
-# without a history rewrite.
-scratch_live_*.log
-*.logcat
-
-# Site build cache
-site/scripts/.cache_metadata/
-
-# Firebase CLI local state
-.firebase/
-
-# Playwright MCP session artifacts (console logs + page snapshots)
-.playwright-mcp/
-
-# Local verification screenshots — some capture console/account UI
-fleet-signin*.png
-hero-live-check.png
-
-# Personal documents that happen to sit in the repo root — never commit
-Dinesh_Kumar_Resume.*
-
-# Extracted reference code, not part of the build
-overlay-feature-code/
-
-# AndroidWorld benchmark: upstream clone + its venv, not ours to track
-android_world/
-androidworld-venv/
-
-# Benchmark output: regenerable, and the videos are large
-bench-results/
-bench-site/
-runs/
-
-# Local-only: publishing config and private notes (never commit).
-# The *.example.json files next to the two config files show their shape.
-_private/
 aura-android/app/google-services.json
 aura-mcp-connect/firebase-config.json
+# Release signing keys, anywhere in the tree. Losing one means never being able to update the app
+# under the same identity again; leaking one lets anyone ship a forged update. Keep the .jks
+# outside the repo and point at it with an absolute path in aura-android/local.properties.
+*.jks
+*.keystore
+
+# Maintainer-only release tooling: Firebase project config, rules, dashboard and release
+# scripts live beside the checkout but are not part of the open-source tree.
 firebase.json
 .firebaserc
 firestore.rules
@@ -126,6 +41,35 @@ database.rules.json
 dashboard/
 release-app.sh
 release-site.sh
+.firebase/
+_private/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Tool state
+.vercel/
 .claude/
 .agents/
-aura-launch-video/
+.superpowers/
+.playwright-mcp/
+graphify-out/
+.graphify_*
+
+# Chat transcript exports land in the repo root. Root only: a repo-wide *.txt would also hide
+# assets such as assets/kws/*.txt, which the wake word needs.
+/*.txt
+
+# Benchmark and scratch output
+bench-results/
+bench-site/
+runs/
+android_world/
+androidworld-venv/
+_gtmp/
+
+# On-device logcat dumps carry live BYOK API keys and other apps' logs.
+*.logcat

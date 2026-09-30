@@ -1,26 +1,10 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+.gradle/
 .kotlin/
-
-# Release signing keys. Losing one means never being able to update the app
-# under the same identity again; leaking one lets anyone ship a forged update.
-# Prefer keeping the .jks entirely OUTSIDE the repo and pointing at it with an
-# absolute path in local.properties — then no gitignore edit can ever expose it.
-*.jks
-*.keystore
+.cxx/
+.externalNativeBuild/
+/captures/
+*.iml
+local.properties
 
 # Vendored sherpa-onnx wake-word AAR (28 MB) — fetched from its pinned GitHub
 # release by the config-time guard in app/build.gradle.kts. Kept out of git
