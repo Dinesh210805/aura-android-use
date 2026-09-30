@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  The link-preview (Open Graph) card, 1200 x 630, in the website's hero style.
+  - Render: see design/README.md. Output: aura-android-use-website/og.png (1x).
+  - assets/phone-dots.png is the site's own dot phone, captured from the live hero canvas.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AURA share card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@500..900&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet">
+<style>
+  :root { --paper: #E7E9EC; --ink: #0B0C0F; --ink2: #4C5058; --red: #FF2B1C; --line: rgba(11,12,15,.15); }
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1200px; height: 630px; overflow: hidden; position: relative; background: var(--paper);
+         font-family: Geist, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  /* the site's faint dot field behind the hero */
+  body::before { content: ""; position: absolute; inset: 0; opacity: .5;
+                 background-image: radial-gradient(rgba(11,12,15,.16) 1px, transparent 1.2px); background-size: 22px 22px;
+                 -webkit-mask-image: radial-gradient(ellipse 60% 75% at 78% 50%, #000 30%, transparent 75%);
+                 mask-image: radial-gradient(ellipse 60% 75% at 78% 50%, #000 30%, transparent 75%); }
+  .brand { position: absolute; left: 72px; top: 62px; display: flex; align-items: center; gap: 14px; }
+  .brand img { width: 30px; height: 30px; }
+  .brand b { font-size: 30px; font-weight: 600; letter-spacing: .02em; }
+  .brand span { font-family: 'Geist Mono', monospace; font-size: 18px; color: var(--ink2); border: 1px solid var(--line);
+                border-radius: 999px; padding: 5px 14px; margin-left: 6px; }
+  h1 { position: absolute; left: 66px; top: 140px; font-family: Doto, monospace; font-weight: 900; font-size: 104px;
+       line-height: .98; letter-spacing: -.01em; }
+  .sub { position: absolute; left: 72px; top: 404px; font-size: 40px; font-weight: 500; letter-spacing: -.015em; }
+  .sub em { font-style: normal; color: var(--red); }
+  .foot { position: absolute; left: 72px; top: 540px; font-family: 'Geist Mono', monospace; font-size: 20px; color: var(--ink2); }
+  .phone { position: absolute; right: 100px; top: 34px; height: 572px; transform: rotate(-4deg);
+           filter: drop-shadow(0 30px 40px rgba(11,12,15,.10)); }
+  .tap { position: absolute; background: var(--ink); color: #F3F4F6; font-family: 'Geist Mono', monospace; font-size: 19px;
+         border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+         box-shadow: 0 18px 40px -16px rgba(11,12,15,.55); }
+  .tap i { width: 9px; height: 9px; border-radius: 50%; background: var(--red); display: block; }
+</style>
+</head>
+<body>
+  <div class="brand"><img src="../aura-android-use-website/media/aura_logo_mono.png" alt=""><b>AURA</b><span>android-use</span></div>
+  <h1>Open-source<br>hands</h1>
+  <p class="sub">for <em>AI agents</em> to control your Android.</p>
+  <p class="foot">MCP server on your phone · AGPL-3.0 · No root · No cable</p>
+  <img class="phone" id="phone" src="assets/phone-dots.png" alt="">
+  <div class="tap" id="tap"><i></i>tap {"som_id": 7}</div>
+<script>
+  // Park the tap chip just left of the phone's red tap ring (at 39% x, 46% y of the capture).
+  const ph = document.getElementById('phone');
+  const place = () => {
+    const r = ph.getBoundingClientRect(), tap = document.getElementById('tap');
+    const ringX = r.left + r.width * .39, ringY = r.top + r.height * .46;
+    tap.style.left = (ringX - tap.offsetWidth - 70) + 'px';
+    tap.style.top = (ringY - tap.offsetHeight / 2) + 'px';
+  };
+  ph.complete ? place() : ph.addEventListener('load', place);
+</script>
+</body>
+</html>

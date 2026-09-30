@@ -94,13 +94,13 @@ OpenAI-compatible endpoint, with your own API key. Switch whenever you like.
 ## How it works
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/readme/architecture-dark.svg"/>
-    <img src=".github/readme/architecture-light.svg" alt="AURA architecture: you ask by voice or text; the on-phone agent asks your LLM what to do and calls tools on the MCP server inside the app; every call passes the safety gate before the accessibility service taps and types in your apps. An MCP client on your computer reaches the same server through the aura-mcp-connect daemon over LAN-only WebRTC." width="100%"/>
-  </picture>
+  <img src=".github/readme/architecture.png" alt="AURA architecture: you talk or type; Conversation mode streams audio to Gemini Live and voice commands go through Groq Whisper; both hand a request to the AURA agent on the phone, which asks your LLM for the next step and calls tools on the MCP server inside the app. Every call passes the safety gate before the accessibility service taps and types in your apps. MCP clients on your computer reach the same server through the aura-mcp-connect daemon over LAN-only WebRTC." width="100%"/>
 </p>
 
-1. **You ask**, by voice or text. Speech goes to Groq Whisper with your key and comes back as text.
+1. **You ask**, by voice or text. There are two ways to talk:
+   - **Voice commands** ("Hello AURA"): speech goes to Groq Whisper with your key and comes back as text.
+   - **Conversation mode**: a real-time back-and-forth with Gemini Live, using your Gemini key. When you
+     ask it to *do* something, it hands the task to the agent through one tool, `ask_aura`.
 2. **The agent runs on the phone.** It sends your goal and what's on screen to the LLM you
    picked, and gets back the next tool to call.
 3. **Every tool call goes through one MCP server and one safety gate**, whether it comes from
@@ -111,8 +111,7 @@ OpenAI-compatible endpoint, with your own API key. Switch whenever you like.
 5. **Your computer is optional.** `aura-mcp-connect` runs a small local daemon that MCP clients
    talk to, and it reaches the phone over an encrypted WebRTC link on your local network only.
 
-<sub>Want to poke at it? The [interactive version](https://aura-android-use.vercel.app/architecture)
-links every box to the code behind it.</sub>
+<sub>The same diagram is on the website at [/architecture](https://aura-android-use.vercel.app/architecture).</sub>
 
 ## Highlights
 
@@ -324,8 +323,8 @@ License v3.0 or later**. See [`LICENSE`](LICENSE).
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (wake word) ·
 [ONNX Runtime](https://onnxruntime.ai) with an [OmniParser](https://github.com/microsoft/OmniParser)
 icon detector · [ML Kit](https://developers.google.com/ml-kit) text recognition ·
-[Silero VAD](https://github.com/snakers4/silero-vad). Diagram made with
-[Archify](https://github.com/tt-a1i/archify).
+[Silero VAD](https://github.com/snakers4/silero-vad). Diagram icons from
+[Lucide](https://lucide.dev) (ISC).
 
 <p align="center">
   <sub>Built by one person. If AURA is useful to you, a ⭐ helps other people find it.</sub>
