@@ -17,6 +17,7 @@
   <a href="https://www.npmjs.com/package/aura-mcp-connect"><img src="https://img.shields.io/npm/v/aura-mcp-connect?label=aura-mcp-connect&style=flat-square&color=0A0A0A&logo=npm&logoColor=white" alt="npm"/></a>
   <a href="https://aura-android-use.vercel.app"><img src="https://img.shields.io/github/deployments/Dinesh210805/aura-android-use/Production?label=website&style=flat-square&logo=vercel&logoColor=white" alt="Website"/></a>
   <a href="https://discord.com/invite/H66ws9zMPF"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"/></a>
+  <a href="https://m8ven.ai/mcp/dinesh210805/aura-android-use"><img src="https://m8ven.ai/badge/mcp/dinesh210805/aura-android-use" alt="M8ven Score"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-A31621?style=flat-square" alt="AGPL-3.0"/></a>
 </p>
 
