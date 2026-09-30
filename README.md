@@ -71,8 +71,8 @@ flowchart LR
 
 ### 1. Get the app on your phone
 
-Build it from source (see [Build from source](#build-from-source)) and install the APK. You
-need Android 8.0 or newer.
+Download the latest APK from [Releases](https://github.com/Dinesh210805/aura-releases/releases/latest)
+and install it, or [build it from source](#build-from-source). You need Android 8.0 or newer.
 
 The first-run setup walks you through signing in, the permissions AURA needs (accessibility,
 display over other apps, microphone, notifications, keyboard) and choosing an AI provider and key.

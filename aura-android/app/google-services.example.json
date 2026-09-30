@@ -8,20 +8,50 @@
     {
       "client_info": {
         "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
-        "android_client_info": { "package_name": "com.aura.aura_ui.feature" }
+        "android_client_info": {
+          "package_name": "com.aura.aura_ui.feature"
+        }
       },
-      "oauth_client": [],
-      "api_key": [{ "current_key": "YOUR_ANDROID_API_KEY" }],
-      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+      "oauth_client": [
+        {
+          "client_id": "000000000000-your-web-client.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "YOUR_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
     },
     {
       "client_info": {
         "mobilesdk_app_id": "1:000000000000:android:1111111111111111111111",
-        "android_client_info": { "package_name": "com.aura.aura_ui.feature.debug" }
+        "android_client_info": {
+          "package_name": "com.aura.aura_ui.feature.debug"
+        }
       },
-      "oauth_client": [],
-      "api_key": [{ "current_key": "YOUR_ANDROID_API_KEY" }],
-      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+      "oauth_client": [
+        {
+          "client_id": "000000000000-your-web-client.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "YOUR_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
     }
   ],
   "configuration_version": "1"

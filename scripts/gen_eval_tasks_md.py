@@ -168,6 +168,7 @@ def main() -> int:
         print(f"{TARGET.name} is up to date ({len(tasks)} tasks)")
         return 0
 
+    TARGET.parent.mkdir(parents=True, exist_ok=True)
     TARGET.write_text(rendered, encoding="utf-8")
     print(f"wrote {TARGET.relative_to(REPO)} ({len(tasks)} tasks)")
     return 0
