@@ -16,8 +16,8 @@
   <a href="https://github.com/Dinesh210805/aura-releases/releases"><img src="https://img.shields.io/github/downloads/Dinesh210805/aura-releases/total?label=downloads&style=flat-square&color=0A0A0A" alt="Downloads"/></a>
   <a href="https://www.npmjs.com/package/aura-mcp-connect"><img src="https://img.shields.io/npm/v/aura-mcp-connect?label=aura-mcp-connect&style=flat-square&color=0A0A0A&logo=npm&logoColor=white" alt="npm"/></a>
   <a href="https://aura-android-use.vercel.app"><img src="https://img.shields.io/github/deployments/Dinesh210805/aura-android-use/Production?label=website&style=flat-square&logo=vercel&logoColor=white" alt="Website"/></a>
+  <a href="https://discord.com/invite/H66ws9zMPF"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-A31621?style=flat-square" alt="AGPL-3.0"/></a>
-  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 8.0+"/>
 </p>
 
 <p align="center">
@@ -27,9 +27,9 @@
   &nbsp;·&nbsp;
   <a href="#quick-start"><b>Quick start</b></a>
   &nbsp;·&nbsp;
-  <a href="aura-mcp-connect/README.md"><b>Connect your computer</b></a>
+  <a href="#how-it-works"><b>How it works</b></a>
   &nbsp;·&nbsp;
-  <a href="#build-from-source"><b>Build from source</b></a>
+  <a href="#come-build-it-with-me"><b>Get involved</b></a>
 </p>
 
 ---
@@ -67,45 +67,59 @@
 
 <p align="center"><sub>Clips are sped up. Click one for the full recording.</sub></p>
 
-## Two ways to use it
+## A quick note before you dive in
 
-**🗣️ An assistant on your phone.** Say "Hello AURA", press both volume keys, or type. Ask for
-something ("message Mum that I'm running late", "turn on dark mode in Instagram") and an on-device
-agent does it in the real apps, step by step, while you watch.
+Hi, I'm Dinesh. AURA is a solo project: I design, build and test it on my own. It does real work
+on real apps, as the clips above show, but it isn't perfect. Some apps fight back, some screens confuse it, and there are bugs I haven't met yet.
+I've listed the ones I know about [below](#known-rough-edges).
+
+I'm opening it up because I think more people should be able to give an AI a real phone, without
+being locked into one company's assistant or one model. If that interests you, I'd really like to
+hear from you. See [Come build it with me](#come-build-it-with-me).
+
+## What it is
+
+**🗣️ An assistant on your phone.** Say "Hello AURA", press both volume keys, or just type. Ask
+for something ("message Mum that I'm running late", "turn on dark mode in Instagram") and the
+agent does it in your real apps, step by step, while you watch. You can stop it at any point.
 
 **🔌 An MCP server inside the phone.** The same 50+ tools are exposed over the
-[Model Context Protocol](https://modelcontextprotocol.io), so an AI agent on your computer can see
-and operate a real phone: test your own apps, automate chores, or give a coding agent hands.
+[Model Context Protocol](https://modelcontextprotocol.io), so an AI agent on your computer can
+see and operate a real phone: test your own apps, automate chores, or give a coding agent hands.
 
-**You bring the brain.** Gemini, Anthropic (Claude), OpenAI, Groq, OpenRouter, Mistral, DeepSeek,
-xAI (Grok), Qwen, Moonshot (Kimi), Z.ai (GLM), Cerebras, Together AI, or any OpenAI-compatible
-endpoint, with your own API key.
+**🧠 You pick the brain.** Gemini, Anthropic (Claude), OpenAI, Groq, OpenRouter, Mistral,
+DeepSeek, xAI (Grok), Qwen, Moonshot (Kimi), Z.ai (GLM), Cerebras, Together AI, or any
+OpenAI-compatible endpoint, with your own API key. Switch whenever you like.
 
-```mermaid
-flowchart LR
-    subgraph PC["💻 Your computer (optional)"]
-        clients["Claude Code · Cursor · VS Code<br/>Claude Desktop · any MCP client"]
-        bridge["aura-mcp-connect<br/>(one local daemon)"]
-        clients -- "http://127.0.0.1:4816/mcp" --> bridge
-    end
+## How it works
 
-    subgraph PHONE["📱 Your phone: the AURA app"]
-        you(["You: voice or text"]) --> agent["On-device agent<br/>(your LLM, your key)"]
-        agent --> tools
-        server["MCP server"] --> tools["50+ tools<br/>see · tap · type · apps · browser · notifications"]
-        tools --> guard["Safety gate<br/>banking & passwords blocked · audit log"]
-        guard --> android["Accessibility API<br/>+ on-device vision"]
-    end
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/readme/architecture-dark.svg"/>
+    <img src=".github/readme/architecture-light.svg" alt="AURA architecture: you ask by voice or text; the on-phone agent asks your LLM what to do and calls tools on the MCP server inside the app; every call passes the safety gate before the accessibility service taps and types in your apps. An MCP client on your computer reaches the same server through the aura-mcp-connect daemon over LAN-only WebRTC." width="100%"/>
+  </picture>
+</p>
 
-    bridge == "same Wi-Fi only<br/>encrypted WebRTC" ==> server
-```
+1. **You ask**, by voice or text. Speech goes to Groq Whisper with your key and comes back as text.
+2. **The agent runs on the phone.** It sends your goal and what's on screen to the LLM you
+   picked, and gets back the next tool to call.
+3. **Every tool call goes through one MCP server and one safety gate**, whether it comes from
+   the agent on the phone or from an MCP client on your computer. Blocked things stay blocked
+   either way.
+4. **The accessibility service does the actual work**: it reads the screen (with an on-device
+   vision model for what the accessibility tree misses) and taps, types and scrolls.
+5. **Your computer is optional.** `aura-mcp-connect` runs a small local daemon that MCP clients
+   talk to, and it reaches the phone over an encrypted WebRTC link on your local network only.
+
+<sub>Want to poke at it? The [interactive version](https://aura-android-use.vercel.app/architecture)
+links every box to the code behind it.</sub>
 
 ## Highlights
 
 | | |
 |---|---|
 | 👁️ **Sees the screen properly** | Every look combines the accessibility tree (exact and fast) with an on-device vision model (YOLOv8 + OCR) that finds what the tree misses: WebViews, games, maps, custom views. The agent picks numbered elements, never guessed coordinates. |
-| ✅ **Acts, then checks** | Perceive → act → verify. A guard refuses to act without looking first, catches loops, and won't let the agent say "done" before checking. |
+| ✅ **Acts, then checks** | Look, act, verify. A guard refuses to act without looking first, catches loops, and won't let the agent say "done" before checking. |
 | ⚡ **Takes shortcuts** | Deep links jump straight to an app's screen, system intents handle calls, SMS, alarms and navigation, and a built-in browser works on the page, not on pixels. |
 | 🎙️ **Voice** | Offline wake word ("Hello AURA", via sherpa-onnx), a volume-key shortcut, the Android assistant gesture, speech-to-text, spoken replies, and a Gemini Live conversation mode. |
 | 🧠 **Remembers how apps work** | Encrypted per-app learnings, reusable skills, runs that survive the app being killed, and an `ask_user` tool so the agent asks instead of guessing. |
@@ -195,6 +209,20 @@ The server also teaches clients how to use it: MCP **instructions** at connect t
 - **Anonymous diagnostics are optional.** Crash reports and usage counts, never content. The
   full list is in the in-app privacy policy, and one switch in Settings turns it off.
 
+## Known rough edges
+
+Being honest about what doesn't work yet:
+
+- **A few apps ignore taps from an accessibility service.** When an app does, the built-in
+  browser or a deep link is usually the way around it.
+- **Google Pay and some banking apps refuse to run while any accessibility service is on.**
+  That's their rule, not AURA's, and AURA stays out of banking apps anyway.
+- **Google sign-in doesn't work inside AURA's browser.** Google blocks sign-in in every embedded
+  browser.
+- **Your own builds still lean on Firebase** for sign-in, crash reports and remote config. Debug
+  builds let you skip sign-in, and a build without Firebase is on the list.
+- **I test on the phones I have.** Yours may well find new bugs. Please tell me when it does.
+
 ## Downloads and deployments
 
 | What | Where | Latest |
@@ -203,8 +231,8 @@ The server also teaches clients how to use it: MCP **instructions** at connect t
 | **Desktop bridge** (`aura-mcp-connect`) | [npm](https://www.npmjs.com/package/aura-mcp-connect) | <a href="https://www.npmjs.com/package/aura-mcp-connect"><img src="https://img.shields.io/npm/v/aura-mcp-connect?label=&style=flat-square&color=0A0A0A" alt="npm version"/></a> |
 | **Website** | [aura-android-use.vercel.app](https://aura-android-use.vercel.app), deployed by Vercel from [`aura-android-use-website/`](aura-android-use-website/) on every push to `main` | <a href="https://aura-android-use.vercel.app"><img src="https://img.shields.io/github/deployments/Dinesh210805/aura-android-use/Production?label=&style=flat-square" alt="Deployment status"/></a> |
 
-APKs are published to a separate `aura-releases` repository because installed copies of the app
-check it for updates.
+APKs live in a separate `aura-releases` repository because installed copies of the app check it
+for updates.
 
 ## Build from source
 
@@ -255,18 +283,23 @@ scripts/                   Evaluation and benchmarking tools
 docs/                      The evaluation task list, generated from the app's eval suite
 ```
 
-## Contributing
+## Come build it with me
 
-Issues and pull requests are welcome.
+AURA has one maintainer, so every good bug report, idea and pull request makes a real difference.
+If you work on agents, Android internals, MCP or on-device ML, or you just like breaking things,
+you're exactly who I'd love to hear from.
 
-- On your first pull request a bot asks you to sign the [CLA](CLA.md). It keeps the project
-  able to offer a commercial licence alongside the AGPL.
-- Read [`AGENTS.md`](AGENTS.md) before changing code. It has the build commands, the comment
-  standard and the rule to update folder READMEs in the same commit. It's written for human
-  contributors and coding agents alike.
-- Run the tests above before opening a pull request.
-- Found a security problem? Please use GitHub's private vulnerability reporting (the
-  **Security** tab) instead of a public issue.
+- **Chat:** come say hi on [Discord](https://discord.com/invite/H66ws9zMPF).
+- **Found a bug?** [Open an issue](https://github.com/Dinesh210805/aura-android-use/issues). A
+  screen recording and your phone model help more than anything.
+- **Want to fix something?** Pull requests are welcome. Read [`AGENTS.md`](AGENTS.md) first: it
+  has the build commands, the comment standard and the rule to update folder READMEs in the same
+  commit, and it's written for human contributors and coding agents alike. Run the tests above
+  before you open the PR. On your first one, a bot asks you to sign the [CLA](CLA.md) once; it
+  keeps the project able to offer a commercial licence alongside the AGPL.
+- **Security problem?** Please use GitHub's private vulnerability reporting (the **Security**
+  tab) instead of a public issue.
+- **Anything else:** [dinesh210805@gmail.com](mailto:dinesh210805@gmail.com).
 
 ## License
 
@@ -291,8 +324,9 @@ License v3.0 or later**. See [`LICENSE`](LICENSE).
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (wake word) ·
 [ONNX Runtime](https://onnxruntime.ai) with an [OmniParser](https://github.com/microsoft/OmniParser)
 icon detector · [ML Kit](https://developers.google.com/ml-kit) text recognition ·
-[Silero VAD](https://github.com/snakers4/silero-vad).
+[Silero VAD](https://github.com/snakers4/silero-vad). Diagram made with
+[Archify](https://github.com/tt-a1i/archify).
 
 <p align="center">
-  <sub>If AURA is useful to you, a ⭐ helps other people find it.</sub>
+  <sub>Built by one person. If AURA is useful to you, a ⭐ helps other people find it.</sub>
 </p>
