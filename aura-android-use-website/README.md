@@ -25,4 +25,4 @@ locally; that script only exists on Vercel.
 4. Project → **Analytics** → **Enable**, then redeploy once so the analytics route goes live.
 
 `vercel.json` turns on clean URLs (`/download`), caches media for a week, and skips a rebuild when
-a commit doesn't touch `aura-android-use-website/`.
+nothing in `aura-android-use-website/` changed since the last successful deploy.
