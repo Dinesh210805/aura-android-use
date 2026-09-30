@@ -1,22 +1,17 @@
 package com.aura.aura_ui.presentation.screens.legal
 
-// ============================================================================
-// LEGAL COPY — in-app privacy policy, terms, and OSS license list for Play
-// Store readiness. DRAFT text (legal review pending, spec v2 §10); the surfaces
-// are real so the app satisfies the "must show these" requirement now.
-// ============================================================================
+/**
+ * In-app privacy policy, terms and open-source licence list. DRAFT text, pending legal review.
+ * - Change together: the website copy at `aura-android-use-website/privacy.html` is generated from this
+ *   file. Run `node scripts/gen_legal_page.mjs` after any edit and commit both.
+ */
 
 object LegalCopy {
 
     const val CONTACT_EMAIL = "dinesh210805@gmail.com"
-    const val PRIVACY_URL = "https://dinesh210805.github.io/aura-app/privacy.html"
-    const val TERMS_URL = "https://dinesh210805.github.io/aura-app/privacy.html#terms"
+    const val PRIVACY_URL = "https://aura-android-use.vercel.app/privacy"
+    const val TERMS_URL = "https://aura-android-use.vercel.app/privacy#terms"
 
-    /**
-     * Canonical text, mirrored byte-for-byte in `site/privacy.html` (see that file's own note).
-     * Keep both in sync on every edit — the site literally tells the reader "the same text
-     * shown inside the app, so there is one version of this and not two."
-     */
     // DRAFT — legal review pending.
     val PRIVACY = """
 AURA — Privacy Policy

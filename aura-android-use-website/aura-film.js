@@ -1,8 +1,14 @@
 /* AURA — scroll film engine. window.AuraFilm.mount(root)
-   Sound design: SFX_ENABLED is the code-level master switch. The header toggle (window.AuraSound) is the user switch.
-   Audio starts only after a user gesture. Haptics use navigator.vibrate where supported. */
+   Sound design: SFX_ENABLED is the code-level master switch. window.AuraSound is the one user switch: the header
+   button and the Rapido video button both show AuraSound.state() and call AuraSound.press().
+   - Contract: state() is 'on' (audible), 'tap' (on, but the browser blocks audio until the first click or key) or 'off'.
+   - Why sessionStorage: every visit starts with sound on; turning it off lasts for this tab only.
+   Haptics use navigator.vibrate where supported. */
 (function () {
   'use strict';
+  // Why: support.js runs the page's scripts again when it mounts. A second run would build a second sound
+  // engine, so the header would mute one while the film plays through the other.
+  if (window.AuraSound) return;
   var SFX_ENABLED = true;
 
   var TAU = Math.PI * 2, D = Math.PI / 180;
@@ -15,13 +21,19 @@
   /* ---------------- sound design ---------------- */
   var Snd = (function () {
     var allowed = window.AURA_SFX != null ? !!window.AURA_SFX : SFX_ENABLED;
-    var on = allowed; try { var s = localStorage.getItem('aura-sound'); if (s === 'off') on = false; } catch (e) {}
-    var ac = null, master = null, wet = null, noise = null, gestured = false, listeners = [];
+    var on = allowed; try { if (sessionStorage.getItem('aura-sound') === 'off') on = false; } catch (e) {}
+    var ac = null, master = null, wet = null, noise = null, listeners = [];
+    // iOS: without this the ringer switch silences Web Audio.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    function unlocked() { return !!ac && ac.state === 'running'; }
+    var firstGestureAt = 0;
+    function notify() { listeners.forEach(function (f) { f(); }); }
     function build() {
       if (ac || !allowed) return;
       try {
         ac = new (window.AudioContext || window.webkitAudioContext)();
         var comp = ac.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 3; comp.connect(ac.destination);
+        ac.onstatechange = notify;
         master = ac.createGain(); master.gain.value = on ? .4 : 0; master.connect(comp);
         var len = ac.sampleRate, b = ac.createBuffer(1, len, ac.sampleRate), d = b.getChannelData(0);
         for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; noise = b;
@@ -31,11 +43,17 @@
         wet = ac.createGain(); wet.gain.value = .55; wet.connect(cv); cv.connect(lp); lp.connect(master);
       } catch (e) { allowed = false; ac = null; }
     }
-    function gesture() { gestured = true; build(); if (ac && ac.state === 'suspended') ac.resume(); }
-    ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, gesture, { passive: true }); });
+    // Only these events grant the user activation that lets audio start; pointerdown and touchstart fire before it.
+    function gesture() {
+      if (!firstGestureAt) firstGestureAt = Date.now();
+      var was = unlocked(); build();
+      if (ac && ac.state === 'suspended') { var pr = ac.resume(); if (pr && pr.then) pr.then(notify, function () {}); }
+      if (unlocked() !== was) notify();
+    }
+    ['pointerup', 'touchend', 'click', 'keydown'].forEach(function (ev) { window.addEventListener(ev, gesture, { passive: true }); });
     var quiet = false;
-    function live() { return ac && on && gestured && !quiet && !document.hidden; }
-    function buzz(p) { if (on && gestured && navigator.vibrate) try { navigator.vibrate(p); } catch (e) {} }
+    function live() { return on && unlocked() && !quiet && !document.hidden; }
+    function buzz(p) { if (on && unlocked() && navigator.vibrate) try { navigator.vibrate(p); } catch (e) {} }
     function out(g, send) { g.connect(master); if (send) { var sg = ac.createGain(); sg.gain.value = send; g.connect(sg); sg.connect(wet); } }
     function bell(t, f, peak, att, dur, send) {
       [[1, 1], [2.001, .18], [3.01, .05]].forEach(function (pp) {
@@ -59,10 +77,12 @@
     var last = {};
     function gap(k, s) { var n = ac.currentTime; if (last[k] && n - last[k] < s) return false; last[k] = n; return true; }
     return {
-      isOn: function () { return on && allowed; },
-      set: function (v) { on = !!v && allowed; try { localStorage.setItem('aura-sound', on ? 'on' : 'off'); } catch (e) {} if (on) gesture(); if (master) master.gain.setTargetAtTime(on ? .4 : 0, ac.currentTime, .08); listeners.forEach(function (f) { f(on); }); },
+      state: function () { return !(on && allowed) ? 'off' : unlocked() ? 'on' : 'tap'; },
+      set: function (v) { on = !!v && allowed; try { sessionStorage.setItem('aura-sound', on ? 'on' : 'off'); } catch (e) {} if (on) gesture(); if (master) master.gain.setTargetAtTime(on ? .4 : 0, ac.currentTime, .08); notify(); },
+      // A press while blocked means "let me hear it", never "mute". The same tap unlocks audio a moment
+      // before the button's click handler runs, so a press right after the unlock still counts as blocked.
+      press: function () { this.set(this.state() !== 'on' || Date.now() - firstGestureAt < 800); },
       onChange: function (f) { listeners.push(f); },
-      unlocked: function () { return gestured; },
       quiet: function (q) { quiet = !!q; },
       blip: function (f) { if (!live() || !gap('blip', .06)) return; tone(ac.currentTime, f || 1400, .03, .011); buzz(6); },
       key: function () {
@@ -81,6 +101,12 @@
     };
   })();
   window.AuraSound = Snd;
+  // One wording for every sound button: the text says what you hear now, the aria-label says what a press does.
+  window.AuraSoundLabel = function (st) {
+    return st === 'on' ? { text: 'Sound on', aria: 'Sound is on. Turn sound off' }
+      : st === 'tap' ? { text: 'Tap for sound', aria: 'Sound is blocked until you tap. Turn sound on' }
+      : { text: 'Sound off', aria: 'Sound is off. Turn sound on' };
+  };
 
   /* ---------------- phone geometry ---------------- */
   var SW = .92, SH = 1.96, SR = .11, PW = 1, PH = 2.06, PR = .15;
@@ -306,8 +332,8 @@
     var caps = []; $$('[data-cap]').forEach(function (e) { caps[+e.getAttribute('data-cap')] = e; });
     var ai = $('[data-ai]'), steps = $$('[data-step]'), phaseEl = $('[data-phase]'), code = $('[data-code]'), hdr = $('header');
     var lapVid = $('[data-lapvid]'), lapV = lapVid && lapVid.querySelector('video'), vidTime = $('[data-vidtime]');
-    var rap = $('[data-rapido]'), rapV = rap && rap.querySelector('video'), rapMute = $('[data-rap-mute]'), rapSeek = $('[data-rap-seek]'), rapTime = $('[data-rap-time]'), rapUserOn = true, seeking = false, rapLbl = '';
-    if (rapMute) rapMute.addEventListener('click', function () { if (rapLbl === 'Tap for sound') rapUserOn = true; else rapUserOn = !rapUserOn; });
+    var rap = $('[data-rapido]'), rapV = rap && rap.querySelector('video'), rapMute = $('[data-rap-mute]'), rapSeek = $('[data-rap-seek]'), rapTime = $('[data-rap-time]'), seeking = false, rapLbl = '';
+    if (rapMute) rapMute.addEventListener('click', function () { Snd.press(); });
     if (rapSeek && rapV) {
       rapSeek.addEventListener('input', function () { seeking = true; if (rapV.duration) rapV.currentTime = rapSeek.value / 1000 * rapV.duration; });
       rapSeek.addEventListener('change', function () { seeking = false; });
@@ -834,10 +860,9 @@
         vis(rap, ra);
         var wantR = i === 6 && ra > .3;
         if (rapV) {
-          var canAudio = navigator.userActivation ? navigator.userActivation.hasBeenActive : Snd.unlocked(), soundOK = rapUserOn && canAudio;
+          var sst = Snd.state(), soundOK = sst === 'on';
           if (rapV.muted === soundOK) rapV.muted = !soundOK;
-          var lbl = !rapUserOn ? 'Unmute' : (canAudio ? 'Mute' : 'Tap for sound');
-          if (rapMute && rapLbl !== lbl) { rapLbl = lbl; rapMute.textContent = lbl; rapMute.setAttribute('aria-label', lbl === 'Mute' ? 'Mute video' : 'Turn video sound on'); rapMute.style.background = lbl === 'Tap for sound' ? 'var(--ink)' : 'var(--paper)'; rapMute.style.color = lbl === 'Tap for sound' ? 'var(--paper)' : 'var(--ink)'; }
+          if (rapMute && rapLbl !== sst) { rapLbl = sst; var sl = window.AuraSoundLabel(sst); rapMute.textContent = sl.text; rapMute.setAttribute('aria-label', sl.aria); rapMute.setAttribute('aria-pressed', String(sst === 'on')); rapMute.style.background = sst === 'tap' ? 'var(--ink)' : 'var(--paper)'; rapMute.style.color = sst === 'tap' ? 'var(--paper)' : 'var(--ink)'; }
           if (rapSeek && !seeking && rapV.duration) rapSeek.value = String(Math.round(rapV.currentTime / rapV.duration * 1000));
           if (rapTime) rapTime.textContent = fmt(rapV.currentTime) + ' / ' + fmt(rapV.duration);
           if (wantR && !rapPlaying) { playVid(rapV, true, true); rapPlaying = true; } else if (!wantR && rapPlaying) { playVid(rapV, false); rapPlaying = false; }

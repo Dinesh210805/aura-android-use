@@ -87,7 +87,7 @@ summary::-webkit-details-marker{display:none}
     <button type="button" data-m="theme" onClick="{{ toggleTheme }}" aria-label="{{ themeLabel }}" style="flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0" style-hover="background:var(--chip)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor"></path></svg>
     </button>
-    <button type="button" data-m="snd" onClick="{{ toggleSound }}" aria-pressed="{{ soundStr }}" aria-label="{{ soundLabel }}" title="{{ soundLabel }}" style="flex:none;height:36px;padding:0 14px 0 11px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);display:inline-flex;align-items:center;gap:8px;cursor:pointer;font:500 12px 'Geist Mono',monospace;white-space:nowrap" style-hover="background:var(--chip)">
+    <button type="button" data-m="snd" onClick="{{ toggleSound }}" aria-pressed="{{ soundStr }}" aria-label="{{ soundLabel }}" title="{{ soundLabel }}" style="flex:none;height:36px;padding:0 14px 0 11px;border-radius:999px;border:1px solid var(--line);background:{{ soundBg }};color:{{ soundFg }};display:inline-flex;align-items:center;gap:8px;cursor:pointer;font:500 12px 'Geist Mono',monospace;white-space:nowrap" style-hover="background:var(--chip)">
       <sc-if value="{{ soundOn }}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"></path></svg></sc-if>
       <sc-if value="{{ soundOff }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M17 9l5 6M22 9l-5 6"></path></svg></sc-if>
       <span data-m="snd-txt">{{ soundText }}</span>
@@ -223,7 +223,7 @@ summary::-webkit-details-marker{display:none}
     </div>
 
     <div data-cap="6" style="position:absolute;left:clamp(20px,5vw,80px);bottom:clamp(28px,5svh,64px);width:min(480px,calc(100vw - 40px),max(calc(50vw - 170px),calc((1100px - 100vw) * 100)));opacity:0;visibility:hidden">
-      <div style="display:inline-flex;align-items:center;gap:10px;min-height:38px;padding:4px 16px 4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--paper);box-sizing:border-box;flex-wrap:wrap"><span style="width:28px;height:28px;border-radius:999px;background:#fff;display:grid;place-items:center;flex:none"><img src="logos/gemini.svg" alt="" width="18" height="18" style="display:block"></span><span style="font-size:15px;font-weight:600">Voice by Gemini Live</span><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">thank you, Google DeepMind</span></div>
+      <div style="display:inline-flex;align-items:center;gap:10px;min-height:38px;padding:4px 16px 4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--paper);box-sizing:border-box;flex-wrap:wrap"><span style="width:28px;height:28px;border-radius:999px;background:#fff;display:grid;place-items:center;flex:none"><img src="logos/gemini.svg" alt="" width="18" height="18" style="display:block"></span><span style="font-size:15px;font-weight:600">Voice by Gemini Live</span></div>
       <h2 style="margin:18px 0 0;font-family:Doto,monospace;font-weight:850;font-size:clamp(40px,4.6vw,78px);line-height:.92;letter-spacing:-.01em;text-wrap:balance">Then we gave it a voice.</h2>
       <p aria-label="Hey AURA, book a Rapido to Rock Beach, Puducherry." style="margin:16px 0 0;font-size:clamp(17px,1.5vw,22px);line-height:1.35;letter-spacing:-.01em;display:flex;flex-wrap:wrap;gap:0 .28em"><span data-word="" style="opacity:.18;transition:opacity .25s">“Hey</span><span data-word="" style="opacity:.18;transition:opacity .25s">AURA,</span><span data-word="" style="opacity:.18;transition:opacity .25s">book</span><span data-word="" style="opacity:.18;transition:opacity .25s">a</span><span data-word="" style="opacity:.18;transition:opacity .25s">Rapido</span><span data-word="" style="opacity:.18;transition:opacity .25s">to</span><span data-word="" style="opacity:.18;transition:opacity .25s">Rock</span><span data-word="" style="opacity:.18;transition:opacity .25s">Beach,</span><span data-word="" style="opacity:.18;transition:opacity .25s">Puducherry.”</span></p>
       <p data-vdesc="" style="margin:10px 0 0;font-size:clamp(15px,1.1vw,17px);line-height:1.45;color:var(--ink2);max-width:42ch">A real conversation, not a voice menu. It talks back and uses the phone while it speaks, with the same tools and the same gate.</p>
@@ -626,7 +626,7 @@ summary::-webkit-details-marker{display:none}
       <nav aria-label="Product"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Product</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="/download">Download</a></li><li><a href="#tools">Tools</a></li><li><a href="#testing">App testing</a></li><li><a href="#safety">Safety</a></li><li><a href="#film">Launch film</a></li></ul></nav>
       <nav aria-label="Developers"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Developers</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener">GitHub</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/aura-mcp-connect/README.md" rel="noopener">Docs</a></li><li><a href="https://www.npmjs.com/package/aura-mcp-connect" rel="noopener">aura-mcp-connect</a></li><li><a href="https://github.com/Dinesh210805/aura-releases/releases" rel="noopener">Releases</a></li></ul></nav>
       <nav aria-label="Community"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Community</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://discord.com/invite/H66ws9zMPF" rel="noopener">Discord</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/issues" rel="noopener">Issues</a></li><li><a href="mailto:dinesh210805@gmail.com">Contact</a></li></ul></nav>
-      <nav aria-label="Legal"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Legal</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://dinesh210805.github.io/aura-app/privacy.html" rel="noopener">Privacy</a></li><li><a href="https://dinesh210805.github.io/aura-app/privacy.html#terms" rel="noopener">Terms</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/LICENSE" rel="noopener">AGPL-3.0 License</a></li></ul></nav>
+      <nav aria-label="Legal"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Legal</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="/privacy" rel="noopener">Privacy</a></li><li><a href="/privacy#terms" rel="noopener">Terms</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/LICENSE" rel="noopener">AGPL-3.0 License</a></li></ul></nav>
     </div>
     <div style="margin-top:48px;padding-top:20px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">
       <span>© 2026 AURA. Built in India by one person, Dinesh. Early software: it can break.</span>
@@ -638,7 +638,7 @@ summary::-webkit-details-marker{display:none}
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;system&quot;,&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;system&quot;,&quot;tsType&quot;:&quot;'system'|'light'|'dark'&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#FF2B1C&quot;,&quot;#FF3D00&quot;,&quot;#E8112D&quot;,&quot;#FF4F3A&quot;],&quot;default&quot;:&quot;#FF2B1C&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
 class Component extends DCLogic {
-  state = { film: false, menu: false, copied: '', wide: true, stars: null, rel: null, dark: false, sound: true };
+  state = { film: false, menu: false, copied: '', wide: true, stars: null, rel: null, dark: false, snd: 'tap' };
   rootRef = React.createRef();
 
   componentDidMount() {
@@ -651,7 +651,7 @@ class Component extends DCLogic {
       else this.bootT = setTimeout(boot, 60);
     };
     boot();
-    const sb = () => { if (window.AuraSound) this.setState({ sound: window.AuraSound.isOn() }); else this.sbT = setTimeout(sb, 100); };
+    const sb = () => { const S = window.AuraSound; if (!S) { this.sbT = setTimeout(sb, 100); return; } const up = () => this.setState({ snd: S.state() }); S.onChange(up); up(); };
     sb();
     fetch('https://api.github.com/repos/Dinesh210805/aura-releases/releases/latest').then(r => r.ok ? r.json() : null).then(j => {
       if (!j) return;
@@ -701,8 +701,10 @@ class Component extends DCLogic {
       copyPair: () => this.copy('pair', 'aura-mcp pair '),
       copyJson: () => this.copy('json', '{\n  "mcpServers": {\n    "aura": { "command": "aura-mcp", "args": [] }\n  }\n}'),
       cNpm: cp === 'npm' ? 'Copied' : 'Copy', cPair: cp === 'pair' ? 'Copied' : 'Copy', cJson: cp === 'json' ? 'Copied' : 'Copy',
-      soundOn: this.state.sound, soundOff: !this.state.sound, soundStr: String(this.state.sound), soundLabel: this.state.sound ? 'Turn sound effects off' : 'Turn sound effects on', soundText: this.state.sound ? 'Sound on' : 'Sound off',
-      toggleSound: () => { const S = window.AuraSound; const next = !this.state.sound; if (S) S.set(next); this.setState({ sound: next }); }
+      ...(() => { const st = this.state.snd, l = window.AuraSoundLabel ? window.AuraSoundLabel(st) : { text: 'Sound on', aria: 'Turn sound off' };
+        return { soundOn: st !== 'off', soundOff: st === 'off', soundStr: String(st === 'on'), soundLabel: l.aria, soundText: l.text,
+          soundBg: st === 'tap' ? 'var(--ink)' : 'transparent', soundFg: st === 'tap' ? 'var(--paper)' : 'var(--ink)' }; })(),
+      toggleSound: () => { if (window.AuraSound) window.AuraSound.press(); }
     };
   }
 }
