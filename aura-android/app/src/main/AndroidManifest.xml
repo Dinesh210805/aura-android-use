@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Koog (ai.koog:* 1.0.0) android artifacts declare minSdkVersion="35" in
+      otherwise-empty manifests — a build-config default, NOT a real Android-15
+      API dependency. We keep the app at minSdk 26 and override the floor.
+
+      RELEASE GATE — CLOSED 2026-07-21 by static verification of the shipped
+      bytecode (all 35 Koog AARs from the Gradle cache):
+        * 3331 classes scanned, ZERO references to any android/* API. Koog is a
+          pure-JVM framework; nothing in it can require an Android API level.
+        * Desugaring-sensitive JVM APIs used: java.time.Duration (API 26),
+          java.util.function (API 24), java.nio.file (API 26, only 2 classes in
+          agents-features-trace), java.lang.invoke.StringConcatFactory (desugared
+          by D8). The binding floor is java.nio.file / java.time = API 26.
+        * Bytecode target: Java 17 (class major 61) for all 3331 classes, which
+          matches compileOptions/jvmTarget 17 and desugars cleanly to minSdk 26.
+      Conclusion: minSdk 26 is the correct floor and the override is safe. Re-run
+      this check if Koog is upgraded — a new java.nio/java.time API could raise it.
+    -->
+    <uses-sdk tools:overrideLibrary="ai.koog.koog.agents, ai.koog.agents.core, ai.koog.agents.tools, ai.koog.agents.utils, ai.koog.agents.mcp.metadata, ai.koog.agents.features.event.handler, ai.koog.agents.features.memory, ai.koog.agents.features.opentelemetry, ai.koog.agents.features.snapshot, ai.koog.agents.features.tokenizer, ai.koog.agents.features.trace, ai.koog.embeddings.base, ai.koog.embeddings.llm, ai.koog.http.client.core, ai.koog.http.client.ktor, ai.koog.prompt.cache.files, ai.koog.prompt.cache.model, ai.koog.prompt.executor.anthropic.client, ai.koog.prompt.executor.bedrock.client, ai.koog.prompt.executor.cached, ai.koog.prompt.executor.clients, ai.koog.prompt.executor.model, ai.koog.prompt.executor.ollama.client, ai.koog.prompt.executor.openai.client, ai.koog.prompt.executor.openai.client.base, ai.koog.prompt.llm, ai.koog.prompt.markdown, ai.koog.prompt.model, ai.koog.prompt.processor, ai.koog.prompt.structure, ai.koog.prompt.tokenizer, ai.koog.prompt.xml, ai.koog.rag.base, ai.koog.serialization.core, ai.koog.utils" />
+
+    <!-- Explicit screen-support declaration. Since API 4 the platform infers this from
+         targetSdkVersion and no stock-AOSP app needs to write it — but compileSdk/targetSdk
+         here (36) is newer than some OEM forks' own compat-checking code understands (e.g.
+         MIUI 13 on Android 13/API 33). Observed on a real MIUI 13 device: every window added
+         by a Service (overlay, accessibility-overlay) — never MainActivity's own window — was
+         getting CompatibilityInfo's legacy small-screen scaling (mGlobalScale≈1.227, i.e. a
+         320dp reference width), pushing the "Talk to AURA" overlay outside the visible screen.
+         That scale factor is the platform's fallback for an app that doesn't support large
+         screens/any density; declaring it explicitly removes any ambiguity for compat layers
+         that don't trust an unrecognized-to-them targetSdk. -->
+    <supports-screens
+        android:smallScreens="true"
+        android:normalScreens="true"
+        android:largeScreens="true"
+        android:xlargeScreens="true"
+        android:anyDensity="true" />
+
+    <!-- Required Permissions for AURA Assistant -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16+ Live Update (Promoted Ongoing) notification -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Wake a dark display when an automation run starts. On Android 14+
+         (targetSdk 34+) ACQUIRE_CAUSES_WAKEUP is silently ignored without
+         this; ScreenWakeActivity's setTurnScreenOn is the primary wake path. -->
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- system_intent set_alarm/set_timer — lets the clock app apply them
+         directly (AlarmClock.EXTRA_SKIP_UI), the Google Assistant model. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <!-- Accessibility Service Permissions -->
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
+    
+    <!-- Screenshot Permissions -->  
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    
+    <!-- Optional: For better battery optimization handling -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    
+    <!-- Query all packages permission (Android 11+) for app inventory scanning -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- Read external storage: lets AURA reuse models already downloaded by Google Edge AI Gallery
+         on Android 10 and below. On Android 11+ this is ignored for other apps' Android/data dirs. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    
+    <!-- Contacts permission for resolving contact names to phone numbers -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Files plane (find_files / open_file): media-index search on Android 13+.
+         Runtime-granted; the tools degrade to permission_denied until the user
+         grants Photos & media access. Pre-13 falls back to READ_EXTERNAL_STORAGE. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    
+    <!-- System Control Permissions -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    
+    <!-- Additional System Control Permissions (Google Assistant/Siri parity) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" 
+        tools:ignore="ProtectedPermissions" />
+
+    <application
+        android:name=".AuraApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Aura_ui"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <!-- Firebase Analytics: never collect the advertising ID or ANDROID_ID, and never allow
+             ad personalisation or ad-user-data signals. The diagnostics switch
+             (DiagnosticsStore) controls whether anything is collected at all. -->
+        <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />
+        <meta-data android:name="google_analytics_ssaid_collection_enabled" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_user_data" android:value="false" />
+
+
+        <!-- Main Activity - Transparent overlay style -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Aura.Splash"
+            android:excludeFromRecents="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- OAuth redirect for third-party MCP servers (Sub-project #2). The Custom Tab /
+                 browser returns the authorization code to aura://mcp/oauth; MainActivity forwards
+                 it to McpOAuthCoordinator. autoVerify is intentionally off — this is a private
+                 app-scheme handshake, not an https App Link. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aura" android:host="mcp" android:path="/oauth" />
+            </intent-filter>
+        </activity>
+        
+<!-- Invisible instant-finish activity that turns the display ON when an
+             automation run starts against a dark phone (setTurnScreenOn path —
+             window flags can keep a screen on but cannot wake it). Launched by
+             DefaultScreenAwakeMechanism. -->
+        <activity
+            android:name=".services.keepawake.ScreenWakeActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTop" />
+
+<!-- Transparent Activity that hosts the MediaProjection consent dialog.
+             Launched by AssistantForegroundService when the MCP server requests
+             screen-capture permission. No UI is shown — it finishes immediately
+             after the system dialog is dismissed. -->
+        <activity
+            android:name=".accessibility.ScreenCapturePermissionActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true" />
+
+        <!-- Invisible bounce activity that opens the *device-specific* screen owning
+             the overlay permission. On MIUI/HyperOS, ColorOS, Funtouch and EMUI the
+             AOSP "Display over other apps" toggle is not sufficient — a second vendor
+             permission silently suppresses the window with no exception. Launched
+             from the overlay recovery notification. See OemCompat. -->
+        <!-- Digital assistant entry: long-press power/home opens AURA listening. See AssistActivity. -->
+        <activity
+            android:name=".overlay.AssistActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".overlay.OverlayFixActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTop" />
+
+        <!-- Assistant Foreground Service -->
+        <!-- foregroundServiceType uses connectedDevice (no time limit on Android 14+)
+             so the keep-alive WebSocket connection to the MCP server persists
+             indefinitely without the 6-hour dataSync timeout. -->
+        <service
+            android:name=".services.AssistantForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="microphone|connectedDevice" />
+
+        <!-- AURA Accessibility Service -->
+        <service
+            android:name=".accessibility.AuraAccessibilityService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/aura_accessibility_service" />
+        </service>
+
+        <!-- Visual Feedback Overlay Service -->
+        <service
+            android:name=".overlay.VisualFeedbackOverlayService"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- AURA System Overlay Service (Google Assistant-style) -->
+        <service
+            android:name=".overlay.AuraOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone|specialUse">
+            <!-- specialUse required for OnePlus Live Alerts / Dynamic Island -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="voice_assistant_live_activity" />
+        </service>
+        
+        <!-- Notification Listener (agent event plane: read/reply/dismiss
+             notifications + unlocks MediaSessionManager for media_control).
+             Inert until the user grants "Notification access" in system
+             settings — the grant screen is the consent boundary. -->
+        <service
+            android:name=".notifications.AuraNotificationListenerService"
+            android:enabled="true"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Wake Word Listening Service (always-on "Hey AURA" detection) -->
+        <service
+            android:name=".services.WakeWordListeningService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone|specialUse">
+            <!-- specialUse required for OnePlus Live Alerts / Dynamic Island -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="wake_word_detection_live_activity" />
+        </service>
+
+        <!-- AURA Keyboard (IME) — programmatic text-injection conduit for apps that
+             expose no editable accessibility node (React Native / Flutter / canvas /
+             games, e.g. Rapido). Never shown to the user: AURA switches to it, commits
+             text via InputConnection, and switches back. Inert until enabled in system
+             settings (the enable screen is the consent boundary). -->
+        <service
+            android:name=".ime.AuraKeyboardService"
+            android:label="AURA Keyboard"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/aura_ime" />
+        </service>
+
+        <!-- File Provider for sharing screenshots -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        
+        <!-- Boot Receiver for auto-starting wake word detection -->
+        <!-- Rings stored reminders at their due time (agent/memory/Reminders.kt). -->
+        <receiver
+            android:name=".agent.memory.ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".receivers.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,113 @@
+{
+  "_comment": "Curated deep-link templates surfaced by list_app_deeplinks. Each entry is resolve-probed on-device at query time: if its concrete form resolves it is tagged 'resolved', otherwise 'catalog'. Use 'uri' for fixed links, 'uri_template' + 'example' for parameterised ones. Set requires_confirmation:true for anything that sends/pays/deletes/auths. Extend freely — keys are Android package names.",
+  "apps": {
+    "com.android.settings": {
+      "app_name": "Settings",
+      "entries": [
+        { "label": "Settings home", "uri": "android.settings.SETTINGS" },
+        { "label": "Wi-Fi settings", "uri": "android.settings.WIFI_SETTINGS" },
+        { "label": "Bluetooth settings", "uri": "android.settings.BLUETOOTH_SETTINGS" },
+        { "label": "Display settings", "uri": "android.settings.DISPLAY_SETTINGS" },
+        { "label": "Sound settings", "uri": "android.settings.SOUND_SETTINGS" },
+        { "label": "Battery settings", "uri": "android.settings.BATTERY_SAVER_SETTINGS" },
+        { "label": "Apps settings", "uri": "android.settings.APPLICATION_SETTINGS" },
+        { "label": "Location settings", "uri": "android.settings.LOCATION_SOURCE_SETTINGS" },
+        { "label": "Airplane mode settings", "uri": "android.settings.AIRPLANE_MODE_SETTINGS" },
+        { "label": "Date & time settings", "uri": "android.settings.DATE_SETTINGS" },
+        { "label": "Internet / network settings", "uri": "android.settings.WIRELESS_SETTINGS" }
+      ]
+    },
+    "com.spotify.music": {
+      "app_name": "Spotify",
+      "entries": [
+        { "label": "Open Spotify home", "uri": "https://open.spotify.com/" },
+        { "label": "Search Spotify", "uri_template": "https://open.spotify.com/search/{query}", "example": "https://open.spotify.com/search/jazz" }
+      ]
+    },
+    "com.google.android.youtube": {
+      "app_name": "YouTube",
+      "entries": [
+        { "label": "Open YouTube", "uri": "https://www.youtube.com/" },
+        { "label": "Search YouTube", "uri_template": "https://www.youtube.com/results?search_query={query}", "example": "https://www.youtube.com/results?search_query=lofi" },
+        { "label": "Open a video by ID", "uri_template": "https://www.youtube.com/watch?v={video_id}", "example": "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }
+      ]
+    },
+    "com.google.android.apps.maps": {
+      "app_name": "Google Maps",
+      "entries": [
+        { "label": "Search a place", "uri_template": "https://www.google.com/maps/search/{query}", "example": "https://www.google.com/maps/search/coffee" },
+        { "label": "Directions to a place", "uri_template": "https://www.google.com/maps/dir/?api=1&destination={destination}", "example": "https://www.google.com/maps/dir/?api=1&destination=Eiffel+Tower" },
+        { "label": "Route with a start and stops (stops separated by %7C, up to 9; mode is driving, walking, bicycling or transit; add &dir_action=navigate to start navigation)", "uri_template": "https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}&waypoints={stops}&travelmode={mode}", "example": "https://www.google.com/maps/dir/?api=1&origin=Puducherry&destination=Coimbatore&waypoints=Salem%7CErode&travelmode=driving" },
+        { "label": "Open coordinates", "uri_template": "geo:{lat},{lng}", "example": "geo:48.8584,2.2945" }
+      ]
+    },
+    "com.whatsapp": {
+      "app_name": "WhatsApp",
+      "entries": [
+        { "label": "Chat with a phone number", "uri_template": "https://wa.me/{phone_e164_no_plus}", "example": "https://wa.me/14155552671" },
+        { "label": "Chat with a prefilled message", "uri_template": "https://wa.me/{phone_e164_no_plus}?text={message}", "example": "https://wa.me/14155552671?text=hello", "requires_confirmation": true }
+      ]
+    },
+    "com.google.android.gm": {
+      "app_name": "Gmail",
+      "entries": [
+        { "label": "Compose an email", "uri_template": "mailto:{to}?subject={subject}&body={body}", "example": "mailto:someone@example.com?subject=Hi&body=Hello", "requires_confirmation": true }
+      ]
+    },
+    "com.instagram.android": {
+      "app_name": "Instagram",
+      "entries": [
+        { "label": "Open a profile", "uri_template": "https://www.instagram.com/{username}/", "example": "https://www.instagram.com/instagram/" },
+        { "label": "Open explore", "uri": "https://www.instagram.com/explore/" }
+      ]
+    },
+    "org.telegram.messenger": {
+      "app_name": "Telegram",
+      "entries": [
+        { "label": "Open a chat by username", "uri_template": "https://t.me/{username}", "example": "https://t.me/telegram" },
+        { "label": "Share text to a chat", "uri_template": "https://t.me/share/url?url={url}&text={text}", "example": "https://t.me/share/url?url=https://example.com&text=look", "requires_confirmation": true }
+      ]
+    },
+    "com.twitter.android": {
+      "app_name": "X (Twitter)",
+      "entries": [
+        { "label": "Open a profile", "uri_template": "https://x.com/{username}", "example": "https://x.com/x" },
+        { "label": "Search posts", "uri_template": "https://x.com/search?q={query}", "example": "https://x.com/search?q=android" }
+      ]
+    },
+    "com.android.vending": {
+      "app_name": "Play Store",
+      "entries": [
+        { "label": "Open an app's store page", "uri_template": "market://details?id={package_name}", "example": "market://details?id=com.spotify.music" },
+        { "label": "Search the store", "uri_template": "market://search?q={query}", "example": "market://search?q=podcast player" }
+      ]
+    },
+    "com.android.chrome": {
+      "app_name": "Chrome",
+      "entries": [
+        { "label": "Open a URL", "uri_template": "https://{host_and_path}", "example": "https://en.wikipedia.org/wiki/Android" },
+        { "label": "Web search", "uri_template": "https://www.google.com/search?q={query}", "example": "https://www.google.com/search?q=weather today" }
+      ]
+    },
+    "com.google.android.calendar": {
+      "app_name": "Google Calendar",
+      "entries": [
+        { "label": "Open calendar", "uri": "https://calendar.google.com/" },
+        { "label": "Day view for a date", "uri_template": "https://calendar.google.com/calendar/r/day/{yyyy}/{mm}/{dd}", "example": "https://calendar.google.com/calendar/r/day/2026/07/12" }
+      ]
+    },
+    "com.flipkart.android": {
+      "app_name": "Flipkart",
+      "entries": [
+        { "label": "Search products", "uri_template": "https://www.flipkart.com/search?q={query}", "example": "https://www.flipkart.com/search?q=headphones" }
+      ]
+    },
+    "com.google.android.apps.photos": {
+      "app_name": "Google Photos",
+      "entries": [
+        { "label": "Open photos", "uri": "https://photos.google.com/" },
+        { "label": "Search photos", "uri_template": "https://photos.google.com/search/{query}", "example": "https://photos.google.com/search/beach" }
+      ]
+    }
+  }
+}

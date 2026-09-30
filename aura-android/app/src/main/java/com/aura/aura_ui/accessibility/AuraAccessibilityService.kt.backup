@@ -1,0 +1,1673 @@
+package com.aura.aura_ui.accessibility
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.graphics.*
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.media.Image
+import android.media.ImageReader
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.annotation.RequiresApi
+import com.aura.aura_ui.service.CommandPollingService
+import com.aura.aura_ui.utils.AgentLogger
+import kotlinx.coroutines.*
+import kotlinx.coroutines.delay
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Enhanced Android Accessibility Service for AURA Interactive Assistant
+ * Provides advanced screenshot capture, UI analysis, and gesture execution
+ */
+class AuraAccessibilityService : AccessibilityService() {
+    companion object {
+        private const val SCREENSHOT_REQUEST_CODE = 1000
+
+        // Backend URL - will be set by MainActivity
+        var BACKEND_URL = "http://10.0.2.2:8000" // Default fallback for Android emulator
+
+        // Track last registered URL to prevent duplicate registrations
+        private var lastRegisteredUrl: String? = null
+        private var isRegistering = AtomicBoolean(false)
+
+        // Singleton instance for global access
+        var instance: AuraAccessibilityService? = null
+            private set
+
+        fun isServiceRunning(): Boolean = instance != null
+
+        /**
+         * Update backend URL from MainActivity configuration
+         */
+        fun setBackendUrl(url: String) {
+            val normalizedUrl = url.trimEnd('/')
+            BACKEND_URL = normalizedUrl
+
+            AgentLogger.Auto.i("Backend URL updated", mapOf("url" to BACKEND_URL))
+
+            // 🔥 ALWAYS trigger UI sync on backend (re)connect
+            instance?.serviceScope?.launch {
+                delay(500)
+                AgentLogger.Auto.i("🔄 Forcing UI resync after backend connect")
+                instance?.captureScreenWithAnalysis()
+            }
+
+            // Register only if needed
+            if (normalizedUrl != lastRegisteredUrl && !isRegistering.get()) {
+                lastRegisteredUrl = normalizedUrl
+                instance?.registerDeviceWithBackend()
+            }
+
+            instance?.startCommandPolling()
+        }
+
+    }
+
+    // Media projection for screenshot capture
+    private var mediaProjection: MediaProjection? = null
+    private var virtualDisplay: VirtualDisplay? = null
+    private var imageReader: ImageReader? = null
+    private val isCapturing = AtomicBoolean(false)
+
+    // Store permission data for MediaProjection recreation
+    private var mediaProjectionResultCode: Int? = null
+    private var mediaProjectionData: Intent? = null
+
+    // HTTP client for backend communication
+    private val httpClient = OkHttpClient.Builder().build()
+    private var serviceScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // Screen dimensions
+    private var screenWidth = 0
+    private var screenHeight = 0
+
+    // Debounce for screen change events
+    private var lastEventTime = 0L
+    private val eventDebounceMs = 2000L // 2 seconds between captures
+
+    // Job for periodic updates so we can cancel it
+    private var periodicUpdateJob: Job? = null
+
+    // Track if AURA app is in foreground
+    private var isAuraAppActive = false
+
+    // Command polling service
+    private var commandPollingService: CommandPollingService? = null
+
+    data class UIElementData(
+        val text: String?,
+        val contentDescription: String?,
+        val bounds: BoundsData,
+        val className: String?,
+        val isClickable: Boolean,
+        val isScrollable: Boolean,
+        val isEditable: Boolean,
+        val isEnabled: Boolean,
+        val packageName: String?,
+        val viewId: String?,
+    )
+
+    data class BoundsData(
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int,
+        val centerX: Int,
+        val centerY: Int,
+        val width: Int,
+        val height: Int,
+    )
+
+    data class ScreenshotData(
+        val screenshot: String,
+        val screenWidth: Int,
+        val screenHeight: Int,
+        val timestamp: Long,
+        val uiElements: List<UIElementData>,
+    )
+
+    data class GestureRequest(
+        val action: String,
+        val x: Int? = null,
+        val y: Int? = null,
+        val x2: Int? = null,
+        val y2: Int? = null,
+        val duration: Long = 300L,
+    )
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+
+        // CRITICAL: Initialize screen dimensions IMMEDIATELY
+        val displayMetrics = resources.displayMetrics
+        screenWidth = displayMetrics.widthPixels
+        screenHeight = displayMetrics.heightPixels
+        AgentLogger.UI.i("📐 Screen dimensions initialized: ${screenWidth}x$screenHeight @ ${displayMetrics.densityDpi}dpi")
+
+        instance = this
+
+        // 🔥 RECREATE coroutine scope after service restart
+        serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+        AgentLogger.UI.i("AURA Accessibility Service connected")
+
+        // Check if AURA is already active
+        checkIfAuraIsActive()
+
+        // Start as foreground service for MediaProjection
+        startForegroundService()
+
+        // Attempt to recreate MediaProjection if we have stored permission data
+        if (mediaProjection == null && mediaProjectionData != null && mediaProjectionResultCode != null) {
+            AgentLogger.UI.i("Service reconnected - attempting to restore MediaProjection from stored data")
+            try {
+                val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                mediaProjection = mediaProjectionManager.getMediaProjection(mediaProjectionResultCode!!, mediaProjectionData!!)
+                AgentLogger.UI.i("MediaProjection restored successfully after service reconnection")
+            } catch (e: Exception) {
+                AgentLogger.UI.e("Failed to restore MediaProjection after service reconnection", e)
+            }
+        }
+
+        // DO NOT register immediately - wait for MainActivity to set the correct backend URL
+        // MainActivity will call setBackendUrl() which triggers registration
+        AgentLogger.UI.i("Waiting for MainActivity to configure backend URL...")
+    }
+
+    private fun startForegroundService() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                val channelId = "aura_accessibility"
+                val channelName = "AURA Accessibility"
+                val importance = android.app.NotificationManager.IMPORTANCE_LOW
+
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                val channel = android.app.NotificationChannel(channelId, channelName, importance)
+                notificationManager.createNotificationChannel(channel)
+
+                val notification =
+                    android.app.Notification.Builder(this, channelId)
+                        .setContentTitle("AURA Active")
+                        .setContentText("Screen capture enabled")
+                        .setSmallIcon(android.R.drawable.ic_menu_view)
+                        .build()
+
+                startForeground(1, notification)
+                AgentLogger.UI.i("✅ Started foreground service for MediaProjection")
+            }
+        } catch (e: Exception) {
+            AgentLogger.UI.e("Failed to start foreground service", e)
+        }
+    }
+
+    // Helper function to check if AURA is currently active
+    private fun checkIfAuraIsActive() {
+        try {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                val packageName = rootNode.packageName?.toString()
+                val wasActive = isAuraAppActive
+                isAuraAppActive = packageName == "com.aura.aura_ui.debug" || packageName == "com.aura.aura_ui"
+
+                if (isAuraAppActive != wasActive) {
+                    AgentLogger.Auto.d("AURA app active state changed: $isAuraAppActive (package: $packageName)")
+                }
+                rootNode.recycle()
+            }
+        } catch (e: Exception) {
+            AgentLogger.Auto.e("Error checking AURA activity", e)
+        }
+    }
+
+    @SuppressLint("SwitchIntDef")
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Track if AURA app is in foreground
+        event?.let {
+            // UPDATE isAuraAppActive with TWO checks:
+            // 1. Event packageName (fast)
+            // 2. rootInActiveWindow packageName (accurate - fixes Android systemui bug)
+            val eventPackageName = it.packageName?.toString() ?: ""
+            val wasActive = isAuraAppActive
+
+            // Check event package first
+            var isAura = eventPackageName == "com.aura.aura_ui.debug" || eventPackageName == "com.aura.aura_ui"
+
+            // If event says systemui, check actual window tree (fixes Android bug where events report wrong package)
+            if (!isAura && eventPackageName == "com.android.systemui") {
+                try {
+                    val rootNode = safeGetRootInActiveWindow()
+
+                    if (rootNode != null) {
+                        val actualPackageName = rootNode.packageName?.toString() ?: ""
+                        isAura = actualPackageName == "com.aura.aura_ui.debug" || actualPackageName == "com.aura.aura_ui"
+                        if (isAura) {
+                            AgentLogger.Auto.d("🔍 Event said systemui, but actual window: $actualPackageName - AURA DETECTED!")
+                        }
+                        rootNode.recycle()
+                    }
+                } catch (e: Exception) {
+                    AgentLogger.Auto.e("Error checking actual window package", e)
+                }
+            }
+
+            isAuraAppActive = isAura
+
+            if (isAuraAppActive != wasActive) {
+                AgentLogger.Auto.d("AURA state: $wasActive -> $isAuraAppActive (eventPkg: $eventPackageName)")
+            }
+
+            if (it.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                AgentLogger.Auto.d("Window changed: $eventPackageName, isAuraAppActive: $isAuraAppActive")
+            }
+
+            // Only track UI when AURA app is active (foreground or background)
+            // This prevents unnecessary battery drain when user isn't using AURA
+            if (!isAuraAppActive) {
+                AgentLogger.Auto.d("Skipping UI capture - AURA not active (pkg: $eventPackageName)")
+                return
+            }
+
+            // Capture UI tree (no screenshot) on significant screen changes with debouncing
+            when (it.eventType) {
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                    val currentTime = System.currentTimeMillis()
+                    // Only capture if enough time has passed since last capture
+                    if (currentTime - lastEventTime > eventDebounceMs) {
+                        lastEventTime = currentTime
+                        serviceScope.launch(Dispatchers.IO) {
+                            if (rootInActiveWindow != null) {
+                                // Send lightweight UI tree only (no expensive screenshot)
+                                sendUITreeOnly()
+                                AgentLogger.Auto.d("UI tree sent on screen change (AURA active)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onInterrupt() {
+        AgentLogger.UI.w("Service interrupted")
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        AgentLogger.UI.i("Service unbound")
+        cleanup()
+        return super.onUnbind(intent)
+    }
+
+    /**
+     * Initialize media projection for screenshot capture
+     * Returns true if initialization succeeded
+     */
+    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+    fun initializeMediaProjection(
+        resultCode: Int,
+        data: Intent,
+    ): Boolean {
+        return try {
+            AgentLogger.Screen.i("🔐 Initializing MediaProjection with resultCode=$resultCode")
+
+            // Store permission data for recreation after service restart
+            this.mediaProjectionResultCode = resultCode
+            this.mediaProjectionData = data
+
+            val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
+
+            if (mediaProjection == null) {
+                AgentLogger.Screen.e("❌ CRITICAL: getMediaProjection() returned NULL!")
+                AgentLogger.Screen.e("   This usually means permission was denied or resultCode is invalid")
+                return false
+            }
+
+            AgentLogger.Screen.i("✅ MediaProjection initialized successfully!")
+            AgentLogger.Screen.i("   Screen dimensions: ${screenWidth}x$screenHeight")
+            true
+        } catch (e: Exception) {
+            AgentLogger.Screen.e("❌ CRITICAL: Failed to initialize MediaProjection", e)
+            false
+        }
+    }
+
+    /**
+     * Check if media projection is available for screenshot capture
+     * Returns true if we have either an active MediaProjection OR stored permission data
+     */
+    fun isMediaProjectionAvailable(): Boolean {
+        val available = mediaProjection != null || (mediaProjectionData != null && mediaProjectionResultCode != null)
+        AgentLogger.Screen.d(
+            "📷 MediaProjection available: $available (projection=${mediaProjection != null}, data=${mediaProjectionData != null})",
+        )
+        return available
+    }
+
+    /**
+     * Trigger an immediate screenshot capture and upload
+     * Call this when you need fresh visual data (e.g., for voice commands)
+     */
+    fun triggerScreenshotCapture() {
+        if (!isMediaProjectionAvailable()) {
+            AgentLogger.Screen.w("⚠️ triggerScreenshotCapture: MediaProjection not available")
+            return
+        }
+        AgentLogger.Screen.i("📸 Manual screenshot capture triggered")
+        captureScreenWithAnalysis()
+    }
+
+    /**
+     * Capture screenshot and analyze UI
+     */
+    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+    fun captureScreenWithAnalysis(force: Boolean = false) {
+        if (isCapturing.get() && !force) {
+            AgentLogger.Screen.w("Screenshot capture already in progress")
+            return
+        }
+
+        try {
+            isCapturing.set(true)
+
+            // Recreate MediaProjection if needed
+            if (mediaProjection == null && mediaProjectionData != null && mediaProjectionResultCode != null) {
+                AgentLogger.Screen.i("Recreating MediaProjection from stored permission data")
+                try {
+                    val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    mediaProjection = mediaProjectionManager.getMediaProjection(mediaProjectionResultCode!!, mediaProjectionData!!)
+                    AgentLogger.Screen.i("MediaProjection successfully recreated")
+                } catch (e: Exception) {
+                    AgentLogger.Screen.e("Failed to recreate MediaProjection", e)
+                }
+            }
+
+            if (mediaProjection == null) {
+                AgentLogger.Screen.w("Media projection not initialized - sending UI tree without screenshot")
+                try {
+                    // Send real UI tree even without screenshot
+                    val uiElements = getUIElements()
+                    if (uiElements.isNotEmpty()) {
+                        val uiOnlyData =
+                            ScreenshotData(
+                                screenshot = "", // No screenshot
+                                screenWidth = screenWidth,
+                                screenHeight = screenHeight,
+                                timestamp = System.currentTimeMillis(),
+                                uiElements = uiElements,
+                            )
+                        sendUIDataToBackend(uiOnlyData)
+                        AgentLogger.Auto.i("Sent ${uiElements.size} UI elements without screenshot")
+                    } else {
+                        AgentLogger.Screen.w("No UI elements available to send")
+                    }
+                } finally {
+                    // CRITICAL: Always release the lock
+                    isCapturing.set(false)
+                }
+                return
+            }
+
+            // Set up image reader and virtual display ONLY if not already created
+            if (imageReader == null || virtualDisplay == null) {
+                AgentLogger.Screen.i("📺 Creating new ImageReader and VirtualDisplay")
+
+                // CRITICAL: Validate screen dimensions BEFORE creating ImageReader
+                if (screenWidth <= 0 || screenHeight <= 0) {
+                    AgentLogger.Screen.e("⚠️ CRITICAL: Invalid screen dimensions: ${screenWidth}x$screenHeight")
+                    // Attempt recovery
+                    val displayMetrics = resources.displayMetrics
+                    screenWidth = displayMetrics.widthPixels
+                    screenHeight = displayMetrics.heightPixels
+                    AgentLogger.Screen.i("📐 Recovered screen dimensions: ${screenWidth}x$screenHeight")
+
+                    if (screenWidth <= 0 || screenHeight <= 0) {
+                        AgentLogger.Screen.e("❌ FATAL: Cannot determine screen dimensions!")
+                        isCapturing.set(false)
+                        return
+                    }
+                }
+
+                // Set up image reader with validated dimensions
+                imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
+                AgentLogger.Screen.i("📷 ImageReader created: ${screenWidth}x$screenHeight")
+
+                // Validate ImageReader surface
+                if (imageReader?.surface == null) {
+                    AgentLogger.Screen.e("❌ CRITICAL: ImageReader.surface is NULL!")
+                    isCapturing.set(false)
+                    return
+                }
+
+                // Register MediaProjection callback (required for Android 14+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    mediaProjection?.registerCallback(
+                        object : MediaProjection.Callback() {
+                            override fun onStop() {
+                                AgentLogger.Screen.i("📺 MediaProjection stopped via callback")
+                                cleanup()
+                            }
+                        },
+                        Handler(Looper.getMainLooper()),
+                    )
+                }
+
+                // Create virtual display ONCE and reuse it
+                virtualDisplay =
+                    mediaProjection?.createVirtualDisplay(
+                        "AURA_Screenshot",
+                        screenWidth,
+                        screenHeight,
+                        resources.displayMetrics.densityDpi,
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        imageReader?.surface,
+                        null,
+                        Handler(Looper.getMainLooper()),
+                    )
+
+                // CRITICAL: Validate VirtualDisplay creation
+                if (virtualDisplay == null) {
+                    AgentLogger.Screen.e("❌ CRITICAL: VirtualDisplay creation FAILED!")
+                    AgentLogger.Screen.e("   MediaProjection: ${mediaProjection != null}, Surface: ${imageReader?.surface != null}")
+                    isCapturing.set(false)
+                    return
+                }
+
+                AgentLogger.Screen.i("✅ VirtualDisplay created successfully: ${screenWidth}x$screenHeight")
+            } else {
+                AgentLogger.Screen.d("Reusing existing VirtualDisplay for capture")
+            }
+
+            // Set up image available listener with comprehensive error handling
+            imageReader?.setOnImageAvailableListener({ reader ->
+                var image: Image? = null
+                try {
+                    image = reader.acquireLatestImage()
+
+                    if (image == null) {
+                        AgentLogger.Screen.w("⚠️ acquireLatestImage() returned NULL - buffer may be exhausted")
+                        return@setOnImageAvailableListener
+                    }
+
+                    AgentLogger.Screen.d("📷 Image acquired: ${image.width}x${image.height}")
+
+                    val bitmap = imageToBitmap(image)
+                    if (bitmap == null) {
+                        AgentLogger.Screen.e("⚠️ Failed to convert image to bitmap")
+                        return@setOnImageAvailableListener
+                    }
+
+                    val base64Screenshot = bitmapToBase64(bitmap)
+                    if (base64Screenshot.isEmpty()) {
+                        AgentLogger.Screen.e("⚠️ Base64 encoding failed - empty result")
+                        return@setOnImageAvailableListener
+                    }
+
+                    AgentLogger.Screen.i("📸 Screenshot captured: ${base64Screenshot.length} chars (~${base64Screenshot.length / 1024} KB)")
+
+                    val uiElements = getUIElements()
+                    val screenshotData =
+                        ScreenshotData(
+                            screenshot = base64Screenshot,
+                            screenWidth = screenWidth,
+                            screenHeight = screenHeight,
+                            timestamp = System.currentTimeMillis(),
+                            uiElements = uiElements,
+                        )
+                    sendUIDataToBackend(screenshotData)
+                } catch (e: Exception) {
+                    AgentLogger.Screen.e("❌ Error processing screenshot", e)
+                } finally {
+                    image?.close() // ALWAYS close the image
+                    isCapturing.set(false)
+                }
+            }, Handler(Looper.getMainLooper()))
+        } catch (e: Exception) {
+            AgentLogger.Screen.e("Error capturing screenshot", e)
+            isCapturing.set(false)
+        }
+    }
+
+    /**
+     * Send only UI tree to backend (no screenshot) for lightweight monitoring
+     * This is ~2KB vs ~150KB for screenshot - 98% reduction in data usage
+     */
+    private fun sendUITreeOnly() {
+        try {
+            val uiElements = getUIElements()
+            if (uiElements.isNotEmpty()) {
+                val hasScreenshot = mediaProjection != null
+                val mode = if (hasScreenshot) "📸 FULL" else "📋 UI-ONLY"
+
+                AgentLogger.Auto.d("📤 Sending UI data | Mode: $mode | Elements: ${uiElements.size}")
+
+                val uiOnlyData =
+                    ScreenshotData(
+                        screenshot = "", // No screenshot - just UI tree
+                        screenWidth = screenWidth,
+                        screenHeight = screenHeight,
+                        timestamp = System.currentTimeMillis(),
+                        uiElements = uiElements,
+                    )
+                sendUIDataToBackend(uiOnlyData)
+            }
+        } catch (e: Exception) {
+            AgentLogger.UI.e("Error sending UI tree", e)
+        }
+    }
+
+    /**
+     * Capture UI data without screenshot for lightweight monitoring
+     */
+    fun captureScreenWithUI(): Map<String, Any>? {
+        return try {
+            val uiElements = getUIElements()
+
+            mapOf(
+                "timestamp" to System.currentTimeMillis(),
+                "screenWidth" to screenWidth,
+                "screenHeight" to screenHeight,
+                "uiElements" to
+                    uiElements.map { element ->
+                        mapOf(
+                            "text" to (element.text ?: ""),
+                            "contentDescription" to (element.contentDescription ?: ""),
+                            "className" to (element.className ?: ""),
+                            "isClickable" to element.isClickable,
+                            "isScrollable" to element.isScrollable,
+                            "isEnabled" to element.isEnabled,
+                            "packageName" to (element.packageName ?: ""),
+                            "viewId" to (element.viewId ?: ""),
+                            "bounds" to
+                                mapOf(
+                                    "left" to element.bounds.left,
+                                    "top" to element.bounds.top,
+                                    "right" to element.bounds.right,
+                                    "bottom" to element.bounds.bottom,
+                                    "centerX" to element.bounds.centerX,
+                                    "centerY" to element.bounds.centerY,
+                                    "width" to element.bounds.width,
+                                    "height" to element.bounds.height,
+                                ),
+                        )
+                    },
+            )
+        } catch (e: Exception) {
+            AgentLogger.UI.e("Error capturing UI data", e)
+            null
+        }
+    }
+
+    /**
+     * Convert Image to Bitmap with full validation
+     */
+    private fun imageToBitmap(image: Image): Bitmap? {
+        return try {
+            val planes = image.planes
+            if (planes.isEmpty()) {
+                AgentLogger.Screen.e("⚠️ Image has no planes!")
+                return null
+            }
+
+            val buffer = planes[0].buffer
+            val pixelStride = planes[0].pixelStride
+            val rowStride = planes[0].rowStride
+            val rowPadding = rowStride - pixelStride * screenWidth
+
+            // Validate screen dimensions
+            if (screenWidth <= 0 || screenHeight <= 0) {
+                AgentLogger.Screen.e("⚠️ Invalid screen dimensions: ${screenWidth}x$screenHeight")
+                return null
+            }
+
+            AgentLogger.Screen.d("📊 Buffer: ${buffer.remaining()} bytes, rowStride=$rowStride, pixelStride=$pixelStride")
+
+            // Calculate expected size and validate
+            val expectedBytes = screenHeight * rowStride
+            if (buffer.remaining() < expectedBytes) {
+                AgentLogger.Screen.e("⚠️ Buffer too small: ${buffer.remaining()} < $expectedBytes")
+                return null
+            }
+
+            val bitmapWidth = screenWidth + rowPadding / pixelStride
+            val bitmap = Bitmap.createBitmap(bitmapWidth, screenHeight, Bitmap.Config.ARGB_8888)
+
+            buffer.rewind() // CRITICAL: Rewind buffer before reading!
+            bitmap.copyPixelsFromBuffer(buffer)
+
+            if (rowPadding == 0) {
+                bitmap
+            } else {
+                Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight)
+            }
+        } catch (e: Exception) {
+            AgentLogger.Screen.e("⚠️ imageToBitmap FAILED", e)
+            null
+        }
+    }
+
+    /**
+     * Convert bitmap to base64 string with validation
+     */
+    private fun bitmapToBase64(bitmap: Bitmap): String {
+        if (bitmap.isRecycled) {
+            AgentLogger.Screen.e("⚠️ Bitmap is recycled, cannot compress!")
+            return ""
+        }
+        if (bitmap.width <= 0 || bitmap.height <= 0) {
+            AgentLogger.Screen.e("⚠️ Bitmap has invalid dimensions: ${bitmap.width}x${bitmap.height}")
+            return ""
+        }
+
+        val outputStream = ByteArrayOutputStream()
+        val success = bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+
+        if (!success) {
+            AgentLogger.Screen.e("⚠️ Bitmap.compress() returned false!")
+            return ""
+        }
+
+        val byteArray = outputStream.toByteArray()
+        val sizeKB = byteArray.size / 1024
+        AgentLogger.Screen.i("📸 Compressed bitmap: ${byteArray.size} bytes ($sizeKB KB)")
+
+        if (byteArray.isEmpty()) {
+            AgentLogger.Screen.e("⚠️ Compression produced 0 bytes!")
+            return ""
+        }
+
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    }
+
+    /**
+     * Create mock screenshot for testing
+     */
+    private fun createMockScreenshot(): ScreenshotData {
+        // Create a simple colored bitmap for testing
+        val bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.BLUE)
+
+        return ScreenshotData(
+            screenshot = bitmapToBase64(bitmap),
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            timestamp = System.currentTimeMillis(),
+            uiElements = getUIElements(),
+        )
+    }
+
+    /**
+     * Get UI elements from accessibility tree
+     */
+    private fun getUIElements(): List<UIElementData> {
+        val elements = mutableListOf<UIElementData>()
+
+        try {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                extractUIElements(rootNode, elements)
+                @Suppress("DEPRECATION")
+                rootNode.recycle()
+            }
+        } catch (e: Exception) {
+            AgentLogger.UI.e("Error extracting UI elements", e)
+        }
+
+        return elements
+    }
+
+    /**
+     * Recursively extract UI elements from accessibility node with depth limiting
+     * CRITICAL ANR FIX: Added maxDepth to prevent stack overflow and excessive memory usage
+     */
+    private fun extractUIElements(
+        node: AccessibilityNodeInfo?,
+        elements: MutableList<UIElementData>,
+        currentDepth: Int = 0,
+        maxDepth: Int = 15, // Limit recursion depth to prevent ANR
+        maxElements: Int = 150, // Limit total elements to prevent memory pressure
+    ) {
+        // CRITICAL: Early exit conditions to prevent runaway recursion
+        if (node == null || currentDepth > maxDepth || elements.size >= maxElements) {
+            return
+        }
+
+        try {
+            val bounds = android.graphics.Rect()
+            node.getBoundsInScreen(bounds)
+
+            // Skip tiny or invalid bounds that won't be useful
+            if (bounds.width() > 5 && bounds.height() > 5) {
+                val boundsData =
+                    BoundsData(
+                        left = bounds.left,
+                        top = bounds.top,
+                        right = bounds.right,
+                        bottom = bounds.bottom,
+                        centerX = bounds.centerX(),
+                        centerY = bounds.centerY(),
+                        width = bounds.width(),
+                        height = bounds.height(),
+                    )
+
+                val element =
+                    UIElementData(
+                        text = node.text?.toString(),
+                        contentDescription = node.contentDescription?.toString(),
+                        bounds = boundsData,
+                        className = node.className?.toString(),
+                        isClickable = node.isClickable,
+                        isScrollable = node.isScrollable,
+                        isEditable = node.isEditable || node.className?.toString()?.contains("EditText") == true,
+                        isEnabled = node.isEnabled,
+                        packageName = node.packageName?.toString(),
+                        viewId = node.viewIdResourceName,
+                    )
+
+                elements.add(element)
+            }
+
+            // CRITICAL: Stop early if we've collected enough elements
+            if (elements.size >= maxElements) {
+                return
+            }
+
+            // Recursively process child nodes with depth tracking
+            val childCount = node.childCount
+            for (i in 0 until childCount) {
+                if (elements.size >= maxElements) break // Safety check in loop
+
+                try {
+                    val child = node.getChild(i)
+                    extractUIElements(child, elements, currentDepth + 1, maxDepth, maxElements)
+                    @Suppress("DEPRECATION")
+                    child?.recycle() // Recycle nodes to prevent memory leak
+                } catch (e: Exception) {
+                    // Continue with other children if one fails
+                }
+            }
+        } catch (e: Exception) {
+            AgentLogger.Auto.e("Type action not implemented - requires IME integration")
+        }
+    }
+
+    /**
+     * Send screenshot data to backend (updated for new API)
+     */
+    private fun sendScreenshotToBackend(screenshotData: ScreenshotData) {
+        // Delegate to the new UI data method
+        sendUIDataToBackend(screenshotData)
+    }
+
+    /**
+     * Execute gesture based on action
+     */
+    fun executeGesture(gestureRequest: GestureRequest) {
+        serviceScope.launch {
+            try {
+                when (gestureRequest.action.lowercase()) {
+                    "tap", "click" -> {
+                        val x = gestureRequest.x ?: return@launch
+                        val y = gestureRequest.y ?: return@launch
+                        performTap(x, y)
+                    }
+                    "swipe" -> {
+                        val x1 = gestureRequest.x ?: return@launch
+                        val y1 = gestureRequest.y ?: return@launch
+                        val x2 = gestureRequest.x2 ?: return@launch
+                        val y2 = gestureRequest.y2 ?: return@launch
+                        performSwipe(x1, y1, x2, y2, gestureRequest.duration)
+                    }
+                    "scroll_up" -> performScrollUp()
+                    "scroll_down" -> performScrollDown()
+                    "back" -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                    "home" -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+                    else -> AgentLogger.Auto.w("Unknown gesture action", mapOf("action" to gestureRequest.action))
+                }
+            } catch (e: Exception) {
+                AgentLogger.Auto.e("Error executing gesture", e)
+            }
+        }
+    }
+
+    /**
+     * Perform tap gesture
+     */
+    private fun performTap(
+        x: Int,
+        y: Int,
+    ) {
+        val path =
+            android.graphics.Path().apply {
+                moveTo(x.toFloat(), y.toFloat())
+            }
+
+        val gesture =
+            GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
+                .build()
+
+        dispatchGesture(
+            gesture,
+            object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    AgentLogger.Auto.i(
+                        "Tap gesture completed",
+                        mapOf(
+                            "x" to x,
+                            "y" to y,
+                        ),
+                    )
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    AgentLogger.Auto.w("Tap gesture cancelled")
+                }
+            },
+            null,
+        )
+    }
+
+    /**
+     * Perform swipe gesture
+     */
+    fun performSwipe(
+        x1: Int,
+        y1: Int,
+        x2: Int,
+        y2: Int,
+        duration: Long,
+    ) {
+        val path =
+            android.graphics.Path().apply {
+                moveTo(x1.toFloat(), y1.toFloat())
+                lineTo(x2.toFloat(), y2.toFloat())
+            }
+
+        val gesture =
+            GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
+                .build()
+
+        dispatchGesture(
+            gesture,
+            object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    AgentLogger.Auto.i(
+                        "Swipe gesture completed",
+                        mapOf(
+                            "x1" to x1,
+                            "y1" to y1,
+                            "x2" to x2,
+                            "y2" to y2,
+                        ),
+                    )
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    AgentLogger.Auto.w("Swipe gesture cancelled")
+                }
+            },
+            null,
+        )
+    }
+
+    /**
+     * Perform scroll up
+     */
+    private fun performScrollUp() {
+        val centerX = screenWidth / 2
+        val startY = screenHeight * 3 / 4
+        val endY = screenHeight / 4
+        performSwipe(centerX, startY, centerX, endY, 500)
+    }
+
+    /**
+     * Perform scroll down
+     */
+    private fun performScrollDown() {
+        val centerX = screenWidth / 2
+        val startY = screenHeight / 4
+        val endY = screenHeight * 3 / 4
+        performSwipe(centerX, startY, centerX, endY, 500)
+    }
+
+    /**
+     * Perform click at coordinates (for compatibility)
+     */
+    fun performClick(
+        x: Int,
+        y: Int,
+    ) {
+        performTap(x, y)
+    }
+
+    /**
+     * Find UI elements by text content
+     */
+    fun findNodesByText(text: String): List<AccessibilityNodeInfo> {
+        val matchingNodes = mutableListOf<AccessibilityNodeInfo>()
+        try {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                findNodesByTextRecursive(rootNode, text.lowercase(Locale.ROOT), matchingNodes)
+            }
+        } catch (e: Exception) {
+            AgentLogger.UI.e("Error finding nodes by text", e)
+        }
+        return matchingNodes
+    }
+
+    /**
+     * Recursively search for nodes containing text
+     */
+    private fun findNodesByTextRecursive(
+        node: AccessibilityNodeInfo,
+        searchText: String,
+        results: MutableList<AccessibilityNodeInfo>,
+    ) {
+        try {
+            // Check text content
+            val nodeText = node.text?.toString()?.lowercase(Locale.ROOT)
+            val nodeDesc = node.contentDescription?.toString()?.lowercase(Locale.ROOT)
+
+            if ((nodeText?.contains(searchText) == true) || (nodeDesc?.contains(searchText) == true)) {
+                results.add(node)
+            }
+
+            // Search child nodes
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                if (child != null) {
+                    findNodesByTextRecursive(child, searchText, results)
+                }
+            }
+        } catch (e: Exception) {
+            AgentLogger.UI.e("Error in recursive text search", e)
+        }
+    }
+
+    /**
+     * Perform click on a specific accessibility node
+     */
+    fun performClickOnNode(node: AccessibilityNodeInfo) {
+        try {
+            if (node.isClickable) {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                AgentLogger.Auto.d("Performed click on node", mapOf("text" to node.text))
+            } else {
+                // Try to click on the center of the node
+                val bounds = android.graphics.Rect()
+                node.getBoundsInScreen(bounds)
+                performTap(bounds.centerX(), bounds.centerY())
+                AgentLogger.Auto.d(
+                    "Performed tap on node center",
+                    mapOf(
+                        "x" to bounds.centerX(),
+                        "y" to bounds.centerY(),
+                    ),
+                )
+            }
+        } catch (e: Exception) {
+            AgentLogger.Auto.e("Error performing click on node", e)
+        }
+    }
+
+    /**
+     * Perform scroll action
+     */
+    fun performScroll(direction: String) {
+        when (direction.lowercase(Locale.ROOT)) {
+            "up" -> performScrollUp()
+            "down" -> performScrollDown()
+            else -> AgentLogger.Auto.w("Unknown scroll direction", mapOf("direction" to direction))
+        }
+    }
+
+    /**
+     * Perform swipe action (wrapper for compatibility)
+     */
+    fun performSwipe(direction: String) {
+        when (direction.lowercase(Locale.ROOT)) {
+            "up" -> performScrollUp()
+            "down" -> performScrollDown()
+            "left" -> {
+                val centerY = screenHeight / 2
+                val startX = screenWidth * 3 / 4
+                val endX = screenWidth / 4
+                performSwipe(startX, centerY, endX, centerY, 500)
+            }
+            "right" -> {
+                val centerY = screenHeight / 2
+                val startX = screenWidth / 4
+                val endX = screenWidth * 3 / 4
+                performSwipe(startX, centerY, endX, centerY, 500)
+            }
+        }
+    }
+
+    /**
+     * Launch an app by package name
+     */
+    fun launchApp(packageName: String) {
+        try {
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                AgentLogger.Auto.d("Launched app", mapOf("packageName" to packageName))
+            } else {
+                AgentLogger.Auto.w("No launch intent found for package", mapOf("packageName" to packageName))
+            }
+        } catch (e: Exception) {
+            AgentLogger.Auto.e(
+                "Error launching app",
+                e,
+                mapOf(
+                    "packageName" to packageName,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Perform back action
+     */
+    fun performBack() {
+        performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
+    /**
+     * Perform home action
+     */
+    fun performHome() {
+        performGlobalAction(GLOBAL_ACTION_HOME)
+    }
+
+    /**
+     * Perform recents action
+     */
+    fun performRecents() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+        }
+    }
+
+    /**
+     * Perform text input into the currently focused EditText field
+     * Uses ACTION_SET_TEXT for direct text input
+     */
+    fun performTextInput(text: String): Boolean {
+        return try {
+            val rootNode =
+                rootInActiveWindow ?: run {
+                    AgentLogger.Auto.w("No active window for text input")
+                    return false
+                }
+
+            // Find focused input field
+            val focusedNode =
+                rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    ?: findEditableNode(rootNode)
+
+            if (focusedNode == null) {
+                AgentLogger.Auto.w("No focused or editable node found for text input")
+                @Suppress("DEPRECATION")
+                rootNode.recycle()
+                return false
+            }
+
+            // Use ACTION_SET_TEXT to input text
+            val arguments =
+                android.os.Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+                }
+
+            val success = focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+
+            if (success) {
+                AgentLogger.Auto.i("Text input successful", mapOf("text" to text))
+            } else {
+                AgentLogger.Auto.w("ACTION_SET_TEXT failed, node may not support direct text input")
+            }
+
+            @Suppress("DEPRECATION")
+            focusedNode.recycle()
+            @Suppress("DEPRECATION")
+            rootNode.recycle()
+            success
+        } catch (e: Exception) {
+            AgentLogger.Auto.e("Error performing text input", e)
+            false
+        }
+    }
+
+    /**
+     * Find first editable node in the tree
+     */
+    private fun findEditableNode(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.isEditable || node.className?.toString()?.contains("EditText") == true) {
+            return node
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findEditableNode(child)
+            if (result != null) return result
+            @Suppress("DEPRECATION")
+            child.recycle()
+        }
+
+        return null
+    }
+
+    /**
+     * Capture screen as base64 string (for compatibility)
+     */
+    fun captureScreen(): String? {
+        return try {
+            val uiData = captureScreenWithUI()
+            uiData?.get("screenshot") as? String
+        } catch (e: Exception) {
+            AgentLogger.Screen.e("Error capturing screen", e)
+            null
+        }
+    }
+
+    /**
+     * Get UI tree structure as map
+     */
+    fun getUITree(): Map<String, Any>? {
+        return try {
+            val uiElements = getUIElements()
+            val treeMap = mutableMapOf<String, Any>()
+
+            treeMap["elements_count"] = uiElements.size
+            treeMap["clickable_count"] = uiElements.count { it.isClickable }
+            treeMap["scrollable_count"] = uiElements.count { it.isScrollable }
+            treeMap["editable_count"] = uiElements.count { it.isEditable }
+
+            val elementsData =
+                uiElements.map { elem ->
+                    mapOf(
+                        "text" to (elem.text ?: ""),
+                        "contentDescription" to (elem.contentDescription ?: ""),
+                        "className" to (elem.className ?: ""),
+                        "bounds" to
+                            mapOf(
+                                "left" to elem.bounds.left,
+                                "top" to elem.bounds.top,
+                                "right" to elem.bounds.right,
+                                "bottom" to elem.bounds.bottom,
+                                "centerX" to elem.bounds.centerX,
+                                "centerY" to elem.bounds.centerY,
+                            ),
+                        "isClickable" to elem.isClickable,
+                        "isScrollable" to elem.isScrollable,
+                        "isEditable" to elem.isEditable,
+                        "isEnabled" to elem.isEnabled,
+                    )
+                }
+
+            treeMap["elements"] = elementsData
+            treeMap["timestamp"] = System.currentTimeMillis()
+
+            treeMap
+        } catch (e: Exception) {
+            AgentLogger.UI.e("Error getting UI tree", e)
+            null
+        }
+    }
+
+    /**
+     * Send UI mode status to backend for tracking
+     */
+    private fun sendUIModeStatus() {
+        val hasScreenshotPermission = mediaProjection != null
+        val statusData =
+            JSONObject().apply {
+                put("mode", if (hasScreenshotPermission) "full" else "ui_only")
+                put("has_screenshot_permission", hasScreenshotPermission)
+                put("ui_elements_available", rootInActiveWindow != null)
+                put("timestamp", System.currentTimeMillis())
+            }
+
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val requestBody = statusData.toString().toRequestBody("application/json".toMediaType())
+
+                val request =
+                    Request.Builder()
+                        .url("${BACKEND_URL}/device/status")
+                        .post(requestBody)
+                        .build()
+
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    AgentLogger.Auto.d("✅ UI mode status sent: ${statusData.get("mode")}")
+                } else {
+                    AgentLogger.Auto.d("⚠️ Failed to send UI mode status: ${response.code}")
+                }
+            } catch (e: Exception) {
+                AgentLogger.Auto.e("Error sending UI mode status", e)
+            }
+        }
+    }
+
+    /**
+     * Safe access to rootInActiveWindow with retry logic for null checks
+     * Handles Android race condition where rootInActiveWindow might briefly be null
+     * Retries up to 3 times with 50ms delay between attempts
+     */
+    private fun safeGetRootInActiveWindow(maxRetries: Int = 3): AccessibilityNodeInfo? {
+        repeat(maxRetries) { attempt ->
+            try {
+                val root = rootInActiveWindow
+                if (root != null) {
+                    return root
+                }
+                if (attempt < maxRetries - 1) {
+                    Thread.sleep(50) // Brief delay before retry
+                }
+            } catch (e: Exception) {
+                AgentLogger.Auto.d("Attempt ${attempt + 1}/$maxRetries to get root node failed: ${e.message}")
+                if (attempt < maxRetries - 1) {
+                    Thread.sleep(50) // Brief delay before retry
+                }
+            }
+        }
+        AgentLogger.Auto.d("⚠️ Could not access rootInActiveWindow after $maxRetries attempts")
+        return null
+    }
+
+    /**
+     * Flexible swipe function that handles both coordinate-based and direction-based swipes
+     */
+    fun performSwipe(
+        x1: Int? = null,
+        y1: Int? = null,
+        x2: Int? = null,
+        y2: Int? = null,
+        direction: String? = null,
+        duration: Long = 500,
+    ) {
+        when {
+            // If direction is provided, use direction-based swipe
+            !direction.isNullOrBlank() -> performSwipe(direction)
+
+            // If all coordinates are provided, use coordinate-based swipe
+            x1 != null && y1 != null && x2 != null && y2 != null ->
+                performSwipe(x1, y1, x2, y2, duration)
+
+            // Default to a down scroll if insufficient parameters
+            else -> performScrollDown()
+        }
+    }
+
+    /**
+     * Register device with AURA backend
+     */
+    fun registerDeviceWithBackend() {
+        if (!isRegistering.compareAndSet(false, true)) {
+            AgentLogger.Auto.i("⏭️ Registration already in progress, skipping")
+            return
+        }
+
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                AgentLogger.Auto.i("🔄 Starting device registration with backend: $BACKEND_URL")
+
+                // Scan installed apps (this may take a few seconds)
+                AgentLogger.Auto.i("📱 Scanning installed apps...")
+                val scanner = com.aura.aura_ui.utils.AppInventoryScanner(this@AuraAccessibilityService)
+                val installedApps = scanner.scanInstalledApps()
+
+                val deviceInfo =
+                    JSONObject().apply {
+                        put("device_name", "${Build.MANUFACTURER} ${Build.MODEL}")
+                        put("android_version", Build.VERSION.RELEASE)
+                        put("screen_width", screenWidth)
+                        put("screen_height", screenHeight)
+                        put("density_dpi", resources.displayMetrics.densityDpi)
+                        put("app_version", "1.0.0")
+                        put(
+                            "capabilities",
+                            JSONArray().apply {
+                                put("screenshot_capture")
+                                put("ui_hierarchy")
+                                put("gesture_execution")
+                                put("app_automation")
+                            },
+                        )
+                        put(
+                            "installed_apps",
+                            JSONArray().apply {
+                                installedApps.forEach { app ->
+                                    put(
+                                        JSONObject().apply {
+                                            put("package_name", app.packageName)
+                                            put("app_name", app.appName)
+                                            put("is_system_app", app.isSystemApp)
+                                            put("version_name", app.versionName)
+                                            put(
+                                                "deep_links",
+                                                JSONArray().apply {
+                                                    app.deepLinks.forEach { put(it) }
+                                                },
+                                            )
+                                            put(
+                                                "intent_filters",
+                                                JSONArray().apply {
+                                                    app.intentFilters.forEach { filter ->
+                                                        put(
+                                                            JSONObject().apply {
+                                                                put("action", filter.action)
+                                                                put(
+                                                                    "categories",
+                                                                    JSONArray().apply {
+                                                                        filter.categories.forEach { put(it) }
+                                                                    },
+                                                                )
+                                                                filter.dataScheme?.let { put("data_scheme", it) }
+                                                                filter.dataHost?.let { put("data_host", it) }
+                                                            },
+                                                        )
+                                                    }
+                                                },
+                                            )
+                                        },
+                                    )
+                                }
+                            },
+                        )
+                    }
+
+                AgentLogger.Auto.i("📦 Including ${installedApps.size} apps in registration")
+
+                val requestBody = deviceInfo.toString().toRequestBody("application/json".toMediaType())
+                val request =
+                    okhttp3.Request.Builder()
+                        .url("$BACKEND_URL/device/register")
+                        .post(requestBody)
+                        .build()
+
+                AgentLogger.Auto.i("📤 Sending registration request to: $BACKEND_URL/device/register")
+                val response = httpClient.newCall(request).execute()
+                val responseBody = response.body?.string()
+                AgentLogger.Auto.i("📥 Registration response: code=${response.code}")
+
+                if (response.isSuccessful && responseBody != null) {
+                    val responseJson = JSONObject(responseBody)
+                    val status = responseJson.optString("status")
+
+                    if (status == "registered") {
+                        AgentLogger.Auto.i("Device registered successfully with AURA backend")
+                        isRegistering.set(false)
+
+                        // Immediately send initial UI data
+                        serviceScope.launch {
+                            delay(1000) // Wait 1 second for service to be fully ready
+                            captureScreenWithAnalysis()
+                            AgentLogger.Auto.i("Initial UI data sent to backend")
+                        }
+
+                        // Start periodic UI data uploads
+                        startPeriodicUIUpdates()
+                    } else {
+                        AgentLogger.Auto.w(
+                            "Device registration returned unexpected status",
+                            mapOf(
+                                "status" to status,
+                            ),
+                        )
+                        isRegistering.set(false)
+                    }
+                } else {
+                    AgentLogger.Auto.e(
+                        "Device registration failed",
+                        null,
+                        mapOf(
+                            "responseCode" to response.code,
+                            "responseBody" to (responseBody ?: "null"),
+                        ),
+                    )
+                    isRegistering.set(false)
+                }
+            } catch (e: Exception) {
+                AgentLogger.Auto.e("Device registration failed with exception", e)
+                isRegistering.set(false)
+            }
+        }
+    }
+
+    /**
+     * Start periodic UI updates to backend
+     * Periodic UI data upload with optional screenshot
+     * Sends screenshot if MediaProjection is available, otherwise UI-only
+     */
+    private fun startPeriodicUIUpdates() {
+        // Cancel any existing periodic update job
+        periodicUpdateJob?.cancel()
+
+        periodicUpdateJob =
+            serviceScope.launch(Dispatchers.IO) {
+                var screenshotInterval = 0 // Counter for screenshot capture
+
+                while (isActive) {
+                    try {
+                        // Send UI data every 5 seconds
+                        delay(5000)
+
+                        // Re-check if AURA is active (in case window event was missed)
+                        checkIfAuraIsActive()
+
+                        // Only track UI when AURA app is active (prevents battery drain)
+                        if (isAuraAppActive && rootInActiveWindow != null) {
+                            screenshotInterval++
+
+                            // Capture screenshot every 3rd iteration (every 15 seconds) if MediaProjection is available
+                            // This prevents excessive CPU/battery usage while still providing screenshots
+                            if (screenshotInterval >= 3 && isMediaProjectionAvailable()) {
+                                screenshotInterval = 0
+                                AgentLogger.Auto.i("📸 Periodic screenshot capture triggered")
+                                captureScreenWithAnalysis()
+                            } else {
+                                // Send lightweight UI tree only
+                                sendUITreeOnly()
+                                AgentLogger.Auto.d("📋 Periodic UI-only update (screenshot in ${3 - screenshotInterval} cycles)")
+                            }
+                        } else {
+                            AgentLogger.Auto.d("⏸️ Skipping periodic update - AURA not active")
+                            screenshotInterval = 0 // Reset counter when AURA not active
+                        }
+                    } catch (e: CancellationException) {
+                        AgentLogger.Auto.d("Periodic UI updates cancelled")
+                        break
+                    } catch (e: Exception) {
+                        AgentLogger.UI.e("Error in periodic UI updates", e)
+                        delay(5000) // Wait 5 seconds on error before retrying
+                    }
+                }
+            }
+    }
+
+    /**
+     * Enhanced method to send screenshot data to backend
+     */
+    private fun sendUIDataToBackend(screenshotData: ScreenshotData) {
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                AgentLogger.Auto.d(
+                    "Preparing to send UI data: ${screenshotData.uiElements.size} elements, screenshot: ${if (screenshotData.screenshot.isEmpty()) "NO" else "YES"}",
+                )
+                val currentApp = getCurrentApp()
+
+                val uiData =
+                    JSONObject().apply {
+                        put("screenshot", screenshotData.screenshot)
+                        put(
+                            "ui_elements",
+                            JSONArray().apply {
+                                screenshotData.uiElements.forEach { element ->
+                                    put(
+                                        JSONObject().apply {
+                                            put("text", element.text)
+                                            put("contentDescription", element.contentDescription)
+                                            put(
+                                                "bounds",
+                                                JSONObject().apply {
+                                                    put("left", element.bounds.left)
+                                                    put("top", element.bounds.top)
+                                                    put("right", element.bounds.right)
+                                                    put("bottom", element.bounds.bottom)
+                                                    put("centerX", element.bounds.centerX)
+                                                    put("centerY", element.bounds.centerY)
+                                                    put("width", element.bounds.width)
+                                                    put("height", element.bounds.height)
+                                                },
+                                            )
+                                            put("className", element.className)
+                                            put("clickable", element.isClickable)
+                                            put("scrollable", element.isScrollable)
+                                            put("editable", element.isEditable)
+                                            put("enabled", element.isEnabled)
+                                            put("packageName", element.packageName)
+                                            put("viewId", element.viewId)
+                                        },
+                                    )
+                                }
+                            },
+                        )
+                        put("screen_width", screenWidth)
+                        put("screen_height", screenHeight)
+                        put("timestamp", screenshotData.timestamp)
+                        put("package_name", currentApp.first)
+                        put("activity_name", currentApp.second)
+                        put("capture_reason", "automatic_analysis")
+                    }
+
+                val requestBody = uiData.toString().toRequestBody("application/json".toMediaType())
+                val request =
+                    okhttp3.Request.Builder()
+                        .url("$BACKEND_URL/device/ui-data")
+                        .post(requestBody)
+                        .build()
+
+                AgentLogger.Auto.d("Sending UI data to: $BACKEND_URL/device/ui-data")
+                val response = httpClient.newCall(request).execute()
+                val responseBody = response.body?.string()
+                AgentLogger.Auto.d("UI data response: code=${response.code}, body=$responseBody")
+
+                if (response.isSuccessful) {
+                    AgentLogger.Auto.i("✅ UI data sent successfully to backend")
+                } else {
+                    AgentLogger.Auto.e("Failed to send UI data", null, mapOf("responseCode" to response.code))
+                }
+            } catch (e: Exception) {
+                AgentLogger.Auto.e("Error sending UI data to backend", e)
+            }
+        }
+    }
+
+    /**
+     * Get current app package and activity
+     */
+    private fun getCurrentApp(): Pair<String, String> {
+        return try {
+            val rootNode = rootInActiveWindow
+            val packageName = rootNode?.packageName?.toString() ?: ""
+
+            // For modern Android, we can only reliably get the package name
+            // Activity name requires special permissions and is deprecated
+            val activityName = "unknown_activity"
+
+            Pair(packageName, activityName)
+        } catch (e: Exception) {
+            AgentLogger.Auto.e("Error getting current app info", e)
+            Pair("", "")
+        }
+    }
+
+    /**
+     * Start command polling service
+     */
+    private fun startCommandPolling() {
+        if (commandPollingService?.isPolling() == true) {
+            AgentLogger.Auto.i("Command polling already active")
+            return
+        }
+
+        // Get device name from Android device
+        val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
+
+        commandPollingService =
+            CommandPollingService(
+                context = this,
+                serverUrl = BACKEND_URL,
+                deviceName = deviceName,
+            )
+
+        commandPollingService?.startPolling()
+
+        AgentLogger.Auto.i(
+            "Command polling service started",
+            mapOf(
+                "deviceName" to deviceName,
+                "serverUrl" to BACKEND_URL,
+            ),
+        )
+    }
+
+    /**
+     * Stop command polling service
+     */
+    private fun stopCommandPolling() {
+        commandPollingService?.stopPolling()
+        commandPollingService = null
+        AgentLogger.Auto.i("Command polling service stopped")
+    }
+
+    /**
+     * Cleanup resources
+     */
+    private fun cleanup() {
+        // Stop command polling first
+        stopCommandPolling()
+
+        // Cancel periodic updates
+        periodicUpdateJob?.cancel()
+        periodicUpdateJob = null
+
+        serviceScope.cancel()
+        virtualDisplay?.release()
+        imageReader?.close()
+        mediaProjection?.stop()
+
+        // DO NOT clear stored permission data - we need it for service restart
+        // mediaProjectionResultCode and mediaProjectionData remain for recreation
+
+        // DO NOT shutdown OkHttp globally (breaks future requests)
+        // httpClient.dispatcher.executorService.shutdown()
+        httpClient.connectionPool.evictAll()
+
+        AgentLogger.UI.i("Service cleanup completed - polling and periodic updates cancelled")
+    }
+}

@@ -1,0 +1,97 @@
+[versions]
+agp = "8.9.1"
+kotlin = "2.2.21"
+ksp = "2.2.21-2.0.5"
+hilt = "2.56.2"
+coreKtx = "1.17.0-alpha01"
+junit = "4.13.2"
+junitVersion = "1.2.1"
+espressoCore = "3.6.1"
+uiautomator = "2.3.0"
+lifecycleRuntimeKtx = "2.9.2" # <--- Updated
+activityCompose = "1.10.1"
+# Google sign-in. Credential Manager is the supported path since 2025 — the old
+# GoogleSignInClient/startActivityForResult API is deprecated and its Play Services
+# artifact is no longer the one Google updates.
+credentials = "1.3.0"
+googleid = "1.1.1"
+composeBom = "2024.09.00"
+mcpKotlinSdk = "0.8.3"
+koog = "1.0.0"
+kotlinxSerialization = "1.7.3"
+kotlinxCoroutines = "1.8.1"
+androidLibraryPlugin = "8.9.1"
+securityCrypto = "1.1.0-alpha06"
+okhttp = "4.12.0"
+workmanager = "2.10.0"
+firebaseBom = "33.1.0"
+webrtc = "1.1.1"
+googleServices = "4.4.2"
+firebaseCrashlyticsPlugin = "3.0.7"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+androidx-credentials-play-services = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
+google-identity-googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version = "1.2.0" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workmanager" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+
+# Koog — on-device AI agent framework (JetBrains). KMP umbrella: bundles
+# agent core + MCP integration + provider clients (OpenAI-base/OpenRouter/Google).
+# Android .aar variant resolved automatically from Gradle module metadata.
+koog-agents = { group = "ai.koog", name = "koog-agents", version.ref = "koog" }
+# Ktor OkHttp client engine for Koog's HTTP layer. Koog resolves its
+# KoogHttpClient.Factory via a classpath provider, but Android's R8 merge drops
+# the AAR's META-INF/services registration, so we construct the Ktor engine
+# explicitly (see GroqProvider). Pinned to 3.3.3 to match Koog's transitive
+# ktor-client-core — NOT the app's server-side ktor 3.2.3 — to avoid a
+# split-version Ktor classpath.
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version = "3.3.3" }
+
+# MCP Kotlin SDK (mcp-server module)
+mcp-kotlin-sdk-server = { group = "io.modelcontextprotocol", name = "kotlin-sdk-server", version.ref = "mcpKotlinSdk" }
+# MCP client (version-matched to the server) — the on-device agent is an MCP
+# client of our own in-process server. Pinned to 0.8.3 to stay matched with
+# :mcp-server; the agent adapter is hand-written against this version (Koog's
+# own agents-mcp targets SDK 0.11.1 and is not used).
+mcp-kotlin-sdk-client = { group = "io.modelcontextprotocol", name = "kotlin-sdk-client", version.ref = "mcpKotlinSdk" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-config = { group = "com.google.firebase", name = "firebase-config" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
+firebase-crashlytics-ndk = { group = "com.google.firebase", name = "firebase-crashlytics-ndk" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+webrtc = { group = "io.getstream", name = "stream-webrtc-android", version.ref = "webrtc" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "androidLibraryPlugin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+google-firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPlugin" }

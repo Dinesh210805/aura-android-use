@@ -1,0 +1,7 @@
+# Shell scripts must keep LF endings even on Windows checkouts. Git Bash dies
+# on CRLF with a cryptic `$'\r': command not found`, and the release scripts are
+# run from Git Bash on this machine.
+*.sh text eol=lf
+
+# sherpa-onnx parses these natively; a CR on a token line reads as an unknown token and aborts.
+aura-android/app/src/main/assets/kws/*.txt text eol=lf

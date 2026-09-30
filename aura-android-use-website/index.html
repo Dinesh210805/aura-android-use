@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AURA · android-use · Open-source hands for AI agents</title>
+<meta name="description" content="AURA is open-source android-use. An MCP server that runs on your Android phone gives any AI agent eyes and hands, plus a voice agent built on the same server. No root, no cable, no backend.">
+<link rel="canonical" href="https://aura-android-use.vercel.app/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="Dinesh">
+<meta name="theme-color" content="#E7E9EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AURA">
+<meta property="og:url" content="https://aura-android-use.vercel.app/">
+<meta property="og:title" content="AURA · Open-source hands for AI agents on Android">
+<meta property="og:description" content="An MCP server on your phone gives Claude, Cursor or any AI agent eyes and hands. Plus a voice agent. No root, no cable, no backend. MIT.">
+<meta property="og:image" content="https://aura-android-use.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="AURA: open-source hands for AI agents to control your Android.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AURA · Open-source hands for AI agents on Android">
+<meta name="twitter:description" content="An MCP server on your phone gives Claude, Cursor or any AI agent eyes and hands. Plus a voice agent. No root, no cable, no backend. MIT.">
+<meta name="twitter:image" content="https://aura-android-use.vercel.app/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"AURA","alternateName":"android-use","description":"Open-source android-use: an MCP server that runs on your Android phone and gives any AI agent eyes and hands, plus a voice agent built on the same server.","url":"https://aura-android-use.vercel.app/","applicationCategory":"UtilitiesApplication","operatingSystem":"Android 8.0+","license":"https://opensource.org/licenses/MIT","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Dinesh"},"sameAs":["https://github.com/Dinesh210805/aura-android-use"]}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@500..900&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/mobile.css">
+<script src="/support.js"></script>
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script>try{var t=localStorage.getItem('aura-theme');if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+<script src="aura-film.js"></script>
+<style>
+:root{--paper:#E7E9EC;--paper2:#DCDFE3;--ink:#0B0C0F;--ink2:#4C5058;--line:rgba(11,12,15,.15);--chip:rgba(11,12,15,.055);--red:#FF2B1C;--glow:rgba(11,12,15,.28);--logo:none;--logo-inv:invert(1) brightness(2);--hdr:rgba(231,233,236,.78);color-scheme:light}
+html[data-theme="dark"]{--paper:#000000;--paper2:#0D0D0F;--ink:#F3F4F6;--ink2:#9CA1AA;--line:rgba(255,255,255,.16);--chip:rgba(255,255,255,.07);--glow:rgba(255,255,255,.55);--logo:invert(1);--logo-inv:none;--hdr:rgba(0,0,0,.72);color-scheme:dark}
+html{background:var(--paper);overflow-x:hidden;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Geist",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip;transition:background-color .3s}
+a{color:var(--ink);text-decoration:none}
+a:hover{color:var(--ink2)}
+::selection{background:var(--ink);color:var(--paper)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px}
+summary{list-style:none;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+[data-noscrollbar]{scrollbar-width:none}
+[data-noscrollbar]::-webkit-scrollbar{display:none}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</helmet>
+<div ref="{{ rootRef }}" style="position:relative;background:var(--paper);color:var(--ink);min-height:100svh">
+
+<a href="#main" style="position:absolute;left:16px;top:-60px;z-index:60;background:var(--ink);color:var(--paper);padding:10px 14px;border-radius:8px;font-size:14px" style-focus="top:12px">Skip to content</a>
+
+<header style="position:fixed;top:0;left:0;right:0;z-index:50;background:var(--hdr);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border-bottom:1px solid var(--line)">
+  <div data-m="hdr" style="max-width:1440px;margin:0 auto;height:60px;padding:0 clamp(16px,3vw,32px);display:flex;align-items:center;gap:16px">
+    <a href="#top" aria-label="AURA home" style="display:flex;align-items:center;gap:9px;font-weight:600;font-size:16px;letter-spacing:.02em">
+      <img src="media/aura_logo_mono.png" alt="" width="24" height="24" style="filter:var(--logo);display:block">
+      <span>AURA</span>
+    </a>
+    <a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 11px;border:1px solid var(--line);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11.5px;white-space:nowrap" style-hover="background:var(--chip)">
+      <img src="logos/github.svg" alt="" width="13" height="13" style="filter:var(--logo);display:block">
+      <span data-m="gh-txt">Open source</span><span data-m="gh-txt" style="color:var(--ink2)">·</span><span>★<span data-m="gh-txt"> Star</span></span>
+      <sc-if value="{{ hasStars }}" hint-placeholder-val="{{ false }}"><span style="color:var(--ink2)">{{ stars }}</span></sc-if>
+    </a>
+    <div style="flex:1"></div>
+    <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+      <nav aria-label="Main" style="display:flex;gap:24px;font-size:14px">
+        <a href="#tools">Tools</a>
+        <a href="#apps">Apps</a>
+        <a href="#browser">Browser</a>
+        <a href="#testing">Testing</a>
+        <a href="#safety">Safety</a>
+        <a href="#developers">Developers</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+    </sc-if>
+    <button type="button" data-m="theme" onClick="{{ toggleTheme }}" aria-label="{{ themeLabel }}" style="flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0" style-hover="background:var(--chip)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor"></path></svg>
+    </button>
+    <button type="button" data-m="snd" onClick="{{ toggleSound }}" aria-pressed="{{ soundStr }}" aria-label="{{ soundLabel }}" title="{{ soundLabel }}" style="flex:none;height:36px;padding:0 14px 0 11px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);display:inline-flex;align-items:center;gap:8px;cursor:pointer;font:500 12px 'Geist Mono',monospace;white-space:nowrap" style-hover="background:var(--chip)">
+      <sc-if value="{{ soundOn }}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"></path></svg></sc-if>
+      <sc-if value="{{ soundOff }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M17 9l5 6M22 9l-5 6"></path></svg></sc-if>
+      <span data-m="snd-txt">{{ soundText }}</span>
+    </button>
+    <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+      <a href="/download" style="height:36px;padding:0 16px;border-radius:999px;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;font-size:14px;font-weight:500" style-hover="color:var(--paper);opacity:.85">Download</a>
+    </sc-if>
+    <sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}">
+      <button type="button" onClick="{{ toggleMenu }}" aria-expanded="{{ menuStr }}" aria-controls="mnav" style="flex:none;height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font:500 14px Geist,sans-serif;cursor:pointer">{{ menuLabel }}</button>
+    </sc-if>
+  </div>
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <nav id="mnav" aria-label="Main" style="border-top:1px solid var(--line);padding:12px 20px 24px;display:flex;flex-direction:column;background:var(--paper)">
+      <a href="#tools" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Tools</a>
+      <a href="#apps" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Apps</a>
+      <a href="#browser" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Browser</a>
+      <a href="#testing" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">App testing</a>
+      <a href="#safety" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Safety</a>
+      <a href="#developers" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Developers</a>
+      <a href="#faq" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">FAQ</a>
+      <button type="button" onClick="{{ toggleTheme }}" style="padding:14px 0;font:400 20px Geist,sans-serif;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer">{{ themeLabel }}</button>
+      <a href="/download" onClick="{{ closeMenu }}" style="margin-top:18px;height:50px;border-radius:999px;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500">Download for Android</a>
+    </nav>
+  </sc-if>
+</header>
+
+<main id="main">
+
+<div id="top" data-story="" style="position:relative;height:2560svh">
+  <div data-stage="" style="position:sticky;top:0;height:100svh;overflow:hidden">
+    <canvas data-canvas="" aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;width:100%;height:100%;display:block"></canvas>
+
+    <div data-ai="" aria-hidden="true" style="position:absolute;left:clamp(20px,7vw,120px);top:17svh;opacity:0;visibility:hidden;display:flex;align-items:center">
+      <div style="font-family:Doto,monospace;font-weight:900;font-size:clamp(110px,17vw,280px);line-height:.8;color:var(--ink);text-shadow:0 0 24px var(--glow),0 0 70px var(--glow)">AI</div>
+      <div style="width:clamp(40px,12vw,220px);border-top:2px dotted var(--ink2);margin-left:clamp(12px,2vw,28px)"></div>
+      <div style="width:12px;height:12px;border:1.5px solid var(--ink2);border-radius:99px;margin-left:6px"></div>
+    </div>
+
+    <div data-lapvid="" style="position:absolute;left:0;top:0;width:0;height:0;overflow:hidden;opacity:0;visibility:hidden;background:#000">
+      <video src="media/mcp-instagram.mp4" poster="media/mcp-instagram.jpg" muted="" playsinline="" preload="metadata" aria-label="Screen recording: Claude on a laptop shares an Instagram post to a story on the phone through AURA" style="width:100%;height:100%;object-fit:contain;display:block;background:#000"></video>
+    </div>
+    <div data-rapido="" style="position:absolute;right:5vw;top:12svh;height:76svh;opacity:0;visibility:hidden;display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+      <video src="media/rapido.mp4" loop="" playsinline="" preload="none" muted="" aria-label="Recording: Dinesh holds his phone and asks AURA by voice to book a Rapido to Rock Beach, Puducherry" style="height:calc(100% - 46px);max-width:100%;width:auto;border-radius:18px;display:block;background:#000;object-fit:contain"></video>
+      <div style="display:flex;align-items:center;gap:10px;width:100%;max-width:380px;min-width:180px">
+        <button type="button" data-rap-mute="" aria-label="Turn video sound on" style="flex:none;height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;font:500 11.5px 'Geist Mono',monospace;white-space:nowrap">Tap for sound</button>
+        <input type="range" data-rap-seek="" min="0" max="1000" value="0" aria-label="Video position" style="flex:1;min-width:0;accent-color:var(--ink);height:36px;margin:0;cursor:pointer">
+        <span data-rap-time="" style="flex:none;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">0:00</span>
+      </div>
+    </div>
+
+    <div data-code="" aria-hidden="true" style="position:absolute;right:clamp(20px,6vw,110px);top:max(84px,calc(50svh - 250px));width:min(540px,calc(100vw - 40px));max-height:min(500px,48svh);overflow:hidden;opacity:0;visibility:hidden;-webkit-mask-image:linear-gradient(#000 72%,transparent);mask-image:linear-gradient(#000 72%,transparent)">
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink2);margin-bottom:12px">mcp-server / SensitivePolicy.kt</div>
+<pre style="margin:0;font-family:'Geist Mono',monospace;font-size:clamp(10.5px,.95vw,12.5px);line-height:1.65;color:var(--ink);white-space:pre;overflow:hidden">object SensitivePolicy {
+
+    <span style="color:var(--ink2)">/** Why an action was refused — surfaced to the agent and the audit log. */</span>
+    enum class Category(val id: String) {
+        FINANCIAL_APP("banking_or_payment_app"),
+        AUTH_APP("authenticator_or_password_app"),
+        BANKING_PATTERN("banking_keyword_app"),
+        SENSITIVE_TEXT("sensitive_text_entry"),
+        OTP_EXFILTRATION("otp_leaving_device"),
+    }
+
+    sealed interface Decision {
+        data object Allow : Decision
+        data class Block(val category: Category, val message: String) : Decision
+    }
+
+    <span style="color:var(--ink2)">/** Financial / payment apps — hard blocked on launch + deep link. */</span>
+    private val BLOCKED_FINANCIAL_PACKAGES = setOf(
+        "com.google.android.apps.walletnfcrel", <span style="color:var(--ink2)">// Google Pay / Wallet</span>
+        "com.paypal.android.p2pmobile",         <span style="color:var(--ink2)">// PayPal</span>
+        "in.org.npci.upiapp",                   <span style="color:var(--ink2)">// BHIM</span>
+        "com.dreamplug.androidapp",             <span style="color:var(--ink2)">// CRED</span></pre>
+    </div>
+
+    <div data-cap="0" style="position:absolute;left:0;right:0;margin:0 auto;top:clamp(76px,11svh,120px);width:min(980px,calc(100vw - 40px));text-align:center">
+      <h1 style="margin:0;display:flex;flex-direction:column;align-items:center;gap:14px">
+        <span style="font-family:Doto,monospace;font-weight:850;font-size:clamp(46px,6vw,100px);line-height:.9;letter-spacing:-.01em">Open-source hands</span>
+        <span style="font-size:clamp(20px,2.1vw,32px);font-weight:500;letter-spacing:-.025em;line-height:1.15;text-wrap:balance">for <span style="color:var(--red)">AI agents</span> to control your Android.</span>
+      </h1>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;justify-content:center">
+        <a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener" style="height:44px;padding:0 20px;border-radius:999px;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:500" style-hover="color:var(--paper);opacity:.86"><img src="logos/github.svg" alt="" width="16" height="16" style="filter:var(--logo-inv);display:block;opacity:.95"> Star on GitHub</a>
+        <a href="/download" style="height:44px;padding:0 20px;border-radius:999px;border:1px solid var(--ink);display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)"><img src="logos/android.svg" alt="" width="16" height="16" style="display:block"> Download<span data-m="hide-sm"> for Android</span></a>
+      </div>
+    </div>
+    <div data-hero="" style="position:absolute;left:clamp(20px,3vw,40px);bottom:24px;font-size:13px;line-height:1.4;color:var(--ink2);max-width:260px">android-use, open source.<br>MIT · No root · No cable · No backend<br><span style="font-size:12px">Early, and built by one person.</span></div>
+    <div data-hero="" data-m="hide-sm" aria-hidden="true" style="position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:min(520px,52vw);overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)">
+      <div data-ticker="" style="overflow:hidden"><div style="display:flex;gap:18px;width:max-content;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2);white-space:nowrap"><span>perceive_screen</span><span>tap</span><span>type_text</span><span>swipe</span><span>verify_action</span><span>launch_app</span><span>open_deeplink</span><span>browser_open</span><span>browser_act</span><span>read_notifications</span><span>media_control</span><span>resolve_contact</span><span>system_intent</span><span>scroll_to</span><span>wait_for</span><span>web_search</span><span>· 56 tools ·</span></div></div>
+    </div>
+    <div data-hero="" data-m="hide-sm" style="position:absolute;right:clamp(20px,3vw,40px);bottom:24px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">[ Scroll to explore ]</div>
+    <div data-calls="" aria-hidden="true" style="position:absolute;right:clamp(20px,6vw,110px);top:34svh;text-align:right;display:grid;gap:8px;font-family:'Geist Mono',monospace;font-size:12.5px;opacity:0;visibility:hidden;transition:opacity .3s">
+      <div style="transition:opacity .4s,color .4s">perceive_screen → 22 elements</div>
+      <div style="transition:opacity .4s,color .4s">tap {"som_id": 7}</div>
+      <div style="transition:opacity .4s,color .4s">verify_action → screen changed</div>
+      <div style="transition:opacity .4s,color .4s">perceive_screen → 8 elements</div>
+      <div style="transition:opacity .4s,color .4s">tap {"som_id": 3}</div>
+    </div>
+
+    <div data-cap="1" style="position:absolute;left:clamp(20px,6vw,96px);bottom:clamp(64px,11svh,130px);width:min(760px,calc(100vw - 40px));opacity:0;visibility:hidden">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(42px,5.4vw,90px);line-height:.92;letter-spacing:-.01em;text-wrap:balance">Voice assistants can talk. They can’t use your phone.</h2>
+      <p style="margin:20px 0 0;font-size:clamp(16px,1.25vw,19px);line-height:1.45;color:var(--ink2);max-width:40ch">Ask one to book a ride and it opens the app, then stops. It can’t tap, type or scroll, so the actual work is still yours.</p>
+    </div>
+
+    <div data-cap="3" style="position:absolute;left:clamp(20px,6vw,96px);bottom:clamp(64px,11svh,130px);width:min(540px,calc(100vw - 40px));opacity:0;visibility:hidden">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(42px,5.4vw,90px);line-height:.92;letter-spacing:-.01em;text-wrap:balance">The server runs on the phone.</h2>
+      <p style="margin:20px 0 0;font-size:clamp(16px,1.25vw,19px);line-height:1.45;color:var(--ink2);max-width:40ch">No backend and no cloud computer watching your screen. The MCP server lives inside the AURA app, on the device in your hand.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;font-family:'Geist Mono',monospace;font-size:12px"><span style="padding:5px 10px;border:1px solid var(--line);border-radius:999px">no root</span><span style="padding:5px 10px;border:1px solid var(--line);border-radius:999px">no cable</span><span style="padding:5px 10px;border:1px solid var(--line);border-radius:999px">no backend</span><span style="padding:5px 10px;border:1px solid var(--line);border-radius:999px">100% Kotlin</span></div>
+    </div>
+
+    <div data-cap="2" style="position:absolute;left:clamp(20px,6vw,96px);bottom:clamp(64px,11svh,130px);width:min(500px,calc(100vw - 40px));opacity:0;visibility:hidden">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(42px,5.4vw,90px);line-height:.92;letter-spacing:-.01em;text-wrap:balance">Any AI agent gets hands.</h2>
+      <p style="margin:20px 0 0;font-size:clamp(16px,1.25vw,19px);line-height:1.45;color:var(--ink2);max-width:38ch">Claude, Cursor, VS Code or any MCP client plugs into the server on your phone. Seven layers, one loop.</p>
+    </div>
+
+    <div data-cap="4" style="position:absolute;left:clamp(20px,6vw,96px);bottom:clamp(64px,11svh,130px);width:min(560px,calc(100vw - 40px));opacity:0;visibility:hidden">
+      <h2 aria-label="Look. Pick. Tap. Check." style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(42px,5.4vw,90px);line-height:.92;letter-spacing:-.01em;display:flex;flex-wrap:wrap;gap:0 .32em">
+        <span data-step="" style="transition:opacity .35s">Look.</span>
+        <span data-step="" style="opacity:.18;transition:opacity .35s">Pick.</span>
+        <span data-step="" style="opacity:.18;transition:opacity .35s">Tap.</span>
+        <span data-step="" style="opacity:.18;transition:opacity .35s">Check.</span>
+      </h2>
+      <p data-phase="" aria-hidden="true" style="margin:18px 0 0;font-family:'Geist Mono',monospace;font-size:13px;color:var(--ink);display:inline-block;padding:6px 10px;background:var(--chip);border-radius:6px">perceive_screen · 22 things to touch</p>
+      <p style="margin:14px 0 0;font-size:clamp(16px,1.25vw,19px);line-height:1.45;color:var(--ink2);max-width:38ch">Every button gets a number. The agent picks a number, never a pixel, then looks again.</p>
+    </div>
+
+    <div data-cap="5" style="position:absolute;left:clamp(16px,3vw,48px);bottom:clamp(16px,3svh,36px);width:min(620px,calc(100vw - 32px));opacity:0;visibility:hidden;display:flex;align-items:flex-end;justify-content:space-between;gap:16px 20px;flex-wrap:wrap;background:var(--paper);padding:18px 20px;border-radius:14px;box-sizing:border-box">
+      <div>
+        <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(34px,3.6vw,60px);line-height:.92;letter-spacing:-.01em">Claude, on your phone.</h2>
+        <p style="margin:10px 0 0;font-size:15px;line-height:1.45;color:var(--ink2);max-width:44ch">Pair once with a PIN, and Claude Code on a laptop drives the phone over MCP. Here it shares an Instagram post to a story, uncut and muted.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)"><img src="logos/claude.svg" alt="Claude" width="18" height="18" style="display:block"><img src="logos/mcp.svg" alt="MCP" width="18" height="18" style="display:block;filter:var(--logo)"><span data-vidtime="" style="color:var(--ink)">0:00 / 0:59</span></div>
+    </div>
+
+    <div data-cap="6" style="position:absolute;left:clamp(20px,5vw,80px);bottom:clamp(28px,5svh,64px);width:min(480px,calc(100vw - 40px),max(calc(50vw - 170px),calc((1100px - 100vw) * 100)));opacity:0;visibility:hidden">
+      <div style="display:inline-flex;align-items:center;gap:10px;min-height:38px;padding:4px 16px 4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--paper);box-sizing:border-box;flex-wrap:wrap"><span style="width:28px;height:28px;border-radius:999px;background:#fff;display:grid;place-items:center;flex:none"><img src="logos/gemini.svg" alt="" width="18" height="18" style="display:block"></span><span style="font-size:15px;font-weight:600">Voice by Gemini Live</span><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">thank you, Google DeepMind</span></div>
+      <h2 style="margin:18px 0 0;font-family:Doto,monospace;font-weight:850;font-size:clamp(40px,4.6vw,78px);line-height:.92;letter-spacing:-.01em;text-wrap:balance">Then we gave it a voice.</h2>
+      <p aria-label="Hey AURA, book a Rapido to Rock Beach, Puducherry." style="margin:16px 0 0;font-size:clamp(17px,1.5vw,22px);line-height:1.35;letter-spacing:-.01em;display:flex;flex-wrap:wrap;gap:0 .28em"><span data-word="" style="opacity:.18;transition:opacity .25s">“Hey</span><span data-word="" style="opacity:.18;transition:opacity .25s">AURA,</span><span data-word="" style="opacity:.18;transition:opacity .25s">book</span><span data-word="" style="opacity:.18;transition:opacity .25s">a</span><span data-word="" style="opacity:.18;transition:opacity .25s">Rapido</span><span data-word="" style="opacity:.18;transition:opacity .25s">to</span><span data-word="" style="opacity:.18;transition:opacity .25s">Rock</span><span data-word="" style="opacity:.18;transition:opacity .25s">Beach,</span><span data-word="" style="opacity:.18;transition:opacity .25s">Puducherry.”</span></p>
+      <p data-vdesc="" style="margin:10px 0 0;font-size:clamp(15px,1.1vw,17px);line-height:1.45;color:var(--ink2);max-width:42ch">A real conversation, not a voice menu. It talks back and uses the phone while it speaks, with the same tools and the same gate.</p>
+      <div data-vfeat="" style="margin-top:18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 22px;border-top:1px solid var(--line);padding-top:16px">
+        <div><div style="font-size:14.5px;font-weight:600">Interrupt anytime</div><div style="margin-top:3px;font-size:13.5px;line-height:1.4;color:var(--ink2)">Talk over it and it stops mid-sentence.</div></div>
+        <div><div style="font-size:14.5px;font-weight:600">Works while it talks</div><div style="margin-top:3px;font-size:13.5px;line-height:1.4;color:var(--ink2)">Tells you the moment the task is done.</div></div>
+        <div><div style="font-size:14.5px;font-weight:600">Hands-free</div><div style="margin-top:3px;font-size:13.5px;line-height:1.4;color:var(--ink2)">Optional “Hey AURA” wake word.</div></div>
+        <div><div style="font-size:14.5px;font-weight:600">Picks up where it left off</div><div style="margin-top:3px;font-size:13.5px;line-height:1.4;color:var(--ink2)">Ask it to finish a task you cut short.</div></div>
+      </div>
+    </div>
+
+    <div data-cap="7" style="position:absolute;left:clamp(20px,6vw,96px);bottom:clamp(64px,11svh,130px);width:min(460px,calc(100vw - 40px));opacity:0;visibility:hidden">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(42px,5.4vw,90px);line-height:.92;letter-spacing:-.01em">You always win.</h2>
+      <p style="margin:18px 0 0;font-size:clamp(16px,1.25vw,19px);line-height:1.45;color:var(--ink2);max-width:36ch">The agent asks to open a banking app and the safety gate refuses. You tap Pause and it waits for you.</p>
+      <ul style="list-style:none;margin:20px 0 0;padding:0;font-size:15px;max-width:400px">
+        <li style="display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--line)"><span>Banking, payment, authenticator apps</span><span style="color:var(--red);font-weight:600" aria-label="blocked">✕</span></li>
+        <li style="display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--line)"><span>Card numbers, PINs, passwords</span><span style="color:var(--red);font-weight:600" aria-label="blocked">✕</span></li>
+        <li style="display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)"><span>A new computer connects</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">your tap</span></li>
+      </ul>
+    </div>
+
+    <div data-cap="8" style="position:absolute;left:clamp(20px,6vw,96px);bottom:clamp(64px,11svh,130px);width:min(460px,calc(100vw - 40px));opacity:0;visibility:hidden">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(42px,5.4vw,90px);line-height:.92;letter-spacing:-.01em">Read every line.</h2>
+      <p style="margin:18px 0 0;font-size:clamp(16px,1.25vw,19px);line-height:1.45;color:var(--ink2);max-width:36ch">The app, the agent and the MCP server are all open. MIT licensed.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:22px">
+        <a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener" style="height:44px;padding:0 18px;border-radius:999px;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;font-size:15px;font-weight:500" style-hover="color:var(--paper);opacity:.86">★ Star on GitHub</a>
+        <a href="#contribute" style="height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--ink);display:inline-flex;align-items:center;font-size:15px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)">Contribute</a>
+      </div>
+    </div>
+
+    <div data-cap="9" style="position:absolute;left:clamp(20px,6vw,96px);bottom:clamp(64px,11svh,130px);width:min(540px,calc(100vw - 40px));opacity:0;visibility:hidden">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(42px,5.4vw,90px);line-height:.92;letter-spacing:-.01em;text-wrap:balance">Give it something to do.</h2>
+      <p style="margin:18px 0 0;font-size:clamp(16px,1.25vw,19px);line-height:1.45;color:var(--ink2)">Keep scrolling to see everything it can reach.</p>
+    </div>
+
+  </div>
+</div>
+
+<section id="tools" data-screen-label="Tools" data-boardsec="" style="position:relative;height:560svh;border-top:1px solid var(--line)">
+  <div style="position:sticky;top:0;height:100svh;overflow:hidden;display:flex;align-items:center">
+    <div style="width:100%;max-width:1240px;margin:0 auto;padding:70px clamp(20px,5vw,64px) 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:clamp(24px,5vw,72px);align-items:center;box-sizing:border-box">
+      <div>
+        <h2 style="margin:0;font-size:clamp(32px,4.2vw,60px);font-weight:500;letter-spacing:-.035em;line-height:1.02">56 tools, on the phone.</h2>
+        <p data-m="hide-sm" style="margin:14px 0 22px;font-size:16px;line-height:1.45;color:var(--ink2);max-width:36ch">Called in any order, checking the screen between each one, all through the same gate.</p>
+        <ol data-m="hide-sm" style="list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 16px;font-family:'Geist Mono',monospace;font-size:13.5px">
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">seeing</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">touching</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">typing</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">apps</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">browser</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">notifications</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">media</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">contacts</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">files</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">deep links</li>
+          <li data-cat="" style="transition:opacity .3s,color .3s;opacity:.32">system</li>
+        </ol>
+      </div>
+      <div data-m="board" style="min-height:min(60svh,520px);display:flex;flex-direction:column;justify-content:center">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:1px solid var(--line);padding-bottom:14px">
+          <span data-bd-name="" style="font-family:Doto,monospace;font-weight:900;font-size:clamp(44px,6vw,96px);line-height:.9">seeing</span>
+          <span data-bd-count="" style="font-family:'Geist Mono',monospace;font-size:13px;color:var(--ink2)">6 / 56</span>
+        </div>
+        <p data-bd-desc="" style="margin:16px 0 22px;font-size:clamp(17px,1.4vw,21px);line-height:1.4">Reads the screen and numbers everything you can touch.</p>
+        <div data-bd-tools="" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="apps" data-screen-label="Real apps" style="border-top:1px solid var(--line);padding:clamp(40px,6vw,80px) 0 clamp(60px,8vw,110px);overflow:hidden">
+  <div data-constel="" style="position:relative;max-width:1400px;margin:0 auto;height:clamp(720px,100svh,960px)">
+    <svg data-csvg="" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none"></svg>
+    <button type="button" data-ci="" data-x="24" data-y="11" data-r="-4" data-label="Calendar" data-mx="20" data-my="9" data-prompt="“Read today’s schedule”" aria-label="Calendar: Read today’s schedule" style="position:absolute;left:24%;top:11%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/googlecalendar.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;top:-10px;right:-14px;padding:3px 8px;border-radius:999px;background:var(--red);color:#fff;font:600 12px Geist,sans-serif;box-shadow:0 6px 14px -6px rgba(255,43,28,.7)">3</span></button>
+    <button type="button" data-ci="" data-x="55" data-y="8" data-r="5" data-label="Instagram" data-mx="52" data-my="5" data-prompt="“Show my latest DMs”" aria-label="Instagram: Show my latest DMs" style="position:absolute;left:55%;top:8%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/instagram.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;top:-10px;right:-14px;padding:3px 8px;border-radius:999px;background:var(--red);color:#fff;font:600 12px Geist,sans-serif;box-shadow:0 6px 14px -6px rgba(255,43,28,.7)">2</span></button>
+    <button type="button" data-ci="" data-x="84" data-y="17" data-r="-6" data-label="YouTube" data-mx="82" data-my="12" data-prompt="“Put on a lo-fi playlist”" aria-label="YouTube: Put on a lo-fi playlist" style="position:absolute;left:84%;top:17%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/youtube.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;left:50%;bottom:-16px;transform:translateX(-30%);padding:4px 10px;border-radius:999px;background:#fff;color:#0B0C0F;font:500 11px 'Geist Mono',monospace;white-space:nowrap;box-shadow:0 8px 20px -10px rgba(0,0,0,.45)">lo-fi ▶</span></button>
+    <button type="button" data-ci="" data-x="93" data-y="47" data-r="8" data-arc="2" data-label="Uber" data-mx="88" data-my="24" data-prompt="“Book a ride to the airport”" aria-label="Uber: Book a ride to the airport" style="position:absolute;left:93%;top:47%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/uber.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;left:50%;bottom:-16px;transform:translateX(-30%);padding:4px 10px;border-radius:999px;background:#fff;color:#0B0C0F;font:500 11px 'Geist Mono',monospace;white-space:nowrap;box-shadow:0 8px 20px -10px rgba(0,0,0,.45)">Airport · 4 min</span></button>
+    <button type="button" data-ci="" data-x="85" data-y="80" data-r="-5" data-label="Spotify" data-mx="84" data-my="80" data-prompt="“Play my Discover Weekly”" aria-label="Spotify: Play my Discover Weekly" style="position:absolute;left:85%;top:80%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/spotify.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;left:50%;bottom:-16px;transform:translateX(-30%);padding:4px 10px;border-radius:999px;background:#fff;color:#0B0C0F;font:500 11px 'Geist Mono',monospace;white-space:nowrap;box-shadow:0 8px 20px -10px rgba(0,0,0,.45)">Discover Weekly</span></button>
+    <button type="button" data-ci="" data-x="63" data-y="91" data-r="4" data-arc="4" data-label="Swiggy" data-mx="62" data-my="94" data-prompt="“Reorder my last meal”" aria-label="Swiggy: Reorder my last meal" style="position:absolute;left:63%;top:91%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/swiggy.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;left:50%;bottom:-16px;transform:translateX(-30%);padding:4px 10px;border-radius:999px;background:#fff;color:#0B0C0F;font:500 11px 'Geist Mono',monospace;white-space:nowrap;box-shadow:0 8px 20px -10px rgba(0,0,0,.45)">Reorder</span></button>
+    <button type="button" data-ci="" data-x="35" data-y="90" data-r="-3" data-label="Maps" data-mx="32" data-my="92" data-prompt="“Start navigation home”" aria-label="Maps: Start navigation home" style="position:absolute;left:35%;top:90%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/maps.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;left:50%;bottom:-16px;transform:translateX(-30%);padding:4px 10px;border-radius:999px;background:#fff;color:#0B0C0F;font:500 11px 'Geist Mono',monospace;white-space:nowrap;box-shadow:0 8px 20px -10px rgba(0,0,0,.45)">Home · 14 min</span></button>
+    <button type="button" data-ci="" data-x="10" data-y="77" data-r="6" data-label="Gmail" data-mx="12" data-my="76" data-prompt="“Check for new work mail”" aria-label="Gmail: Check for new work mail" style="position:absolute;left:10%;top:77%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/gmail.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;top:-10px;right:-14px;padding:3px 8px;border-radius:999px;background:var(--red);color:#fff;font:600 12px Geist,sans-serif;box-shadow:0 6px 14px -6px rgba(255,43,28,.7)">99+</span></button>
+    <button type="button" data-ci="" data-x="6" data-y="40" data-r="-8" data-arc="0" data-label="WhatsApp" data-mx="10" data-my="40" data-prompt="“Text Mom that I’ll be home soon”" aria-label="WhatsApp: Text Mom that I’ll be home soon" style="position:absolute;left:6%;top:40%;width:clamp(58px,6.2vw,92px);height:clamp(58px,6.2vw,92px);border-radius:24%;border:0;background:#fff;box-shadow:0 22px 40px -20px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.08);display:grid;place-items:center;cursor:pointer;padding:0;transform:translate(-50%,-50%);opacity:0;transition:box-shadow .3s"><img src="logos/whatsapp.svg" alt="" style="width:56%;height:56%;display:block"><span style="position:absolute;top:-10px;right:-14px;padding:3px 8px;border-radius:999px;background:var(--red);color:#fff;font:600 12px Geist,sans-serif;box-shadow:0 6px 14px -6px rgba(255,43,28,.7)">12</span></button>
+    <div data-ctext="" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,74%);text-align:center;pointer-events:none">
+      <h2 style="margin:0;font-size:clamp(40px,5.4vw,84px);font-weight:500;letter-spacing:-.04em;line-height:1">Real apps.<br>No APIs.</h2>
+      <div data-m="hide-sm" style="margin:clamp(24px,3.4vw,44px) auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:14px 32px;text-align:left;font-family:'Geist Mono',monospace;font-size:13.5px;line-height:1.55;max-width:720px">
+        <p style="margin:0">No integrations. It reads the screen the way you do.</p>
+        <p style="margin:0">Its own keyboard types into React Native and Flutter apps.</p>
+        <p style="margin:0">Webview apps like Swiggy and Amazon work too.</p>
+      </div>
+      <div style="margin-top:clamp(30px,4vw,52px)">
+        <div data-mq-app="" style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">WhatsApp</div>
+        <p data-mq-cap="" aria-live="polite" style="margin:8px 0 0;font-size:clamp(20px,2.2vw,32px);font-weight:500;letter-spacing:-.025em;min-height:1.3em;transition:opacity .3s">“Text Mom that I’ll be home soon”</p>
+        <div data-ctalk="" style="margin:22px auto 0;display:inline-flex;align-items:center;gap:12px;height:50px;padding:0 22px 0 8px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:15px;font-weight:500"><span style="width:34px;height:34px;border-radius:999px;background:var(--paper);display:grid;place-items:center"><img src="media/aura_logo_mono.png" alt="" width="20" height="20" style="display:block;filter:var(--logo)"></span>Talk to AURA</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:clamp(70px,9vw,120px);display:grid;gap:10px" aria-label="Things to say">
+    <div data-qrow="1" style="overflow:hidden"><div style="display:flex;gap:48px;width:max-content;font-size:clamp(34px,5vw,76px);font-weight:500;letter-spacing:-.035em;white-space:nowrap;padding-right:48px"><span>“Message Amma I’m running ten minutes late”</span><span style="color:var(--ink2)">“What did Ravi say?”</span><span>“Book a Rapido to office”</span><span style="color:var(--ink2)">“Navigate to Cubbon Park”</span><span>“Reply to that and tell him I’ll call back”</span><span style="color:var(--ink2)">“Where am I right now?”</span></div></div>
+    <div data-qrow="-1" style="overflow:hidden"><div style="display:flex;gap:48px;width:max-content;font-size:clamp(34px,5vw,76px);font-weight:500;letter-spacing:-.035em;white-space:nowrap;padding-right:48px"><span style="color:var(--ink2)">“Set an alarm for six thirty”</span><span>“Pause the music”</span><span style="color:var(--ink2)">“Open the PDF I downloaded yesterday”</span><span>“Order my usual from Swiggy”</span><span style="color:var(--ink2)">“Put a ten minute timer on”</span><span>“What’s on my screen?”</span></div></div>
+  </div>
+  <p data-reveal="" style="margin:40px auto 0;padding:0 20px;font-size:15px;line-height:1.5;color:var(--ink2);max-width:58ch;text-align:center">No magic words. Type instead of talking, stop any task from the bubble, and if it can’t do something it says so.</p>
+</section>
+
+<section id="browser" data-screen-label="Browser" data-hsec="" data-hstack="" style="position:relative;height:300svh;border-top:1px solid var(--line);background:var(--paper2)">
+  <div style="position:sticky;top:0;height:100svh;overflow:hidden;display:flex;align-items:center">
+    <div data-htrack="" style="display:flex;align-items:center;gap:clamp(40px,6vw,96px);padding:60px clamp(20px,6vw,96px) 0;width:max-content;will-change:transform">
+      <div style="width:min(88vw,700px);flex:none">
+        <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(44px,5.6vw,96px);line-height:.9;letter-spacing:-.01em">It brought a browser.</h2>
+        <p style="margin:18px 0 28px;font-size:18px;line-height:1.45;color:var(--ink2);max-width:40ch">Half the jobs you want done live on the web. AURA carries its own browser and opens it in front of you. This is its real chrome.</p>
+        <div role="img" aria-label="AURA browser chrome: AURA mark, two tabs, new tab, home, minimize and close; then back, forward and the address bar." style="background:#0A0A0A;color:#F5F5F2;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px -30px rgba(0,0,0,.45);font-family:Geist,sans-serif">
+          <div style="height:44px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px">
+            <img src="media/aura_logo_mono.png" alt="" width="24" height="24" style="filter:invert(1);display:block;transform:scale(1.28)">
+            <div style="flex:1;min-width:0;display:flex;gap:6px;overflow:hidden;margin-left:8px">
+              <span style="height:30px;display:inline-flex;align-items:center;gap:8px;padding:0 9px 0 11px;background:#1A1A19;border:1px solid #2E2E2B;border-radius:9px;font-size:12.5px;white-space:nowrap">MX Master 3S — Amazon<span style="color:#9A9A95">✕</span></span>
+              <span style="height:30px;display:inline-flex;align-items:center;gap:8px;padding:0 9px 0 11px;border:1px solid #2E2E2B;border-radius:9px;font-size:12.5px;color:#9A9A95;white-space:nowrap">MX Master 3S — Flipkart<span>✕</span></span>
+            </div>
+            <span style="width:40px;height:40px;display:grid;place-items:center;font-size:18px">+</span>
+            <span style="width:40px;height:40px;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="1.8" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"></path></svg></span>
+            <span style="width:40px;height:40px;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="1.8" aria-hidden="true"><path d="M5 18h14"></path></svg></span>
+            <span style="width:40px;height:40px;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A31621" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></span>
+          </div>
+          <div style="height:52px;display:flex;align-items:center;padding:0 10px 0 4px">
+            <span style="width:40px;height:40px;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></span>
+            <span style="width:40px;height:40px;display:grid;place-items:center;opacity:.32"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="1.8" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+            <div style="flex:1;min-width:0;height:40px;margin-left:4px;display:flex;align-items:center;background:#1A1A19;border:1px solid #2E2E2B;border-radius:14px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9A9A95" stroke-width="1.8" aria-hidden="true" style="margin:0 8px 0 12px;flex:none"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+              <span style="flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">amazon.in/s?k=mx+master+3s</span>
+              <span style="width:32px;height:32px;display:grid;place-items:center;margin-right:4px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="1.8" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"></path></svg></span>
+            </div>
+          </div>
+          <div style="height:2px;background:rgba(255,255,255,.11)"><div style="height:2px;width:62%;background:#F5F5F2"></div></div>
+          <div style="padding:18px;display:grid;gap:10px;background:#F4F4F2;color:#0A0A0A">
+            <div style="display:flex;gap:12px;align-items:center;padding:12px;border:1px dashed rgba(0,0,0,.2);border-radius:10px"><span style="font:600 11px 'Geist Mono',monospace;background:#0A0A0A;color:#fff;padding:2px 6px;border-radius:3px">01</span><span style="height:8px;width:60%;background:rgba(0,0,0,.08);border-radius:3px"></span></div>
+            <div style="display:flex;gap:12px;align-items:center;padding:12px;border:1.5px solid #0A0A0A;border-radius:10px"><span style="font:600 11px 'Geist Mono',monospace;background:#0A0A0A;color:#fff;padding:2px 6px;border-radius:3px">02</span><span style="height:8px;flex:1;background:rgba(0,0,0,.08);border-radius:3px"></span><span style="font:600 13px 'Geist Mono',monospace">₹8,295</span></div>
+          </div>
+        </div>
+        <p style="margin:14px 0 0;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">browser_read → price, delivery, seller rating</p>
+      </div>
+      <figure style="margin:0;flex:none;display:flex;flex-wrap:wrap;gap:24px 28px;align-items:flex-end;max-width:92vw">
+        <div data-m="bphone" style="height:min(72svh,720px,130vw);aspect-ratio:540 / 1208;border-radius:34px;padding:9px;background:#0A0A0A;box-shadow:0 30px 80px -30px rgba(0,0,0,.5)"><div style="width:100%;height:100%;border-radius:26px;overflow:hidden;background:#000"><video src="media/swiggy.mp4" poster="media/swiggy.jpg" data-rate="2" muted="" loop="" playsinline="" preload="none" aria-label="Screen recording: AURA opens Swiggy in its browser and searches for coffee" style="width:100%;height:100%;object-fit:cover;display:block"></video></div></div>
+        <figcaption style="width:min(300px,88vw)">
+          <div style="display:flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)"><img src="logos/swiggy.svg" alt="" width="20" height="20" style="display:block">in-app browser · playing at 2×</div>
+          <p style="margin:12px 0 0;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.25">“Open Swiggy in the browser and search for coffee. Don’t order.”</p>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;font-family:'Geist Mono',monospace;font-size:11.5px"><code style="padding:4px 8px;border-radius:5px;background:var(--ink);color:var(--paper)">browser_open</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">browser_act</code><code style="padding:4px 8px;border-radius:5px;background:var(--ink);color:var(--paper)">browser_find</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">verify_action</code></div>
+        </figcaption>
+      </figure>
+      <figure style="margin:0;flex:none;display:flex;flex-wrap:wrap;gap:24px 28px;align-items:flex-end;max-width:92vw">
+        <div data-m="bphone" style="height:min(72svh,720px,130vw);aspect-ratio:540 / 1208;border-radius:34px;padding:9px;background:#0A0A0A;box-shadow:0 30px 80px -30px rgba(0,0,0,.5)"><div style="width:100%;height:100%;border-radius:26px;overflow:hidden;background:#000"><video src="media/amazon-flipkart.mp4" poster="media/amazon-flipkart.jpg" data-rate="2" muted="" loop="" playsinline="" preload="none" aria-label="Screen recording: AURA compares a mouse on Amazon and Flipkart in two tabs" style="width:100%;height:100%;object-fit:cover;display:block"></video></div></div>
+        <figcaption style="width:min(300px,88vw)">
+          <div style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">two tabs · playing at 2×</div>
+          <p style="margin:12px 0 0;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.25">“Compare the MX Master 3S on Amazon and Flipkart: price, delivery, rating, warranty, returns. Don’t buy.”</p>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;font-family:'Geist Mono',monospace;font-size:11.5px"><code style="padding:4px 8px;border-radius:5px;background:var(--ink);color:var(--paper)">browser_open</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">browser_tabs</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">browser_read</code><code style="padding:4px 8px;border-radius:5px;background:var(--ink);color:var(--paper)">browser_act</code></div>
+        </figcaption>
+      </figure>
+      <figure style="margin:0;flex:none;display:flex;flex-wrap:wrap;gap:24px 28px;align-items:flex-end;max-width:92vw">
+        <div data-m="bphone" style="height:min(72svh,720px,130vw);aspect-ratio:540 / 1208;border-radius:34px;padding:9px;background:#0A0A0A;box-shadow:0 30px 80px -30px rgba(0,0,0,.5)"><div style="width:100%;height:100%;border-radius:26px;overflow:hidden;background:#000"><video src="media/lecafe.mp4" poster="media/lecafe.jpg" data-rate="2" muted="" loop="" playsinline="" preload="none" aria-label="Screen recording: AURA finds a café near Rock Beach and opens directions in Maps" style="width:100%;height:100%;object-fit:cover;display:block"></video></div></div>
+        <figcaption style="width:min(300px,88vw)">
+          <div style="display:flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)"><img src="logos/maps.svg" alt="" width="20" height="20" style="display:block">search + Maps · playing at 2×</div>
+          <p style="margin:12px 0 0;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.25">“Find a highly rated café near Rock Beach, check it’s open today, and get directions in Maps.”</p>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;font-family:'Geist Mono',monospace;font-size:11.5px"><code style="padding:4px 8px;border-radius:5px;background:var(--ink);color:var(--paper)">web_search</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">browser_read</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">resolve_deeplink</code><code style="padding:4px 8px;border-radius:5px;background:var(--ink);color:var(--paper)">open_deeplink</code></div>
+        </figcaption>
+      </figure>
+      <div style="width:min(86vw,560px);flex:none;display:grid;gap:0">
+        <div style="padding:20px 0;border-top:1px solid var(--line)"><div style="font-family:Doto,monospace;font-weight:850;font-size:34px;line-height:1">8</div><p style="margin:8px 0 0;font-size:17px;font-weight:500">Its tabs are your tabs</p><p style="margin:4px 0 0;font-size:15px;line-height:1.5;color:var(--ink2)">Up to eight, with an address bar you can type into. Take over mid-task and you’re just browsing.</p></div>
+        <div style="padding:20px 0;border-top:1px solid var(--line)"><div style="font-family:Doto,monospace;font-weight:850;font-size:34px;line-height:1">∞</div><p style="margin:8px 0 0;font-size:17px;font-weight:500">You stay logged in</p><p style="margin:4px 0 0;font-size:15px;line-height:1.5;color:var(--ink2)">Sessions survive closing the app. Google sign-in is the exception: Google blocks it in every embedded browser.</p></div>
+        <div style="padding:20px 0;border-top:1px solid var(--line)"><div style="font-family:Doto,monospace;font-weight:850;font-size:34px;line-height:1">1</div><p style="margin:8px 0 0;font-size:17px;font-weight:500">A table in one call</p><p style="margin:4px 0 0;font-size:15px;line-height:1.5;color:var(--ink2)"><code style="font-family:'Geist Mono',monospace;font-size:13px">browser_extract</code> reads a whole table at once, so a comparison takes a minute, not ten.</p></div>
+        <div style="padding:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)"><div style="font-family:Doto,monospace;font-weight:850;font-size:34px;line-height:1">◐</div><p style="margin:8px 0 0;font-size:17px;font-weight:500">A window, not a takeover</p><p style="margin:4px 0 0;font-size:15px;line-height:1.5;color:var(--ink2)">Shrink it to a floating ball. Logins, captchas and payments are handed to you. Only ordinary web addresses open.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="testing" data-screen-label="App testing" style="border-top:1px solid var(--line);padding:clamp(80px,11vw,150px) clamp(20px,5vw,64px)">
+  <div style="max-width:1240px;margin:0 auto">
+    <div data-reveal="" style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:20px 48px">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(44px,5.8vw,100px);line-height:.9;letter-spacing:-.01em;max-width:11ch">Test your app in plain English.</h2>
+      <p style="margin:0;font-size:18px;line-height:1.45;color:var(--ink2);max-width:40ch">Point Claude Code or Cursor at your build, describe the flow, and it taps through it on a real phone, checking the screen after every step.</p>
+    </div>
+    <div data-reveal="" style="margin-top:clamp(40px,5vw,72px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:20px">
+      <div style="border:1px solid var(--line);border-radius:20px;overflow:hidden;background:var(--paper2)">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)"><img src="logos/claude.svg" alt="" width="16" height="16" style="display:block">Claude Code · test run on a real phone</div>
+        <p style="margin:0;padding:22px 20px;font-size:clamp(20px,1.8vw,26px);font-weight:500;letter-spacing:-.02em;line-height:1.3;border-bottom:1px solid var(--line)">“Open the expense app, add lunch for ₹250, and check it shows up in today’s list.”</p>
+        <ol data-tests="" style="list-style:none;margin:0;padding:6px 0">
+          <li data-ts="" style="display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 20px;transition:opacity .3s"><span data-dot="" style="width:9px;height:9px;border-radius:9px;border:1px solid var(--ink);display:block"></span><span style="font-family:'Geist Mono',monospace;font-size:13px">launch_app <span style="color:var(--ink2)">· Expenses</span></span><span data-st="" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink2)">queued</span></li>
+          <li data-ts="" style="display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 20px;transition:opacity .3s"><span data-dot="" style="width:9px;height:9px;border-radius:9px;border:1px solid var(--ink);display:block"></span><span style="font-family:'Geist Mono',monospace;font-size:13px">perceive_screen <span style="color:var(--ink2)">· numbers every button</span></span><span data-st="" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink2)">queued</span></li>
+          <li data-ts="" style="display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 20px;transition:opacity .3s"><span data-dot="" style="width:9px;height:9px;border-radius:9px;border:1px solid var(--ink);display:block"></span><span style="font-family:'Geist Mono',monospace;font-size:13px">tap <span style="color:var(--ink2)">· “+ Add”</span></span><span data-st="" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink2)">queued</span></li>
+          <li data-ts="" style="display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 20px;transition:opacity .3s"><span data-dot="" style="width:9px;height:9px;border-radius:9px;border:1px solid var(--ink);display:block"></span><span style="font-family:'Geist Mono',monospace;font-size:13px">type_text <span style="color:var(--ink2)">· “Lunch” · “250”</span></span><span data-st="" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink2)">queued</span></li>
+          <li data-ts="" style="display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 20px;transition:opacity .3s"><span data-dot="" style="width:9px;height:9px;border-radius:9px;border:1px solid var(--ink);display:block"></span><span style="font-family:'Geist Mono',monospace;font-size:13px">tap <span style="color:var(--ink2)">· “Save”</span></span><span data-st="" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink2)">queued</span></li>
+          <li data-ts="" style="display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 20px;transition:opacity .3s"><span data-dot="" style="width:9px;height:9px;border-radius:9px;border:1px solid var(--ink);display:block"></span><span style="font-family:'Geist Mono',monospace;font-size:13px">verify_action <span style="color:var(--ink2)">· “Lunch ₹250” in today’s list</span></span><span data-st="" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink2)">queued</span></li>
+        </ol>
+      </div>
+      <div style="display:grid;gap:20px;align-content:start">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px">
+          <div style="border:1px solid var(--line);border-radius:20px;padding:22px"><div style="font-family:Doto,monospace;font-weight:850;font-size:44px;line-height:1">real</div><p style="margin:12px 0 0;font-size:15px;line-height:1.45;color:var(--ink2)">Runs on the phones your users hold, not an emulator you tuned.</p></div>
+          <div style="border:1px solid var(--line);border-radius:20px;padding:22px"><div style="font-family:Doto,monospace;font-weight:850;font-size:44px;line-height:1">logs</div><p style="margin:12px 0 0;font-size:15px;line-height:1.45;color:var(--ink2)">Every step is recorded on the phone in Settings → Logs.</p></div>
+          <div style="border:1px solid var(--line);border-radius:20px;padding:22px"><div style="font-family:Doto,monospace;font-weight:850;font-size:44px;line-height:1">any</div><p style="margin:12px 0 0;font-size:15px;line-height:1.45;color:var(--ink2)">Native, React Native, Flutter or web views. If it’s on screen, it’s testable.</p></div>
+          <div style="border:1px solid var(--line);border-radius:20px;padding:22px"><div style="font-family:Doto,monospace;font-weight:850;font-size:44px;line-height:1">0</div><p style="margin:12px 0 0;font-size:15px;line-height:1.45;color:var(--ink2)">Test IDs to add. It reads the screen the way a person does.</p></div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:20px;padding:22px">
+          <p style="margin:0;font-size:15px;line-height:1.45"><b style="font-weight:500">Benchmarked on AndroidWorld,</b> <span style="color:var(--ink2)">the public suite of real-app tasks. A few we run:</span></p>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)"><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">ExpenseAddSingle</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">ContactsAddContact</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">ClockTimerEntry</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">CameraTakePhoto</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">FilesMoveFile</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">MarkorAddNoteHeader</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">BrowserMaze</code><code style="padding:4px 8px;border-radius:5px;background:var(--chip)">AudioRecorderRecordAudio</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="safety" data-screen-label="Safety" data-gatesec="" style="position:relative;height:640svh;border-top:1px solid var(--line)">
+  <div style="position:sticky;top:0;height:100svh;overflow:hidden;display:flex;align-items:center">
+    <div style="width:100%;max-width:1240px;margin:0 auto;padding:76px clamp(20px,5vw,64px) 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:clamp(24px,5vw,72px);align-items:center;box-sizing:border-box;max-height:100svh">
+      <div>
+        <h2 data-m="safety-h" style="margin:0;font-size:clamp(30px,4vw,56px);font-weight:500;letter-spacing:-.035em;line-height:1.02;max-width:15ch">You’re handing it your phone. Here’s what it can’t do.</h2>
+        <p data-m="hide-sm" style="margin:14px 0 0;font-size:16px;line-height:1.45;color:var(--ink2);max-width:40ch">Enforced in code, in one gate, before any action runs. No tool and no client can skip it.</p>
+        <ol data-rules="" data-m="hide-sm" style="list-style:none;margin:24px 0 0;padding:0;display:grid;gap:2px">
+          <li data-rule="" data-t="You outrank the AI" data-d="Tap Pause and it stops. Take over and it waits." data-src="AURA agent" data-req="tap {&quot;som_id&quot;: 4}  · while you touch the screen" data-v="PAUSED" data-why="you’re driving now" data-red="0" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">01</span><span style="font-size:15.5px;font-weight:500">You outrank the AI</span></li>
+          <li data-rule="" data-t="Banking apps stay shut" data-d="Banking, payment and authenticator apps are blocklisted, on launch and on deep link." data-src="Claude · MCP" data-req="launch_app(&quot;PhonePe&quot;)" data-v="BLOCKED" data-why="banking_or_payment_app" data-red="1" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">02</span><span style="font-size:15.5px;font-weight:500">Banking apps stay shut</span></li>
+          <li data-rule="" data-t="It won’t type your secrets" data-d="Card numbers, CVVs, PINs, IDs and “my password is…” are rejected before a keystroke." data-src="Cursor · MCP" data-req="type_text(&quot;4111 1111 1111 1111&quot;)" data-v="BLOCKED" data-why="sensitive_text_entry" data-red="1" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">03</span><span style="font-size:15.5px;font-weight:500">It won’t type your secrets</span></li>
+          <li data-rule="" data-t="Nothing connects without your tap" data-d="Every new computer pairs with a 6-digit PIN and is approved on the phone." data-src="new client" data-req="connect_device · MacBook-Pro" data-v="WAITING" data-why="approve on the phone" data-red="0" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">04</span><span style="font-size:15.5px;font-weight:500">Nothing connects without your tap</span></li>
+          <li data-rule="" data-t="Logins come back to you" data-d="In the browser it hands you the page for logins and payments." data-src="AURA agent" data-req="browser_act(&quot;Sign in&quot;)" data-v="HANDED" data-why="browser_handoff → you type it" data-red="0" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">05</span><span style="font-size:15.5px;font-weight:500">Logins come back to you</span></li>
+          <li data-rule="" data-t="One gate, no side doors" data-d="Your AI and AURA’s agent go through the same checkpoint and the same rules." data-src="Claude + AURA agent" data-req="tap · tap" data-v="CHECKED" data-why="same gate, same rules" data-red="0" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">06</span><span style="font-size:15.5px;font-weight:500">One gate, no side doors</span></li>
+          <li data-rule="" data-t="It asks instead of guessing" data-d="“Which Rahul?” It stops and asks out loud. Answer by voice." data-src="AURA agent" data-req="resolve_contact(&quot;Rahul&quot;) → 3 matches" data-v="ASKS YOU" data-why="“Which Rahul?”" data-red="0" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">07</span><span style="font-size:15.5px;font-weight:500">It asks instead of guessing</span></li>
+          <li data-rule="" data-t="You choose where it thinks" data-d="The phone reads the screen and numbers what you can touch. That numbered screenshot goes to the AI model you picked, in the cloud or running locally. AURA has no server of its own." data-src="Claude · MCP" data-req="perceive_screen" data-v="YOUR MODEL" data-why="numbered screenshot → the model you chose" data-red="0" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">08</span><span style="font-size:15.5px;font-weight:500">You choose where it thinks</span></li>
+          <li data-rule="" data-t="Everything is logged" data-d="Every step, when, and whether it worked, in Settings → Logs." data-src="any client" data-req="verify_action → screen changed" data-v="LOGGED" data-why="Settings → Logs" data-red="0" style="display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);opacity:.32;transition:opacity .3s"><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">09</span><span style="font-size:15.5px;font-weight:500">Everything is logged</span></li>
+        </ol>
+      </div>
+      <div data-m="gate" style="background:#0A0A0A;color:#F5F5F2;border-radius:22px;padding:clamp(18px,2.4vw,28px);min-height:min(58svh,480px);display:flex;flex-direction:column;box-shadow:0 40px 90px -40px rgba(0,0,0,.55);box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:7px;font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9A95"><span style="width:8px;height:8px;border-radius:9px;background:#FF2B1C;display:block"></span><span>SensitivePolicy · the gate</span><span data-g-count="" style="margin-left:auto">1 / 9</span></div>
+        <div style="margin-top:clamp(22px,4svh,40px);font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9A95">incoming from <span data-g-src="" style="color:#F5F5F2">AURA agent</span></div>
+        <div data-g-req="" style="margin-top:8px;font-family:'Geist Mono',monospace;font-size:clamp(15px,1.5vw,21px);line-height:1.4;word-break:break-word;min-height:2.8em">tap {"som_id": 4}</div>
+        <div style="flex:1;min-height:18px"></div>
+        <div data-g-verdict="" style="align-self:flex-start;font-family:Doto,monospace;font-weight:900;font-size:clamp(40px,5.4vw,84px);line-height:.9;padding:10px 18px 12px;border:3px solid currentColor;border-radius:12px;color:#F5F5F2;transform-origin:left center">PAUSED</div>
+        <div data-g-why="" style="margin-top:14px;font-family:'Geist Mono',monospace;font-size:13px;color:#C9C9C4">you’re driving now</div>
+        <div style="margin-top:clamp(18px,3svh,28px);padding-top:16px;border-top:1px solid #2E2E2B">
+          <div data-g-title="" style="font-size:clamp(18px,1.6vw,22px);font-weight:500">You outrank the AI</div>
+          <div data-g-desc="" style="margin-top:6px;font-size:15px;line-height:1.5;color:#9A9A95;max-width:52ch">Tap Pause and it stops. Take over and it waits.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section data-screen-label="Safety limits" style="padding:clamp(40px,6vw,72px) clamp(20px,5vw,64px) clamp(80px,10vw,130px)">
+  <div style="max-width:1240px;margin:0 auto">
+    <div data-reveal="" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:20px 64px;align-items:center">
+      <p style="margin:0;font-size:15px;line-height:1.55;color:var(--ink2);max-width:58ch"><b style="color:var(--ink);font-weight:500">Honest limits.</b> AURA uses Android’s accessibility service, the same permission a screen reader uses, and only while running a task you asked for. AI can still misread a screen, so review anything that spends money or can’t be undone.</p>
+      <a href="https://github.com/Dinesh210805/aura-android-use/blob/main/aura-android/mcp-server/src/main/kotlin/com/aura/mcp/server/SensitivePolicy.kt" rel="noopener" style="justify-self:start;display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 18px;border:1px solid var(--ink);border-radius:999px;font-size:15px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)">Read the policy yourself <span data-m="hide-sm" style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">SensitivePolicy.kt</span></a>
+    </div>
+  </div>
+</section>
+
+<section id="developers" data-screen-label="Developers" style="border-top:1px solid var(--line);padding:clamp(80px,11vw,150px) clamp(20px,5vw,64px);background:var(--paper2)">
+  <div style="max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:clamp(40px,6vw,80px);align-items:start">
+    <div data-reveal="">
+      <h2 style="margin:0;font-size:clamp(36px,5vw,68px);font-weight:500;letter-spacing:-.035em;line-height:1.02;max-width:12ch">Connect your AI in four steps.</h2>
+      <div style="display:flex;align-items:center;gap:18px;margin-top:22px">
+        <img src="logos/claude.svg" alt="Claude" width="28" height="28" style="display:block"><img src="logos/cursor.svg" alt="Cursor" width="26" height="26" style="display:block;filter:var(--logo)"><img src="logos/vscode.svg" alt="VS Code" width="26" height="26" style="display:block"><img src="logos/mcp.svg" alt="Any MCP app" width="26" height="26" style="display:block;filter:var(--logo)">
+      </div>
+      <p style="margin:18px 0 0;font-size:16px;line-height:1.5;color:var(--ink2);max-width:44ch">The same steps the AURA app shows on its MCP screen. Several AI apps can use the phone at once. Screen and taps travel directly, encrypted end to end; phone and computer need the same Wi-Fi, for now.</p>
+      <ol style="list-style:none;margin:26px 0 0;padding:0">
+        <li style="padding:18px 0;border-top:1px solid var(--line)"><p style="margin:0 0 4px;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">Step 1 · one time</p><p style="margin:0 0 10px;font-size:16px;font-weight:500">Install the connector (Node.js 18 or newer)</p><div style="display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:6px 6px 6px 14px"><code style="flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-family:'Geist Mono',monospace;font-size:13px">npm install -g aura-mcp-connect</code><button type="button" onClick="{{ copyNpm }}" style="height:32px;padding:0 12px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--ink);font:500 12px 'Geist Mono',monospace;cursor:pointer;flex:none" style-hover="background:var(--chip)">{{ cNpm }}</button></div></li>
+        <li style="padding:18px 0;border-top:1px solid var(--line)"><p style="margin:0 0 4px;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">Step 2 · one time</p><p style="margin:0 0 10px;font-size:16px;font-weight:500">Pair this phone with the code AURA shows</p><div style="display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:6px 6px 6px 14px"><code style="flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-family:'Geist Mono',monospace;font-size:13px">aura-mcp pair &lt;PIN&gt;</code><button type="button" onClick="{{ copyPair }}" style="height:32px;padding:0 12px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--ink);font:500 12px 'Geist Mono',monospace;cursor:pointer;flex:none" style-hover="background:var(--chip)">{{ cPair }}</button></div><p style="margin:8px 0 0;font-size:13.5px;color:var(--ink2)">The code works once, for 5 minutes.</p></li>
+        <li style="padding:18px 0;border-top:1px solid var(--line)"><p style="margin:0 0 4px;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">Step 3 · one time</p><p style="margin:0 0 10px;font-size:16px;font-weight:500">Add AURA to your AI app’s MCP config</p>
+<div style="position:relative;background:var(--paper);border:1px solid var(--line);border-radius:10px"><pre style="margin:0;padding:48px 16px 14px 16px;font-family:'Geist Mono',monospace;font-size:13px;line-height:1.6;overflow-x:auto">{
+  "mcpServers": {
+    "aura": { "command": "aura-mcp", "args": [] }
+  }
+}</pre><button type="button" onClick="{{ copyJson }}" style="position:absolute;right:6px;top:6px;height:32px;padding:0 12px;border-radius:7px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:500 12px 'Geist Mono',monospace;cursor:pointer" style-hover="background:var(--chip)">{{ cJson }}</button></div>
+          <p style="margin:8px 0 0;font-size:13.5px;line-height:1.5;color:var(--ink2)">Claude Desktop: Settings → Developer → Edit Config. On Windows, if AURA doesn’t appear, use <code style="font-family:'Geist Mono',monospace;font-size:12.5px">"command": "cmd", "args": ["/c", "aura-mcp"]</code>.</p></li>
+        <li style="padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)"><p style="margin:0 0 4px;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">Step 4 · one time</p><p style="margin:0;font-size:16px;font-weight:500">Approve on the phone</p><p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:var(--ink2)">Restart your AI app and ask “What’s on my phone screen?” The phone asks “Approve this computer?” Tap Approve once.</p></li>
+      </ol>
+      <p style="margin:18px 0 0;font-size:14px;line-height:1.5;color:var(--ink2)">This is early and built by one person, so the connection can break sometimes. If it does, <a href="https://github.com/Dinesh210805/aura-android-use/issues" rel="noopener" style="border-bottom:1px solid var(--line)">open an issue</a> with the run log.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:22px">
+        <a href="https://github.com/Dinesh210805/aura-android-use/blob/main/docs/CONNECT-GUIDE.md" rel="noopener" style="height:44px;padding:0 18px;border-radius:999px;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;font-size:15px;font-weight:500" style-hover="color:var(--paper);opacity:.86">Connection guide</a>
+        <a href="https://www.npmjs.com/package/aura-mcp-connect" rel="noopener" style="height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--ink);display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)"><img src="logos/npm.svg" alt="" width="18" height="18" style="display:block">aura-mcp-connect</a>
+      </div>
+    </div>
+    <div data-reveal="" data-term="" role="img" aria-label="Terminal: install the connector, pair with the PIN, add the MCP config, then ask your AI to use the phone." style="position:sticky;top:90px;background:#0A0A0A;color:#F5F5F2;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px -30px rgba(0,0,0,.45)">
+      <div style="display:flex;align-items:center;gap:7px;padding:14px 16px;border-bottom:1px solid #2E2E2B"><span style="width:10px;height:10px;border-radius:9px;background:#2E2E2B;display:block"></span><span style="width:10px;height:10px;border-radius:9px;background:#2E2E2B;display:block"></span><span style="width:10px;height:10px;border-radius:9px;background:#2E2E2B;display:block"></span><span style="margin-left:10px;font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9A95">~/your-laptop</span></div>
+      <div style="padding:20px 20px 26px;font-family:'Geist Mono',monospace;font-size:13px;line-height:1.9;min-height:300px">
+        <div style="white-space:pre-wrap;word-break:break-all"><span style="color:#9A9A95">$ </span><span data-tl="npm install -g aura-mcp-connect">npm install -g aura-mcp-connect</span></div>
+        <div data-tl="# AURA → MCP → Start shows a 6-digit code" data-out="" style="color:#9A9A95">&nbsp;</div>
+        <div style="white-space:pre-wrap;word-break:break-all"><span style="color:#9A9A95">$ </span><span data-tl="aura-mcp pair 482913">aura-mcp pair 482913</span></div>
+        <div data-tl="# add to your MCP config:" data-out="" style="color:#9A9A95">&nbsp;</div>
+        <div style="white-space:pre-wrap"><span data-tl='{ "mcpServers": { "aura": { "command": "aura-mcp", "args": [] } } }'>{ "mcpServers": { "aura": { "command": "aura-mcp", "args": [] } } }</span></div>
+        <div data-tl="# tap Approve on the phone, once" data-out="" style="color:#9A9A95">&nbsp;</div>
+        <div style="white-space:pre-wrap;margin-top:10px"><span style="color:#9A9A95">&gt; </span><span data-tl="What's on my phone screen?">What's on my phone screen?</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download" data-screen-label="Download" data-hsec="" style="position:relative;border-top:1px solid var(--line)">
+  <div style="position:sticky;top:0;height:100svh;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(20px,4svh,44px)">
+    <div style="width:100%;max-width:1240px;margin:0 auto;padding:56px clamp(20px,5vw,64px) 0;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:18px 48px;box-sizing:border-box">
+      <div>
+        <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(40px,5.2vw,88px);line-height:.9;letter-spacing:-.01em;max-width:11ch">Sideload it in five minutes.</h2>
+        <p style="margin:14px 0 0;font-size:16px;line-height:1.45;color:var(--ink2);max-width:42ch">Free, no account, no subscription. Not on the Play Store yet, so you install the APK yourself.</p>
+      </div>
+      <div style="display:grid;gap:12px;justify-items:start">
+        <div data-m="hide-sm" style="display:flex;align-items:baseline;gap:10px"><span data-hclock="" style="font-family:Doto,monospace;font-weight:900;font-size:clamp(40px,4.4vw,64px);line-height:.9">0:00</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">of 5:00</span></div>
+        <a href="/download" style="height:52px;padding:0 22px;border-radius:999px;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;gap:12px;font-size:16px;font-weight:500" style-hover="color:var(--paper);opacity:.86"><img src="logos/android.svg" alt="" width="20" height="20" style="display:block">Get AURA <span style="font-family:'Geist Mono',monospace;font-size:12px;opacity:.7">v{{ version }} · {{ sizeLabel }}</span></a>
+      </div>
+    </div>
+    <div data-htrack="" style="display:flex;gap:20px;padding:0 clamp(20px,5vw,64px);width:max-content">
+      <div data-m="dcard" style="flex:none;width:clamp(260px,30vw,380px);height:clamp(200px,min(46svh,calc(100svh - 330px)),440px);border:1px solid var(--line);border-radius:28px;padding:clamp(20px,2vw,28px);display:flex;flex-direction:column;justify-content:space-between;background:var(--paper2);box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><span style="font-family:Doto,monospace;font-weight:900;font-size:clamp(84px,9vw,140px);line-height:.8">1</span></div>
+        <div><p style="margin:0;font-size:clamp(18px,1.6vw,22px);font-weight:500;line-height:1.2">Download the APK</p><p style="margin:8px 0 0;font-size:14.5px;line-height:1.45;color:var(--ink2)">On your Android phone, not your computer.</p><p style="margin:14px 0 0;display:inline-block;font-family:'Geist Mono',monospace;font-size:11.5px;padding:6px 10px;border-radius:8px;background:var(--chip)">Tap “Get AURA”</p></div>
+      </div>
+      <div data-m="dcard" style="flex:none;width:clamp(260px,30vw,380px);height:clamp(200px,min(46svh,calc(100svh - 330px)),440px);border:1px solid var(--line);border-radius:28px;padding:clamp(20px,2vw,28px);display:flex;flex-direction:column;justify-content:space-between;background:var(--paper2);box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><span style="font-family:Doto,monospace;font-weight:900;font-size:clamp(84px,9vw,140px);line-height:.8">2</span></div>
+        <div><p style="margin:0;font-size:clamp(18px,1.6vw,22px);font-weight:500;line-height:1.2">Allow installs from your browser</p><p style="margin:8px 0 0;font-size:14.5px;line-height:1.45;color:var(--ink2)">Android asks once. Switch it off after.</p><p style="margin:14px 0 0;display:inline-block;font-family:'Geist Mono',monospace;font-size:11.5px;padding:6px 10px;border-radius:8px;background:var(--chip)">Settings › Install unknown apps</p></div>
+      </div>
+      <div data-m="dcard" style="flex:none;width:clamp(260px,30vw,380px);height:clamp(200px,min(46svh,calc(100svh - 330px)),440px);border:1px solid var(--line);border-radius:28px;padding:clamp(20px,2vw,28px);display:flex;flex-direction:column;justify-content:space-between;background:var(--paper2);box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><span style="font-family:Doto,monospace;font-weight:900;font-size:clamp(84px,9vw,140px);line-height:.8">3</span></div>
+        <div><p style="margin:0;font-size:clamp(18px,1.6vw,22px);font-weight:500;line-height:1.2">Play Protect warns? Install anyway</p><p style="margin:8px 0 0;font-size:14.5px;line-height:1.45;color:var(--ink2)">It flags unknown developers, not malware.</p><p style="margin:14px 0 0;display:inline-block;font-family:'Geist Mono',monospace;font-size:11.5px;padding:6px 10px;border-radius:8px;background:var(--chip)">More details › Install anyway</p></div>
+      </div>
+      <div data-m="dcard" style="flex:none;width:clamp(260px,30vw,380px);height:clamp(200px,min(46svh,calc(100svh - 330px)),440px);border:1.5px solid var(--ink);border-radius:28px;padding:clamp(20px,2vw,28px);display:flex;flex-direction:column;justify-content:space-between;background:var(--paper2);box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><span style="font-family:Doto,monospace;font-weight:900;font-size:clamp(84px,9vw,140px);line-height:.8">4</span><span style="font-family:'Geist Mono',monospace;font-size:11px;padding:5px 10px;border-radius:999px;background:var(--red);color:#fff">most missed</span></div>
+        <div><p style="margin:0;font-size:clamp(18px,1.6vw,22px);font-weight:500;line-height:1.2">Allow restricted settings</p><p style="margin:8px 0 0;font-size:14.5px;line-height:1.45;color:var(--ink2)">Android 13+. The step Android hides, and the one everyone misses.</p><p style="margin:14px 0 0;display:inline-block;font-family:'Geist Mono',monospace;font-size:11.5px;padding:6px 10px;border-radius:8px;background:var(--chip)">Apps › AURA › ⋮ › Allow restricted settings</p></div>
+      </div>
+      <div data-m="dcard" style="flex:none;width:clamp(260px,30vw,380px);height:clamp(200px,min(46svh,calc(100svh - 330px)),440px);border:1px solid var(--line);border-radius:28px;padding:clamp(20px,2vw,28px);display:flex;flex-direction:column;justify-content:space-between;background:var(--paper2);box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><span style="font-family:Doto,monospace;font-weight:900;font-size:clamp(84px,9vw,140px);line-height:.8">5</span></div>
+        <div><p style="margin:0;font-size:clamp(18px,1.6vw,22px);font-weight:500;line-height:1.2">Open AURA and follow setup</p><p style="margin:8px 0 0;font-size:14.5px;line-height:1.45;color:var(--ink2)">It walks you through each permission, one screen at a time.</p><p style="margin:14px 0 0;display:inline-block;font-family:'Geist Mono',monospace;font-size:11.5px;padding:6px 10px;border-radius:8px;background:var(--chip)">Mic · bubble · accessibility · keyboard</p></div>
+      </div>
+      <a href="/download" data-m="dcard" style="flex:none;width:clamp(260px,30vw,380px);height:clamp(200px,min(46svh,calc(100svh - 330px)),440px);border-radius:28px;padding:clamp(20px,2vw,28px);display:flex;flex-direction:column;justify-content:space-between;background:var(--ink);color:var(--paper);box-sizing:border-box" style-hover="color:var(--paper);opacity:.9"><span style="font-family:Doto,monospace;font-weight:900;font-size:clamp(84px,9vw,140px);line-height:.8">→</span><div><p style="margin:0;font-size:clamp(18px,1.6vw,22px);font-weight:500;line-height:1.2">Full install guide</p><p style="margin:8px 0 0;font-size:14.5px;line-height:1.45;opacity:.7">Your phone brand’s extra switches, every permission, and how to verify the file.</p></div></a>
+    </div>
+  </div>
+</section>
+
+<section id="film" data-screen-label="Film" style="border-top:1px solid var(--line);padding:clamp(56px,7vw,90px) clamp(20px,5vw,64px)">
+  <div data-reveal="" style="max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px 48px;align-items:center">
+    <div style="position:relative;aspect-ratio:16 / 9;border-radius:14px;overflow:hidden;background:var(--paper2);border:1px solid var(--line);max-width:560px">
+      <sc-if value="{{ filmOn }}" hint-placeholder-val="{{ false }}">
+        <iframe src="https://www.youtube-nocookie.com/embed/u2PS767kdMI?autoplay=1&amp;rel=0" title="AURA launch film" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen="" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
+      </sc-if>
+      <sc-if value="{{ filmOff }}" hint-placeholder-val="{{ true }}">
+        <button type="button" onClick="{{ playFilm }}" aria-label="Play the launch film" style="position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;background:transparent;cursor:pointer;display:block">
+          <img src="https://i.ytimg.com/vi/u2PS767kdMI/maxresdefault.jpg" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1) contrast(1.05)">
+          <span style="position:absolute;left:14px;bottom:14px;width:44px;height:44px;border-radius:999px;background:var(--paper);display:grid;place-items:center"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9.5-5.5z" fill="var(--ink)"></path></svg></span>
+        </button>
+      </sc-if>
+    </div>
+    <div>
+      <p style="margin:0;font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">Launch film · 4:25 · with sound</p>
+      <h2 style="margin:10px 0 0;font-size:clamp(26px,2.6vw,38px);font-weight:500;letter-spacing:-.03em;line-height:1.1">The Barrier Is Down.</h2>
+      <p style="margin:10px 0 0;font-size:16px;line-height:1.5;color:var(--ink2);max-width:40ch">What AURA is and what it does, on a real phone.</p>
+    </div>
+  </div>
+</section>
+
+<section id="faq" data-screen-label="FAQ" style="border-top:1px solid var(--line);padding:clamp(80px,11vw,150px) clamp(20px,5vw,64px)">
+  <div style="max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:clamp(32px,6vw,88px);align-items:start">
+    <h2 data-reveal="" style="margin:0;font-size:clamp(36px,5vw,68px);font-weight:500;letter-spacing:-.035em;line-height:1.02;max-width:10ch">The things people ask first.</h2>
+    <div style="border-bottom:1px solid var(--line)">
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Does AURA watch my screen all the time?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">No. It reads the screen only while doing something you asked for, and stops when the task ends. The numbered screenshot and element list go to the AI model you chose, whether that’s a cloud provider or a model you run yourself. AURA itself has no backend and keeps nothing.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">What does it cost?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">The app is free, with no account and no subscription. Bring your own key from any of 13 providers; Groq and Google Gemini have free tiers. You pay your provider directly, if at all.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500"><span>Why is the download {{ sizeLabel }}?</span><span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">The vision models that read your screen ship inside the app instead of on a server. It also carries code for both ARM processor types so one APK works everywhere; per-processor builds are planned.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Why isn’t it on the Play Store?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">It’s coming. For now it ships directly so it can improve quickly. The <a href="#download" style="border-bottom:1px solid var(--line)">download steps</a> cover every screen, including the one Android hides.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Can I use it to test my own app?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">Yes. Connect Claude Code, Cursor or any MCP client, install your build on the phone, and describe the flow in plain English. It checks the screen after every step and logs the run on the phone.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Can it log into websites in its browser?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">Yes, when you type the password yourself, and the session stays signed in. Sign in with Google is the exception: Google has blocked its sign-in page inside embedded browsers since 2023, for every app.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Which phones does it work on?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">Android 8.0 or newer on ARM. Xiaomi, OPPO, realme, vivo, OnePlus, Samsung, Huawei, Honor, Pixel and Motorola all work, though some brands add permission switches of their own.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Does it update itself?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">Not automatically; apps installed outside the Play Store can’t. AURA shows a banner when a new version is out. Updates install over the old app and keep your settings, memory and keys.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Can it work without internet?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">Partly. Seeing the screen, the wake word and speaking back work offline. Deciding what to do next needs your AI provider.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">Is it stable?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">Honestly, not yet. AURA was built by one person and it’s early, so it can break sometimes: some apps trip it up and a run can stall. You can always stop it, and bug reports with the run log help a lot.</p></details>
+      <details style="border-top:1px solid var(--line)"><summary style="display:flex;justify-content:space-between;gap:20px;padding:20px 0;font-size:18px;font-weight:500">What happens if it does the wrong thing?<span aria-hidden="true" style="font-family:'Geist Mono',monospace;color:var(--ink2)">+</span></summary><p style="margin:0 0 22px;font-size:16px;line-height:1.55;color:var(--ink2);max-width:62ch">Stop it any time from the floating bubble or the notification. Every step is logged. It is AI and it can be wrong, so anything irreversible deserves your eyes.</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="contribute" data-screen-label="Contribute" style="border-top:1px solid var(--line);padding:clamp(80px,11vw,150px) clamp(20px,5vw,64px)">
+  <div style="max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:clamp(32px,6vw,88px);align-items:start">
+    <div data-reveal="">
+      <h2 style="margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(48px,6.4vw,104px);line-height:.92;letter-spacing:-.01em">Build android-use with us.</h2>
+      <p style="margin:20px 0 0;font-size:18px;line-height:1.45;color:var(--ink2);max-width:40ch">The easiest way in is a skill: one markdown file that teaches AURA a job. Bug reports with the run log attached help more than anything.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:28px">
+        <a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener" style="height:46px;padding:0 20px;border-radius:999px;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;font-size:15px;font-weight:500" style-hover="color:var(--paper);opacity:.86">★ Star on GitHub</a>
+        <a href="https://github.com/Dinesh210805/aura-android-use/issues" rel="noopener" style="height:46px;padding:0 20px;border-radius:999px;border:1px solid var(--ink);display:inline-flex;align-items:center;font-size:15px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)">Open an issue</a>
+        <a href="https://discord.com/invite/H66ws9zMPF" rel="noopener" style="height:46px;padding:0 20px;border-radius:999px;border:1px solid var(--ink);display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)"><img src="logos/discord.svg" alt="" width="18" height="18" style="display:block">Discord</a>
+      </div>
+    </div>
+    <div data-reveal="" style="border:1px solid var(--line);border-radius:18px;overflow:hidden;font-family:'Geist Mono',monospace;font-size:13px">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--line);color:var(--ink2);font-size:11.5px;display:flex;align-items:center;gap:8px"><img src="logos/github.svg" alt="" width="14" height="14" style="display:block;filter:var(--logo)">Dinesh210805 / aura-android-use</div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--line);display:grid;gap:4px"><span>aura-android/mcp-server/</span><span style="font-family:Geist,sans-serif;font-size:14px;color:var(--ink2)">The MCP server: tools, safety gate, and the rulebook it gives AIs</span></div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--line);display:grid;gap:4px"><span>aura-android/app/</span><span style="font-family:Geist,sans-serif;font-size:14px;color:var(--ink2)">The app: UI, the agent, voice, and the parts that touch the screen</span></div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--line);display:grid;gap:4px;background:var(--chip)"><span>aura-android/app/src/main/assets/skills/</span><span style="font-family:Geist,sans-serif;font-size:14px;color:var(--ink2)">Skills. Start here.</span></div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--line);display:grid;gap:4px"><span>aura-mcp-connect/</span><span style="font-family:Geist,sans-serif;font-size:14px;color:var(--ink2)">The computer-side bridge that links your AI apps to the phone</span></div>
+      <div style="padding:14px 16px;display:grid;gap:4px"><span>docs/</span><span style="font-family:Geist,sans-serif;font-size:14px;color:var(--ink2)">Guides, design notes, benchmarks</span></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer style="border-top:1px solid var(--line);padding:56px clamp(20px,5vw,64px) 36px">
+  <div style="max-width:1240px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:36px 32px">
+      <div>
+        <a href="#top" style="display:flex;align-items:center;gap:9px;font-weight:600;font-size:16px"><img src="media/aura_logo_mono.png" alt="" width="24" height="24" style="filter:var(--logo);display:block">AURA</a>
+        <p style="margin:14px 0 0;font-size:14px;line-height:1.5;color:var(--ink2);max-width:26ch">Open-source android-use. Hands for AI agents on your phone.</p>
+      </div>
+      <nav aria-label="Product"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Product</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="/download">Download</a></li><li><a href="#tools">Tools</a></li><li><a href="#testing">App testing</a></li><li><a href="#safety">Safety</a></li><li><a href="#film">Launch film</a></li></ul></nav>
+      <nav aria-label="Developers"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Developers</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener">GitHub</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/docs/CONNECT-GUIDE.md" rel="noopener">Docs</a></li><li><a href="https://www.npmjs.com/package/aura-mcp-connect" rel="noopener">aura-mcp-connect</a></li><li><a href="https://github.com/Dinesh210805/aura-releases/releases" rel="noopener">Releases</a></li></ul></nav>
+      <nav aria-label="Community"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Community</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://discord.com/invite/H66ws9zMPF" rel="noopener">Discord</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/issues" rel="noopener">Issues</a></li><li><a href="mailto:dinesh210805@gmail.com">Contact</a></li></ul></nav>
+      <nav aria-label="Legal"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Legal</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://dinesh210805.github.io/aura-app/privacy.html" rel="noopener">Privacy</a></li><li><a href="https://dinesh210805.github.io/aura-app/privacy.html#terms" rel="noopener">Terms</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/LICENSE" rel="noopener">MIT License</a></li></ul></nav>
+    </div>
+    <div style="margin-top:48px;padding-top:20px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--ink2)">
+      <span>© 2026 AURA. Built in India by one person, Dinesh. Early software: it can break.</span>
+      <span>v{{ version }} · {{ dateLabel }}</span>
+    </div>
+  </div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;system&quot;,&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;system&quot;,&quot;tsType&quot;:&quot;'system'|'light'|'dark'&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#FF2B1C&quot;,&quot;#FF3D00&quot;,&quot;#E8112D&quot;,&quot;#FF4F3A&quot;],&quot;default&quot;:&quot;#FF2B1C&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { film: false, menu: false, copied: '', wide: true, stars: null, rel: null, dark: false, sound: true };
+  rootRef = React.createRef();
+
+  componentDidMount() {
+    this.onResize = () => { const w = window.innerWidth >= 1000; if (w !== this.state.wide) this.setState({ wide: w, menu: w ? false : this.state.menu }); };
+    this.onResize(); window.addEventListener('resize', this.onResize);
+    this.applyProps();
+    this.setState({ dark: document.documentElement.getAttribute('data-theme') === 'dark' });
+    const boot = () => {
+      if (window.AuraFilm && this.rootRef.current) this.film = window.AuraFilm.mount(this.rootRef.current);
+      else this.bootT = setTimeout(boot, 60);
+    };
+    boot();
+    const sb = () => { if (window.AuraSound) this.setState({ sound: window.AuraSound.isOn() }); else this.sbT = setTimeout(sb, 100); };
+    sb();
+    fetch('https://api.github.com/repos/Dinesh210805/aura-releases/releases/latest').then(r => r.ok ? r.json() : null).then(j => {
+      if (!j) return;
+      const a = (j.assets || []).find(x => /\.apk$/i.test(x.name));
+      this.setState({ rel: { version: (j.tag_name || '').replace(/^v/, '') || null, size: a ? (a.size / 1048576).toFixed(1) : null, apk: a ? a.browser_download_url : null, date: j.published_at || null } });
+    }).catch(() => {});
+    fetch('https://api.github.com/repos/Dinesh210805/aura-android-use').then(r => r.ok ? r.json() : null).then(j => {
+      if (j && typeof j.stargazers_count === 'number') this.setState({ stars: j.stargazers_count });
+    }).catch(() => {});
+  }
+  componentDidUpdate(prev) { if (prev.theme !== this.props.theme || prev.accent !== this.props.accent) this.applyProps(); }
+  componentWillUnmount() { window.removeEventListener('resize', this.onResize); clearTimeout(this.bootT); clearTimeout(this.copyT); this.film && this.film.destroy(); }
+
+  applyProps() {
+    const el = document.documentElement, t = this.props.theme;
+    if (t === 'light' || t === 'dark') { el.setAttribute('data-theme', t); this.setState({ dark: t === 'dark' }); }
+    el.style.setProperty('--red', this.props.accent || '#FF2B1C');
+  }
+  setTheme(dark) {
+    const t = dark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('aura-theme', t); } catch (e) {}
+    this.setState({ dark });
+  }
+  copy(key, text) {
+    const done = () => { this.setState({ copied: key }); clearTimeout(this.copyT); this.copyT = setTimeout(() => this.setState({ copied: '' }), 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, done); else done();
+  }
+
+  renderVals() {
+    const rel = this.state.rel || {};
+    const version = rel.version || '1.0.479', size = rel.size || '159.8';
+    const apk = rel.apk || 'https://github.com/Dinesh210805/aura-releases/releases/download/v1.0.479/aura-1.0.479.apk';
+    let dateLabel = 'latest release';
+    if (rel.date) { try { dateLabel = 'released ' + new Date(rel.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) {} }
+    const cp = this.state.copied, s = this.state.stars;
+    return {
+      rootRef: this.rootRef,
+      wide: this.state.wide, narrow: !this.state.wide,
+      menuOpen: this.state.menu && !this.state.wide, menuStr: String(!!this.state.menu), menuLabel: this.state.menu ? 'Close' : 'Menu',
+      toggleMenu: () => this.setState(st => ({ menu: !st.menu })), closeMenu: () => this.setState({ menu: false }),
+      toggleTheme: () => this.setTheme(!this.state.dark), themeLabel: this.state.dark ? 'Switch to light theme' : 'Switch to dark theme',
+      hasStars: typeof s === 'number', stars: typeof s === 'number' ? (s >= 1000 ? (s / 1000).toFixed(1) + 'k' : String(s)) : '',
+      filmOn: this.state.film, filmOff: !this.state.film, playFilm: () => this.setState({ film: true }),
+      version, sizeLabel: size + ' MB', apk, dateLabel,
+      copyNpm: () => this.copy('npm', 'npm install -g aura-mcp-connect'),
+      copyPair: () => this.copy('pair', 'aura-mcp pair '),
+      copyJson: () => this.copy('json', '{\n  "mcpServers": {\n    "aura": { "command": "aura-mcp", "args": [] }\n  }\n}'),
+      cNpm: cp === 'npm' ? 'Copied' : 'Copy', cPair: cp === 'pair' ? 'Copied' : 'Copy', cJson: cp === 'json' ? 'Copied' : 'Copy',
+      soundOn: this.state.sound, soundOff: !this.state.sound, soundStr: String(this.state.sound), soundLabel: this.state.sound ? 'Turn sound effects off' : 'Turn sound effects on', soundText: this.state.sound ? 'Sound on' : 'Sound off',
+      toggleSound: () => { const S = window.AuraSound; const next = !this.state.sound; if (S) S.set(next); this.setState({ sound: next }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

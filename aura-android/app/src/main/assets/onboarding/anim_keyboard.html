@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none}
+body{display:flex;justify-content:center;align-items:center;min-height:100vh;background:transparent;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+
+/* Premium Realistic Smartphone Chassis */
+.phone-wrapper{position:relative;display:flex;justify-content:center;align-items:center;transform:scale(calc(min(calc(100vh / 520px), calc(100vw / 265px), 1) * 0.88));transform-origin:center center}
+.phone-btn-power{position:absolute;right:-3px;top:110px;width:3px;height:38px;background:#1A1916;border-radius:0 2px 2px 0}
+.phone-btn-vol-up{position:absolute;left:-3px;top:90px;width:3px;height:32px;background:#1A1916;border-radius:2px 0 0 2px}
+.phone-btn-vol-down{position:absolute;left:-3px;top:130px;width:3px;height:32px;background:#1A1916;border-radius:2px 0 0 2px}
+
+.phone{
+  position:relative;
+  width:248px;
+  height:498px;
+  background:#141110;
+  border-radius:40px;
+  padding:6px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 10px 24px rgba(36,27,21,0.09),
+    0 2px 6px rgba(36,27,21,0.04);
+}
+
+.screen{
+  position:relative;
+  width:100%;
+  height:100%;
+  background:#FAFAF8;
+  border-radius:34px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+/* Dynamic Camera Notch Island */
+.notch-island{
+  position:absolute;
+  top:6px;
+  left:50%;
+  transform:translateX(-50%);
+  height:13px;
+  width:13px;
+  background:#1C1A17;
+  border-radius:7px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  z-index:70;
+  transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow:hidden;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+.notch-island.expanded{
+  height:20px;
+  width:auto;
+  max-width:fit-content;
+  border-radius:10px;
+  padding:2px 7px 2px 6px;
+  gap:5px;
+}
+.notch-cam{
+  width:7px;
+  height:7px;
+  background:#090909;
+  border-radius:50%;
+  flex-shrink:0;
+  border:1px solid rgba(255,255,255,0.12);
+}
+.notch-island.expanded .notch-cam{display:none}
+
+.notch-content{
+  display:none;
+  align-items:center;
+  gap:5px;
+  white-space:nowrap;
+}
+.notch-island.expanded .notch-content{display:inline-flex}
+
+.notch-logo{
+  width:11px;
+  height:11px;
+  object-fit:contain;
+  filter:brightness(0) invert(1);
+  flex-shrink:0;
+}
+.notch-verb{
+  font-size:8.5px;
+  font-weight:700;
+  color:#F4F1EA;
+  letter-spacing:0.3px;
+}
+
+/* Status Bar (6:00, Aug 21) */
+.status-bar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 16px 2px;
+  height:26px;
+  z-index:60;
+  flex-shrink:0;
+  background:#FAFAF8;
+  border-bottom:1px solid rgba(0,0,0,0.04);
+}
+.time-group{display:flex;align-items:center;gap:4px}
+.time{font-size:9.5px;font-weight:700;color:#1C1A17;letter-spacing:-0.2px}
+.date-tag{font-size:7.5px;font-weight:600;color:#8A867C}
+.status-icons{display:flex;gap:4px;align-items:center}
+.icon-bar{width:11px;height:7px;background:#1C1A17;opacity:0.85;border-radius:1px}
+.icon-wifi{width:8px;height:7px;background:#1C1A17;opacity:0.85;border-radius:2px}
+.icon-battery{width:13px;height:6px;border:1px solid #1C1A17;border-radius:2px;position:relative}
+.icon-battery::after{content:'';position:absolute;left:1px;top:1px;bottom:1px;width:7px;background:#1C1A17;border-radius:1px}
+
+
+
+
+/* ── Clean Authentic Manga Comic Badges (Top-Right & Bottom-Left) ── */
+.manga-accent-layer{position:absolute;inset:0;pointer-events:none;z-index:200;overflow:visible}
+.manga-sfx{
+  position:absolute;
+  z-index:210;
+  font-family:'Outfit','Impact',-apple-system,sans-serif;
+  font-weight:900;
+  font-size:12px;
+  line-height:1.1;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#141110;
+  background:#FFFDF8;
+  border:2px solid #141110;
+  padding:3px 8px;
+  border-radius:8px;
+  box-shadow:2.5px 2.5px 0 #D62828, 4px 4px 0 #141110;
+  white-space:nowrap;
+  user-select:none;
+}
+.manga-sfx.red-sfx{
+  background:#D62828;
+  color:#FFFDF8;
+  border:2px solid #141110;
+  box-shadow:2.5px 2.5px 0 #FFFDF8, 4px 4px 0 #141110;
+}
+.manga-sfx-tr{
+  top:-8px;
+  right:-18px;
+  animation:mangaBadgePop 3s ease-in-out infinite;
+}
+.manga-sfx-bl{
+  bottom:36px;
+  left:-18px;
+  animation:mangaBadgeFloat 2.8s ease-in-out infinite 0.5s;
+}
+
+@keyframes mangaBadgePop{
+  0%,100%{transform:rotate(8deg) scale(0.96) translateY(0);opacity:0.98}
+  50%{transform:rotate(12deg) scale(1.08) translateY(-3px);opacity:1}
+}
+@keyframes mangaBadgeFloat{
+  0%,100%{transform:rotate(-10deg) scale(0.96) translateY(0);opacity:0.98}
+  50%{transform:rotate(-6deg) scale(1.08) translateY(-2px);opacity:1}
+}
+
+/* Subtle Action Halftones tucked near the badges */
+.manga-tone{position:absolute;z-index:195;opacity:0.65;animation:mangaToneBreathe 4s ease-in-out infinite}
+.manga-tone-tr{top:14px;right:-14px}
+.manga-tone-bl{bottom:60px;left:-14px;animation-delay:1.8s}
+
+@keyframes mangaToneBreathe{
+  0%,100%{opacity:0.35;transform:scale(0.92)}
+  50%{opacity:0.8;transform:scale(1.05)}
+}
+  50%{opacity:0.85;transform:scale(1.05)}
+}
+  50%{opacity:0.8;transform:scale(1.05)}
+}
+  50%{transform:scale(1.15) rotate(10deg);opacity:0.95}
+}
+
+/* App Header & Editor Body */
+.app-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px 6px;border-bottom:1px solid #EFEDE5}
+.app-title-group{display:flex;align-items:center;gap:7px}
+.header-svg{width:15px;height:15px;color:#1C1A17}
+.header-text{font-size:11.5px;font-weight:800;color:#1C1A17}
+.save-chip{font-size:7.5px;font-weight:700;color:#34C759;background:#E8F8EE;padding:2px 7px;border-radius:8px}
+
+/* Note Content Container */
+.editor-body{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.note-timestamp{font-size:7.5px;font-weight:600;color:#8A867C}
+.text-area{
+  font-size:8.5px;
+  line-height:1.45;
+  color:#1C1A17;
+  font-weight:600;
+  white-space:pre-wrap;
+  word-break:break-word;
+  position:relative;
+}
+.typed-text{color:#1C1A17}
+.cursor-caret{display:inline-block;width:2px;height:12px;background:#D62828;vertical-align:middle;margin-left:1px;animation:blinkCaret 0.8s infinite}
+@keyframes blinkCaret{0%,100%{opacity:1}50%{opacity:0}}
+
+/* Android Keyboard Container */
+.keyboard-wrapper{position:absolute;left:0;right:0;bottom:0;background:#ECEAE4;border-top:1px solid #DFDCD3;border-radius:18px 18px 0 0;padding:5px 4px 8px;display:flex;flex-direction:column;gap:4px;box-shadow:0 -4px 18px rgba(0,0,0,0.06);z-index:20;transform:translateY(100%);transition:transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)}
+.keyboard-wrapper.show{transform:translateY(0)}
+
+/* Suggestions Bar */
+.suggestions-bar{display:flex;gap:5px;padding:0 3px 3px;border-bottom:1px solid rgba(0,0,0,0.05)}
+.sug-chip{flex:1;background:#FFFFFF;border-radius:10px;height:20px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;color:#1C1A17;box-shadow:0 1px 2px rgba(0,0,0,0.03)}
+.sug-chip.primary{font-weight:800;color:#D62828}
+
+/* Keyboard Rows */
+.kb-row{display:flex;justify-content:center;gap:3px}
+.key{height:30px;flex:1;background:#FFFFFF;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:#1C1A17;box-shadow:0 1px 2px rgba(0,0,0,0.08);transition:all 0.08s ease}
+.key.active{background:#1C1A17;color:#FFFFFF;transform:scale(0.92)}
+.key.fn{background:#D8D5CC;flex:1.4;font-size:9px;font-weight:700}
+.key.space{flex:4.2;font-size:8.5px;color:#8A867C}
+.key.enter-key{background:#D62828;color:#FFFFFF;flex:1.4}
+.key-svg{width:12px;height:12px}
+</style>
+</head>
+<body>
+
+<div class="phone-wrapper">
+          <div class="phone-btn-power"></div>
+  <div class="phone-btn-vol-up"></div>
+  <div class="phone-btn-vol-down"></div>
+
+  <div class="phone">
+    <div class="screen">
+      
+      <!-- Dynamic Camera Notch Island (Compact Hugging Pill) -->
+      <div class="notch-island" id="notchIsland">
+        <div class="notch-cam"></div>
+        <div class="notch-content">
+          <img src="aura_logo_mono.png" class="notch-logo" alt="AURA">
+          <span class="notch-verb">Typing</span>
+        </div>
+      </div>
+
+      <!-- Clean Status Bar (Time: 6:00, Battery & Wifi, Date removed) -->
+      <div class="status-bar">
+        <div class="time-group">
+          <span class="time">6:00</span>
+        </div>
+        <div class="status-icons">
+          <div class="icon-bar"></div>
+          <div class="icon-wifi"></div>
+          <div class="icon-battery"></div>
+        </div>
+      </div>
+
+      <!-- Notes / Editor Screen -->
+      <div class="app-header">
+        <div class="app-title-group">
+          <svg class="header-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span class="header-text">AURA Notes</span>
+        </div>
+        <div class="save-chip">Saved</div>
+      </div>
+
+      <div class="editor-body">
+        <div class="note-timestamp">August 21 at 6:00 PM</div>
+        <div class="text-area">
+          <span class="typed-text" id="typedOutput"></span>
+          <span class="cursor-caret"></span>
+        </div>
+      </div>
+
+      <!-- Realistic Android Keyboard -->
+      <div class="keyboard-wrapper" id="keyboard">
+        <div class="suggestions-bar">
+          <div class="sug-chip" id="sug1">AURA</div>
+          <div class="sug-chip primary" id="sug2">automation</div>
+          <div class="sug-chip" id="sug3">MCP</div>
+        </div>
+
+        <!-- Row 1 -->
+        <div class="kb-row">
+          <div class="key" data-key="q">q</div>
+          <div class="key" data-key="w">w</div>
+          <div class="key" data-key="e">e</div>
+          <div class="key" data-key="r">r</div>
+          <div class="key" data-key="t">t</div>
+          <div class="key" data-key="y">y</div>
+          <div class="key" data-key="u">u</div>
+          <div class="key" data-key="i">i</div>
+          <div class="key" data-key="o">o</div>
+          <div class="key" data-key="p">p</div>
+        </div>
+
+        <!-- Row 2 -->
+        <div class="kb-row" style="padding:0 6px">
+          <div class="key" data-key="a">a</div>
+          <div class="key" data-key="s">s</div>
+          <div class="key" data-key="d">d</div>
+          <div class="key" data-key="f">f</div>
+          <div class="key" data-key="g">g</div>
+          <div class="key" data-key="h">h</div>
+          <div class="key" data-key="j">j</div>
+          <div class="key" data-key="k">k</div>
+          <div class="key" data-key="l">l</div>
+        </div>
+
+        <!-- Row 3 -->
+        <div class="kb-row">
+          <div class="key fn" data-key="shift">
+            <svg class="key-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+          </div>
+          <div class="key" data-key="z">z</div>
+          <div class="key" data-key="x">x</div>
+          <div class="key" data-key="c">c</div>
+          <div class="key" data-key="v">v</div>
+          <div class="key" data-key="b">b</div>
+          <div class="key" data-key="n">n</div>
+          <div class="key" data-key="m">m</div>
+          <div class="key fn" data-key="backspace">
+            <svg class="key-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path>
+              <line x1="18" y1="9" x2="12" y2="15"></line>
+              <line x1="12" y1="9" x2="18" y2="15"></line>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Row 4 -->
+        <div class="kb-row">
+          <div class="key fn" data-key="123">?123</div>
+          <div class="key fn">
+            <svg class="key-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+          </div>
+          <div class="key space" data-key=" ">space</div>
+          <div class="key enter-key" data-key="enter">
+            <svg class="key-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 10 4 15 9 20"></polyline>
+              <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+            </svg>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  
+  <!-- Authentic Manga Action Accents (Top Layer: z-index 200+) -->
+  <div class="manga-accent-layer">
+    <!-- Clean Manga Comic Badges -->
+    <div class="manga-sfx manga-sfx-tr">TYPE!</div>
+    <div class="manga-sfx red-sfx manga-sfx-bl">CLICK!</div>
+
+    <!-- Screentone Halftone Cluster -->
+    <div class="manga-tone manga-tone-tr">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="4" cy="4" r="1.2" fill="#141110"/>
+        <circle cx="12" cy="4" r="1.5" fill="#141110"/>
+        <circle cx="20" cy="4" r="1.8" fill="#D62828"/>
+        <circle cx="4" cy="12" r="1.5" fill="#141110"/>
+        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
+        <circle cx="20" cy="12" r="2.2" fill="#D62828"/>
+        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
+        <circle cx="12" cy="20" r="2.2" fill="#D62828"/>
+        <circle cx="20" cy="20" r="2.5" fill="#D62828"/>
+      </svg>
+    </div>
+    <div class="manga-tone manga-tone-bl">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="4" cy="4" r="2.5" fill="#141110"/>
+        <circle cx="12" cy="4" r="2.2" fill="#141110"/>
+        <circle cx="20" cy="4" r="1.8" fill="#141110"/>
+        <circle cx="4" cy="12" r="2.2" fill="#141110"/>
+        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
+        <circle cx="20" cy="12" r="1.5" fill="#D62828"/>
+        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
+        <circle cx="12" cy="20" r="1.5" fill="#D62828"/>
+        <circle cx="20" cy="20" r="1.2" fill="#D62828"/>
+      </svg>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const notchIsland = document.getElementById('notchIsland');
+const typedOutput = document.getElementById('typedOutput');
+const keyboard = document.getElementById('keyboard');
+const sug1 = document.getElementById('sug1');
+const sug2 = document.getElementById('sug2');
+const sug3 = document.getElementById('sug3');
+
+// A short first-person introduction to AURA's core capabilities.
+const NOTE_LINES = [
+  "👋 Hello world!",
+  "I'm AURA, your personal assistant.",
+  "I can see your screen and take action:",
+  "tap, type, scroll, and open apps.",
+  "I can read notifications, control media,",
+  "find files, resolve contacts, and use deep links.",
+  "Ask by voice or text. I'm on-device and privacy-first."
+];
+
+const FULL_TEXT = NOTE_LINES.join('\n');
+const DURATION = 8000; // 8.0s loop
+
+let startTime = null;
+let lastCharIdx = -1;
+
+function highlightKey(char) {
+  if (!char) return;
+  const lower = char.toLowerCase();
+  document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
+  let el = null;
+  if (char === ' ' || char === '\n') {
+    el = document.querySelector('.key.space');
+  } else {
+    el = Array.from(document.querySelectorAll('.key[data-key]'))
+      .find(key => key.dataset.key === lower) || null;
+    if (!el && (char === ':' || char === '.' || char === '•' || char === '&' || char === '-')) {
+      el = document.querySelector('.key[data-key="123"]');
+    }
+  }
+  if (el) {
+    el.classList.add('active');
+    setTimeout(() => el.classList.remove('active'), 80);
+  }
+}
+
+function updateSuggestions(progress) {
+  if (progress < 0.2) {
+    sug1.innerText = 'AURA';
+    sug2.innerText = 'actions';
+    sug3.innerText = 'voice';
+  } else if (progress < 0.5) {
+    sug1.innerText = 'autonomous';
+    sug2.innerText = 'control';
+    sug3.innerText = 'privacy';
+  } else if (progress < 0.8) {
+    sug1.innerText = 'local';
+    sug2.innerText = 'MCP';
+    sug3.innerText = 'tools';
+  } else {
+    sug1.innerText = 'real-time';
+    sug2.innerText = 'triage';
+    sug3.innerText = 'execute';
+  }
+}
+
+function animate(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = (ts - startTime) % DURATION;
+  const t = elapsed / DURATION;
+
+  if (t < 0.04) {
+    // Reset State
+    typedOutput.innerText = '';
+    keyboard.classList.remove('show');
+    notchIsland.classList.remove('expanded');
+    lastCharIdx = -1;
+  } 
+  else if (t < 0.10) {
+    // Keyboard slides up, Notch expands to "Typing"
+    keyboard.classList.add('show');
+    notchIsland.classList.add('expanded');
+  } 
+  else if (t < 0.86) {
+    // Progressive typing loop line by line
+    const progress = (t - 0.10) / 0.76;
+    const charIdx = Math.min(Math.floor(progress * FULL_TEXT.length), FULL_TEXT.length);
+    
+    if (charIdx !== lastCharIdx) {
+      lastCharIdx = charIdx;
+      typedOutput.innerText = FULL_TEXT.substring(0, charIdx);
+      updateSuggestions(progress);
+      if (charIdx > 0 && charIdx <= FULL_TEXT.length) {
+        highlightKey(FULL_TEXT[charIdx - 1]);
+      }
+    }
+  } 
+  else if (t < 0.94) {
+    // Hold final completed note
+    typedOutput.innerText = FULL_TEXT;
+  } 
+  else {
+    // Keyboard slides down, Notch collapses back
+    keyboard.classList.remove('show');
+    notchIsland.classList.remove('expanded');
+  }
+
+  requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>

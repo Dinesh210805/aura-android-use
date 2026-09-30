@@ -1,0 +1,951 @@
+{
+  "version": 1,
+  "_comment": [
+    "GENERATED - do not hand-edit. Rebuild with scripts/bench/gen_androidworld_tasks.py.",
+    "",
+    "Google's AndroidWorld suite (116 tasks), exposed in the on-device eval cockpit.",
+    "",
+    "What is different about these rows:",
+    "  - 'goal' is a PLACEHOLDER, not the sentence the agent gets. AndroidWorld generates the",
+    "    real goal from the run seed during setup, so it only exists at run time. The runner",
+    "    replaces it once scripts/bench/referee.py hands it back.",
+    "  - 'truth_check' is informational. These tasks are scored by AndroidWorld's own validator",
+    "    reading device state, never by a human tapping pass/fail.",
+    "  - 'aw_task' is the join key to AndroidWorld's task class, and the flag that routes this row",
+    "    through the host referee.",
+    "  - numbers start at 1001 so they can never collide with tasks.json (the number is a",
+    "    permanent join key AND the on-disk filename).",
+    "",
+    "Running these needs the PC: androidworld-venv/Scripts/python.exe scripts/bench/referee.py"
+  ],
+  "tasks": [
+    {
+      "number": 1001,
+      "goal": "AndroidWorld: AudioRecorderRecordAudio",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "AudioRecorderRecordAudio"
+    },
+    {
+      "number": 1002,
+      "goal": "AndroidWorld: AudioRecorderRecordAudioWithFileName",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "AudioRecorderRecordAudioWithFileName"
+    },
+    {
+      "number": 1003,
+      "goal": "AndroidWorld: BrowserDraw",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "BrowserDraw"
+    },
+    {
+      "number": 1004,
+      "goal": "AndroidWorld: BrowserMaze",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "BrowserMaze"
+    },
+    {
+      "number": 1005,
+      "goal": "AndroidWorld: BrowserMultiply",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "BrowserMultiply"
+    },
+    {
+      "number": 1006,
+      "goal": "AndroidWorld: CameraTakePhoto",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "CameraTakePhoto"
+    },
+    {
+      "number": 1007,
+      "goal": "AndroidWorld: CameraTakeVideo",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "CameraTakeVideo"
+    },
+    {
+      "number": 1008,
+      "goal": "AndroidWorld: ClockStopWatchPausedVerify",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ClockStopWatchPausedVerify"
+    },
+    {
+      "number": 1009,
+      "goal": "AndroidWorld: ClockStopWatchRunning",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ClockStopWatchRunning"
+    },
+    {
+      "number": 1010,
+      "goal": "AndroidWorld: ClockTimerEntry",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ClockTimerEntry"
+    },
+    {
+      "number": 1011,
+      "goal": "AndroidWorld: ContactsAddContact",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ContactsAddContact"
+    },
+    {
+      "number": 1012,
+      "goal": "AndroidWorld: ContactsNewContactDraft",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ContactsNewContactDraft"
+    },
+    {
+      "number": 1013,
+      "goal": "AndroidWorld: ExpenseAddMultiple",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseAddMultiple"
+    },
+    {
+      "number": 1014,
+      "goal": "AndroidWorld: ExpenseAddMultipleFromGallery",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseAddMultipleFromGallery"
+    },
+    {
+      "number": 1015,
+      "goal": "AndroidWorld: ExpenseAddMultipleFromMarkor",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseAddMultipleFromMarkor"
+    },
+    {
+      "number": 1016,
+      "goal": "AndroidWorld: ExpenseAddSingle",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseAddSingle"
+    },
+    {
+      "number": 1017,
+      "goal": "AndroidWorld: ExpenseDeleteDuplicates",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseDeleteDuplicates"
+    },
+    {
+      "number": 1018,
+      "goal": "AndroidWorld: ExpenseDeleteDuplicates2",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseDeleteDuplicates2"
+    },
+    {
+      "number": 1019,
+      "goal": "AndroidWorld: ExpenseDeleteMultiple",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseDeleteMultiple"
+    },
+    {
+      "number": 1020,
+      "goal": "AndroidWorld: ExpenseDeleteMultiple2",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseDeleteMultiple2"
+    },
+    {
+      "number": 1021,
+      "goal": "AndroidWorld: ExpenseDeleteSingle",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "ExpenseDeleteSingle"
+    },
+    {
+      "number": 1022,
+      "goal": "AndroidWorld: FilesDeleteFile",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "FilesDeleteFile"
+    },
+    {
+      "number": 1023,
+      "goal": "AndroidWorld: FilesMoveFile",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "FilesMoveFile"
+    },
+    {
+      "number": 1024,
+      "goal": "AndroidWorld: MarkorAddNoteHeader",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorAddNoteHeader"
+    },
+    {
+      "number": 1025,
+      "goal": "AndroidWorld: MarkorChangeNoteContent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorChangeNoteContent"
+    },
+    {
+      "number": 1026,
+      "goal": "AndroidWorld: MarkorCreateFolder",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorCreateFolder"
+    },
+    {
+      "number": 1027,
+      "goal": "AndroidWorld: MarkorCreateNote",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorCreateNote"
+    },
+    {
+      "number": 1028,
+      "goal": "AndroidWorld: MarkorCreateNoteAndSms",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorCreateNoteAndSms"
+    },
+    {
+      "number": 1029,
+      "goal": "AndroidWorld: MarkorCreateNoteFromClipboard",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorCreateNoteFromClipboard"
+    },
+    {
+      "number": 1030,
+      "goal": "AndroidWorld: MarkorDeleteAllNotes",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorDeleteAllNotes"
+    },
+    {
+      "number": 1031,
+      "goal": "AndroidWorld: MarkorDeleteNewestNote",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorDeleteNewestNote"
+    },
+    {
+      "number": 1032,
+      "goal": "AndroidWorld: MarkorDeleteNote",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorDeleteNote"
+    },
+    {
+      "number": 1033,
+      "goal": "AndroidWorld: MarkorEditNote",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorEditNote"
+    },
+    {
+      "number": 1034,
+      "goal": "AndroidWorld: MarkorMergeNotes",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorMergeNotes"
+    },
+    {
+      "number": 1035,
+      "goal": "AndroidWorld: MarkorMoveNote",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorMoveNote"
+    },
+    {
+      "number": 1036,
+      "goal": "AndroidWorld: MarkorTranscribeReceipt",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorTranscribeReceipt"
+    },
+    {
+      "number": 1037,
+      "goal": "AndroidWorld: MarkorTranscribeVideo",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "MarkorTranscribeVideo"
+    },
+    {
+      "number": 1038,
+      "goal": "AndroidWorld: NotesIsTodo",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "NotesIsTodo"
+    },
+    {
+      "number": 1039,
+      "goal": "AndroidWorld: NotesMeetingAttendeeCount",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "NotesMeetingAttendeeCount"
+    },
+    {
+      "number": 1040,
+      "goal": "AndroidWorld: NotesRecipeIngredientCount",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "NotesRecipeIngredientCount"
+    },
+    {
+      "number": 1041,
+      "goal": "AndroidWorld: NotesTodoItemCount",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "NotesTodoItemCount"
+    },
+    {
+      "number": 1042,
+      "goal": "AndroidWorld: OpenAppTaskEval",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "OpenAppTaskEval"
+    },
+    {
+      "number": 1043,
+      "goal": "AndroidWorld: OsmAndFavorite",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "OsmAndFavorite"
+    },
+    {
+      "number": 1044,
+      "goal": "AndroidWorld: OsmAndMarker",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "OsmAndMarker"
+    },
+    {
+      "number": 1045,
+      "goal": "AndroidWorld: OsmAndTrack",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "OsmAndTrack"
+    },
+    {
+      "number": 1046,
+      "goal": "AndroidWorld: RecipeAddMultipleRecipes",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeAddMultipleRecipes"
+    },
+    {
+      "number": 1047,
+      "goal": "AndroidWorld: RecipeAddMultipleRecipesFromImage",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeAddMultipleRecipesFromImage"
+    },
+    {
+      "number": 1048,
+      "goal": "AndroidWorld: RecipeAddMultipleRecipesFromMarkor",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeAddMultipleRecipesFromMarkor"
+    },
+    {
+      "number": 1049,
+      "goal": "AndroidWorld: RecipeAddMultipleRecipesFromMarkor2",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeAddMultipleRecipesFromMarkor2"
+    },
+    {
+      "number": 1050,
+      "goal": "AndroidWorld: RecipeAddSingleRecipe",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeAddSingleRecipe"
+    },
+    {
+      "number": 1051,
+      "goal": "AndroidWorld: RecipeDeleteDuplicateRecipes",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteDuplicateRecipes"
+    },
+    {
+      "number": 1052,
+      "goal": "AndroidWorld: RecipeDeleteDuplicateRecipes2",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteDuplicateRecipes2"
+    },
+    {
+      "number": 1053,
+      "goal": "AndroidWorld: RecipeDeleteDuplicateRecipes3",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteDuplicateRecipes3"
+    },
+    {
+      "number": 1054,
+      "goal": "AndroidWorld: RecipeDeleteMultipleRecipes",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteMultipleRecipes"
+    },
+    {
+      "number": 1055,
+      "goal": "AndroidWorld: RecipeDeleteMultipleRecipesWithConstraint",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteMultipleRecipesWithConstraint"
+    },
+    {
+      "number": 1056,
+      "goal": "AndroidWorld: RecipeDeleteMultipleRecipesWithNoise",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteMultipleRecipesWithNoise"
+    },
+    {
+      "number": 1057,
+      "goal": "AndroidWorld: RecipeDeleteSingleRecipe",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteSingleRecipe"
+    },
+    {
+      "number": 1058,
+      "goal": "AndroidWorld: RecipeDeleteSingleWithRecipeWithNoise",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RecipeDeleteSingleWithRecipeWithNoise"
+    },
+    {
+      "number": 1059,
+      "goal": "AndroidWorld: RetroCreatePlaylist",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RetroCreatePlaylist"
+    },
+    {
+      "number": 1060,
+      "goal": "AndroidWorld: RetroPlayingQueue",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RetroPlayingQueue"
+    },
+    {
+      "number": 1061,
+      "goal": "AndroidWorld: RetroPlaylistDuration",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RetroPlaylistDuration"
+    },
+    {
+      "number": 1062,
+      "goal": "AndroidWorld: RetroSavePlaylist",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "RetroSavePlaylist"
+    },
+    {
+      "number": 1063,
+      "goal": "AndroidWorld: SaveCopyOfReceiptTaskEval",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SaveCopyOfReceiptTaskEval"
+    },
+    {
+      "number": 1064,
+      "goal": "AndroidWorld: SimpleCalendarAddOneEvent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarAddOneEvent"
+    },
+    {
+      "number": 1065,
+      "goal": "AndroidWorld: SimpleCalendarAddOneEventInTwoWeeks",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarAddOneEventInTwoWeeks"
+    },
+    {
+      "number": 1066,
+      "goal": "AndroidWorld: SimpleCalendarAddOneEventRelativeDay",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarAddOneEventRelativeDay"
+    },
+    {
+      "number": 1067,
+      "goal": "AndroidWorld: SimpleCalendarAddOneEventTomorrow",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarAddOneEventTomorrow"
+    },
+    {
+      "number": 1068,
+      "goal": "AndroidWorld: SimpleCalendarAddRepeatingEvent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarAddRepeatingEvent"
+    },
+    {
+      "number": 1069,
+      "goal": "AndroidWorld: SimpleCalendarAnyEventsOnDate",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarAnyEventsOnDate"
+    },
+    {
+      "number": 1070,
+      "goal": "AndroidWorld: SimpleCalendarDeleteEvents",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarDeleteEvents"
+    },
+    {
+      "number": 1071,
+      "goal": "AndroidWorld: SimpleCalendarDeleteEventsOnRelativeDay",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarDeleteEventsOnRelativeDay"
+    },
+    {
+      "number": 1072,
+      "goal": "AndroidWorld: SimpleCalendarDeleteOneEvent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarDeleteOneEvent"
+    },
+    {
+      "number": 1073,
+      "goal": "AndroidWorld: SimpleCalendarEventOnDateAtTime",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarEventOnDateAtTime"
+    },
+    {
+      "number": 1074,
+      "goal": "AndroidWorld: SimpleCalendarEventsInNextWeek",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarEventsInNextWeek"
+    },
+    {
+      "number": 1075,
+      "goal": "AndroidWorld: SimpleCalendarEventsInTimeRange",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarEventsInTimeRange"
+    },
+    {
+      "number": 1076,
+      "goal": "AndroidWorld: SimpleCalendarEventsOnDate",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarEventsOnDate"
+    },
+    {
+      "number": 1077,
+      "goal": "AndroidWorld: SimpleCalendarFirstEventAfterStartTime",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarFirstEventAfterStartTime"
+    },
+    {
+      "number": 1078,
+      "goal": "AndroidWorld: SimpleCalendarLocationOfEvent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarLocationOfEvent"
+    },
+    {
+      "number": 1079,
+      "goal": "AndroidWorld: SimpleCalendarNextEvent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarNextEvent"
+    },
+    {
+      "number": 1080,
+      "goal": "AndroidWorld: SimpleCalendarNextMeetingWithPerson",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleCalendarNextMeetingWithPerson"
+    },
+    {
+      "number": 1081,
+      "goal": "AndroidWorld: SimpleDrawProCreateDrawing",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleDrawProCreateDrawing"
+    },
+    {
+      "number": 1082,
+      "goal": "AndroidWorld: SimpleSmsReply",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleSmsReply"
+    },
+    {
+      "number": 1083,
+      "goal": "AndroidWorld: SimpleSmsReplyMostRecent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleSmsReplyMostRecent"
+    },
+    {
+      "number": 1084,
+      "goal": "AndroidWorld: SimpleSmsResend",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleSmsResend"
+    },
+    {
+      "number": 1085,
+      "goal": "AndroidWorld: SimpleSmsSend",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleSmsSend"
+    },
+    {
+      "number": 1086,
+      "goal": "AndroidWorld: SimpleSmsSendClipboardContent",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleSmsSendClipboardContent"
+    },
+    {
+      "number": 1087,
+      "goal": "AndroidWorld: SimpleSmsSendReceivedAddress",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SimpleSmsSendReceivedAddress"
+    },
+    {
+      "number": 1088,
+      "goal": "AndroidWorld: SportsTrackerActivitiesCountForWeek",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SportsTrackerActivitiesCountForWeek"
+    },
+    {
+      "number": 1089,
+      "goal": "AndroidWorld: SportsTrackerActivitiesOnDate",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SportsTrackerActivitiesOnDate"
+    },
+    {
+      "number": 1090,
+      "goal": "AndroidWorld: SportsTrackerActivityDuration",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SportsTrackerActivityDuration"
+    },
+    {
+      "number": 1091,
+      "goal": "AndroidWorld: SportsTrackerLongestDistanceActivity",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SportsTrackerLongestDistanceActivity"
+    },
+    {
+      "number": 1092,
+      "goal": "AndroidWorld: SportsTrackerTotalDistanceForCategoryOverInterval",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SportsTrackerTotalDistanceForCategoryOverInterval"
+    },
+    {
+      "number": 1093,
+      "goal": "AndroidWorld: SportsTrackerTotalDurationForCategoryThisWeek",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SportsTrackerTotalDurationForCategoryThisWeek"
+    },
+    {
+      "number": 1094,
+      "goal": "AndroidWorld: SystemBluetoothTurnOff",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBluetoothTurnOff"
+    },
+    {
+      "number": 1095,
+      "goal": "AndroidWorld: SystemBluetoothTurnOffVerify",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBluetoothTurnOffVerify"
+    },
+    {
+      "number": 1096,
+      "goal": "AndroidWorld: SystemBluetoothTurnOn",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBluetoothTurnOn"
+    },
+    {
+      "number": 1097,
+      "goal": "AndroidWorld: SystemBluetoothTurnOnVerify",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBluetoothTurnOnVerify"
+    },
+    {
+      "number": 1098,
+      "goal": "AndroidWorld: SystemBrightnessMax",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBrightnessMax"
+    },
+    {
+      "number": 1099,
+      "goal": "AndroidWorld: SystemBrightnessMaxVerify",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBrightnessMaxVerify"
+    },
+    {
+      "number": 1100,
+      "goal": "AndroidWorld: SystemBrightnessMin",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBrightnessMin"
+    },
+    {
+      "number": 1101,
+      "goal": "AndroidWorld: SystemBrightnessMinVerify",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemBrightnessMinVerify"
+    },
+    {
+      "number": 1102,
+      "goal": "AndroidWorld: SystemCopyToClipboard",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemCopyToClipboard"
+    },
+    {
+      "number": 1103,
+      "goal": "AndroidWorld: SystemWifiTurnOff",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemWifiTurnOff"
+    },
+    {
+      "number": 1104,
+      "goal": "AndroidWorld: SystemWifiTurnOffVerify",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemWifiTurnOffVerify"
+    },
+    {
+      "number": 1105,
+      "goal": "AndroidWorld: SystemWifiTurnOn",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemWifiTurnOn"
+    },
+    {
+      "number": 1106,
+      "goal": "AndroidWorld: SystemWifiTurnOnVerify",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "SystemWifiTurnOnVerify"
+    },
+    {
+      "number": 1107,
+      "goal": "AndroidWorld: TasksCompletedTasksForDate",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TasksCompletedTasksForDate"
+    },
+    {
+      "number": 1108,
+      "goal": "AndroidWorld: TasksDueNextWeek",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TasksDueNextWeek"
+    },
+    {
+      "number": 1109,
+      "goal": "AndroidWorld: TasksDueOnDate",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TasksDueOnDate"
+    },
+    {
+      "number": 1110,
+      "goal": "AndroidWorld: TasksHighPriorityTasks",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TasksHighPriorityTasks"
+    },
+    {
+      "number": 1111,
+      "goal": "AndroidWorld: TasksHighPriorityTasksDueOnDate",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TasksHighPriorityTasksDueOnDate"
+    },
+    {
+      "number": 1112,
+      "goal": "AndroidWorld: TasksIncompleteTasksOnDate",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TasksIncompleteTasksOnDate"
+    },
+    {
+      "number": 1113,
+      "goal": "AndroidWorld: TurnOffWifiAndTurnOnBluetooth",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TurnOffWifiAndTurnOnBluetooth"
+    },
+    {
+      "number": 1114,
+      "goal": "AndroidWorld: TurnOnWifiAndOpenApp",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "TurnOnWifiAndOpenApp"
+    },
+    {
+      "number": 1115,
+      "goal": "AndroidWorld: VlcCreatePlaylist",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "VlcCreatePlaylist"
+    },
+    {
+      "number": 1116,
+      "goal": "AndroidWorld: VlcCreateTwoPlaylists",
+      "category": "androidworld",
+      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
+      "needs_human": false,
+      "aw_task": "VlcCreateTwoPlaylists"
+    }
+  ]
+}

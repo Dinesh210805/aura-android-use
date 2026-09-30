@@ -1,0 +1,32 @@
+// postinstall.js
+const reset = "\x1b[0m";
+const bold = "\x1b[1m";
+const cyan = "\x1b[36m";
+const green = "\x1b[32m";
+const dim = "\x1b[2m";
+const yellow = "\x1b[33m";
+
+console.log("");
+console.log(`${cyan}${bold}======================================================${reset}`);
+console.log(`${cyan}${bold}             A U R A   M C P   C O N N E C T          ${reset}`);
+console.log(`${cyan}${bold}======================================================${reset}`);
+console.log("");
+console.log(`${green}✔ Installed.${reset} One shared daemon connects all your MCP clients`);
+console.log(`to your phone over your local network — nothing goes through the cloud.`);
+console.log("");
+console.log(`${yellow}To get started:${reset}`);
+console.log(`  1. Put this computer and the phone on the ${bold}same Wi-Fi${reset} (or the phone's hotspot).`);
+console.log(`     Open ${bold}AURA${reset} → ${bold}MCP Center${reset}: it shows a PIN.`);
+console.log(`  2. Pair once:   ${cyan}aura-mcp pair <your-pin>${reset}`);
+console.log(`  3. Connect clients — pick either:`);
+console.log("");
+console.log(`     ${bold}By URL${reset} (preferred — Claude Code, Cursor, VS Code, Windsurf):`);
+console.log(`${dim}       { "type": "http", "url": "http://127.0.0.1:4816/mcp" }${reset}`);
+console.log(`       (start the daemon once: ${cyan}aura-mcp daemon${reset})`);
+console.log("");
+console.log(`     ${bold}By command${reset} (stdio clients — auto-starts the daemon):`);
+console.log(`${dim}       { "command": "aura-mcp", "args": [] }${reset}`);
+console.log(`${dim}       Windows note: some clients need { "command": "cmd", "args": ["/c", "aura-mcp"] }${reset}`);
+console.log("");
+console.log(`${cyan}${bold}Welcome to the edge of AI.${reset}`);
+console.log("");

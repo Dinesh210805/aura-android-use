@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none}
+body{display:flex;justify-content:center;align-items:center;min-height:100vh;background:transparent;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+
+/* Premium Realistic Smartphone Chassis */
+.phone-wrapper{position:relative;display:flex;justify-content:center;align-items:center;transform:scale(calc(min(calc(100vh / 520px), calc(100vw / 265px), 1) * 0.88));transform-origin:center center}
+.phone-btn-power{position:absolute;right:-3px;top:110px;width:3px;height:38px;background:#2B2925;border-radius:0 2px 2px 0}
+.phone-btn-vol-up{position:absolute;left:-3px;top:90px;width:3px;height:32px;background:#2B2925;border-radius:2px 0 0 2px}
+.phone-btn-vol-down{position:absolute;left:-3px;top:130px;width:3px;height:32px;background:#2B2925;border-radius:2px 0 0 2px}
+
+.phone{
+  position:relative;
+  width:248px;
+  height:498px;
+  background:#141110;
+  border-radius:40px;
+  padding:6px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 10px 24px rgba(36,27,21,0.09),
+    0 2px 6px rgba(36,27,21,0.04);
+}
+
+.screen{
+  position:relative;
+  width:100%;
+  height:100%;
+  background:linear-gradient(180deg, #E6E2D8 0%, #D8D2C4 100%);
+  border-radius:34px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+/* Dynamic Camera Notch Island */
+.notch-island{
+  position:absolute;
+  top:6px;
+  left:50%;
+  transform:translateX(-50%);
+  height:13px;
+  width:13px;
+  background:#1C1A17;
+  border-radius:7px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  z-index:70;
+  transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow:hidden;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+.notch-island.expanded{
+  height:20px;
+  width:auto;
+  max-width:fit-content;
+  border-radius:10px;
+  padding:2px 7px 2px 6px;
+  gap:5px;
+}
+.notch-cam{
+  width:7px;
+  height:7px;
+  background:#090909;
+  border-radius:50%;
+  flex-shrink:0;
+  border:1px solid rgba(255,255,255,0.12);
+}
+.notch-island.expanded .notch-cam{display:none}
+
+.notch-content{
+  display:none;
+  align-items:center;
+  gap:5px;
+  white-space:nowrap;
+}
+.notch-island.expanded .notch-content{display:inline-flex}
+
+.notch-logo{
+  width:11px;
+  height:11px;
+  object-fit:contain;
+  filter:brightness(0) invert(1);
+  flex-shrink:0;
+}
+.notch-verb{
+  font-size:8.5px;
+  font-weight:700;
+  color:#F4F1EA;
+  letter-spacing:0.3px;
+}
+
+/* Status Bar (6:00, Aug 21) */
+.status-bar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 16px 2px;
+  height:26px;
+  z-index:60;
+  flex-shrink:0;
+  background:transparent;
+}
+.time-group{display:flex;align-items:center;gap:4px}
+.time{font-size:9.5px;font-weight:700;color:#1C1A17;letter-spacing:-0.2px}
+.date-tag{font-size:7.5px;font-weight:600;color:#57534A}
+.status-icons{display:flex;gap:4px;align-items:center}
+.icon-bar{width:11px;height:7px;background:#1C1A17;opacity:0.85;border-radius:1px}
+.icon-wifi{width:8px;height:7px;background:#1C1A17;opacity:0.85;border-radius:2px}
+.icon-battery{width:13px;height:6px;border:1px solid #1C1A17;border-radius:2px;position:relative}
+.icon-battery::after{content:'';position:absolute;left:1px;top:1px;bottom:1px;width:7px;background:#1C1A17;border-radius:1px}
+
+
+
+/* Android Home Screen Content */
+.home-canvas{flex:1;padding:24px 14px 12px;display:flex;flex-direction:column;justify-content:space-between;position:relative}
+.home-clock-widget{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:14px}
+.widget-time{font-size:32px;font-weight:800;color:#1C1A17;letter-spacing:-1px}
+.widget-date{font-size:9px;font-weight:600;color:#57534A}
+
+/* App Grid Dock with White BG AURA App Icon at Center */
+.app-dock{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.7);border-radius:22px;border:1px solid rgba(255,255,255,0.85)}
+.app-icon{width:34px;height:34px;border-radius:11px;display:flex;justify-content:center;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,0.06);transition:all 0.15s ease}
+.app-icon.phone-app{background:#34C759;color:#FFFFFF}
+/* AURA App with White Background */
+.app-icon.aura-app{
+  width:40px;
+  height:40px;
+  border-radius:13px;
+  background:#FFFFFF;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  box-shadow:0 4px 12px rgba(28,26,23,0.15);
+  border:1px solid #E2DFD5;
+}
+.app-icon.msg-app{background:#007AFF;color:#FFFFFF}
+.app-icon.camera-app{background:#57534A;color:#FFFFFF}
+.app-icon.aura-app.press{transform:scale(0.88)}
+.app-svg{width:16px;height:16px}
+.aura-dock-img{width:26px;height:26px;object-fit:contain}
+
+/* Dialogue Transcript Cards Container (Above Bottom Overlay) */
+.transcript-layer{
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:68px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  z-index:42;
+  pointer-events:none;
+}
+.bubble-user{
+  align-self:flex-end;
+  background:#1C1A17;
+  border-radius:12px 12px 2px 12px;
+  padding:6px 10px;
+  font-size:9px;
+  color:#F4F1EA;
+  font-weight:600;
+  max-width:85%;
+  opacity:0;
+  transform:translateY(6px);
+  transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:0 4px 12px rgba(0,0,0,0.12);
+}
+.bubble-user.show{opacity:1;transform:translateY(0)}
+
+.bubble-aura{
+  align-self:flex-start;
+  background:#FFFFFF;
+  border:1px solid #E2DFD5;
+  border-radius:12px 12px 12px 2px;
+  padding:6px 10px;
+  font-size:9px;
+  color:#1C1A17;
+  font-weight:600;
+  max-width:90%;
+  opacity:0;
+  transform:translateY(6px);
+  display:flex;
+  align-items:center;
+  gap:6px;
+  transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:0 4px 12px rgba(0,0,0,0.08);
+}
+.bubble-aura.show{opacity:1;transform:translateY(0)}
+.aura-bubble-logo{width:12px;height:12px;object-fit:contain;flex-shrink:0}
+
+/* AURA Floating Input & Mic Overlay Bar (No Blur, Sharp & Clear) */
+.aura-bottom-overlay{
+  position:absolute;
+  left:8px;
+  right:8px;
+  bottom:10px;
+  height:48px;
+  background:#1C1A17;
+  border-radius:24px;
+  padding:0 6px 0 10px;
+  box-shadow:0 12px 32px rgba(0,0,0,0.35);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  z-index:45;
+  transform:translateY(120%);
+  opacity:0;
+  transition:all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.aura-bottom-overlay.show{transform:translateY(0);opacity:1}
+
+/* Left Close Button (Always visible) */
+.overlay-close-btn{
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.12);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  color:#FFFFFF;
+  flex-shrink:0;
+  cursor:pointer;
+  transition:background 0.2s;
+}
+.close-svg{width:12px;height:12px}
+
+/* Middle Content: Switches smoothly from "Ask AURA..." to Live Spectrogram Wave */
+.overlay-middle-area{
+  flex:1;
+  height:34px;
+  display:flex;
+  align-items:center;
+  position:relative;
+  overflow:hidden;
+}
+
+.ask-aura-text{
+  font-size:10.5px;
+  font-weight:600;
+  color:#8A867C;
+  letter-spacing:0.2px;
+  position:absolute;
+  left:4px;
+  transition:opacity 0.25s ease, transform 0.25s ease;
+}
+.ask-aura-text.hidden{opacity:0;transform:translateY(-8px)}
+
+/* 22-Bar Live Voice Waveform Spectrogram in Middle Area */
+.wave-container{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:2.5px;
+  width:100%;
+  height:100%;
+  opacity:0;
+  transform:translateY(8px);
+  transition:opacity 0.25s ease, transform 0.25s ease;
+}
+.wave-container.active{opacity:1;transform:translateY(0)}
+.wave-bar{width:2.5px;height:4px;background:#D62828;border-radius:2px;transition:height 0.08s ease}
+
+/* Right Side: AURA Logo as Mic Button (Always visible) with Tooltip */
+.mic-btn-wrapper{position:relative;flex-shrink:0}
+.aura-mic-btn{
+  width:36px;
+  height:36px;
+  border-radius:18px;
+  background:#FFFFFF;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  box-shadow:0 2px 8px rgba(0,0,0,0.25);
+  cursor:pointer;
+  transition:transform 0.15s ease;
+}
+.aura-mic-btn.active-pulse{
+  transform:scale(0.92);
+  box-shadow:0 0 0 3px #D62828;
+}
+.aura-mic-logo{width:22px;height:22px;object-fit:contain}
+
+/* Tooltip: "Tap to speak" */
+.mic-tooltip{
+  position:absolute;
+  bottom:44px;
+  right:-4px;
+  background:#D62828;
+  color:#FFFFFF;
+  font-size:7.5px;
+  font-weight:700;
+  padding:3px 7px;
+  border-radius:6px;
+  white-space:nowrap;
+  box-shadow:0 4px 10px rgba(214,40,40,0.35);
+  opacity:0;
+  transform:translateY(4px);
+  transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events:none;
+}
+.mic-tooltip::after{
+  content:'';
+  position:absolute;
+  bottom:-4px;
+  right:16px;
+  width:0;
+  align-items:center;
+  gap:12px;
+  box-shadow:0 4px 16px rgba(0,0,0,0.06);
+  backdrop-filter:blur(10px);
+  margin-top:10px;
+}
+.voice-hero-title{font-size:11px;font-weight:800;color:#1C1A17;letter-spacing:-0.2px}
+.voice-orb-container{position:relative;width:60px;height:60px;display:flex;justify-content:center;align-items:center}
+.voice-orb-ring{position:absolute;border-radius:50%;border:1.5px solid #D62828;opacity:0.3;animation:orbWave 2s infinite ease-out}
+.voice-orb-ring:nth-child(2){animation-delay:0.6s}
+.voice-orb-ring:nth-child(3){animation-delay:1.2s}
+.voice-orb-core{width:36px;height:36px;border-radius:50%;background:#D62828;display:flex;justify-content:center;align-items:center;box-shadow:0 4px 12px rgba(214,40,40,0.35);z-index:2}
+.voice-orb-svg{width:18px;height:18px;color:#FFFFFF}
+@keyframes orbWave{0%{width:36px;height:36px;opacity:0.8}100%{width:72px;height:72px;opacity:0}}
+
+/* Live Dialogue Bubbles */
+.dialogue-viewport{width:100%;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.speech-bubble{padding:7px 10px;border-radius:12px;font-size:9px;font-weight:600;line-height:1.35;max-width:88%;opacity:0;transform:translateY(8px);transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
+.speech-bubble.visible{opacity:1;transform:translateY(0)}
+.speech-bubble.user{align-self:flex-end;background:#1C1A17;color:#FFFFFF;border-bottom-right-radius:2px}
+.speech-bubble.aura{align-self:flex-start;background:#FFFFFF;color:#1C1A17;border:1px solid #E8E5DD;border-bottom-left-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+
+/* Floating Assistant Bubble Overlay */
+.aura-bubble{position:absolute;top:160px;right:14px;width:38px;height:38px;border-radius:50%;background:#FFFFFF;border:1.5px solid #D62828;box-shadow:0 4px 14px rgba(214,40,40,0.25);display:flex;justify-content:center;align-items:center;z-index:60;transform:scale(0);transition:transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)}
+.aura-bubble.visible{transform:scale(1)}
+.aura-bubble-logo{width:22px;height:22px;object-fit:contain}
+
+/* Lively Micro-Burst Particles (Kaboom Tap Pop) */
+.burst-effect{position:absolute;pointer-events:none;z-index:60;opacity:0;transform:scale(0);transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1)}
+.burst-effect.active{opacity:1;transform:scale(1.4)}
+.burst-particle{position:absolute;width:4px;height:4px;border-radius:50%;background:#D62828;animation:particleFly 0.5s ease-out forwards}
+
+
+
+
+/* ── Clean Authentic Manga Comic Badges (Top-Right & Bottom-Left) ── */
+.manga-accent-layer{position:absolute;inset:0;pointer-events:none;z-index:200;overflow:visible}
+.manga-sfx{
+  position:absolute;
+  z-index:210;
+  font-family:'Outfit','Impact',-apple-system,sans-serif;
+  font-weight:900;
+  font-size:12px;
+  line-height:1.1;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#141110;
+  background:#FFFDF8;
+  border:2px solid #141110;
+  padding:3px 8px;
+  border-radius:8px;
+  box-shadow:2.5px 2.5px 0 #D62828, 4px 4px 0 #141110;
+  white-space:nowrap;
+  user-select:none;
+}
+.manga-sfx.red-sfx{
+  background:#D62828;
+  color:#FFFDF8;
+  border:2px solid #141110;
+  box-shadow:2.5px 2.5px 0 #FFFDF8, 4px 4px 0 #141110;
+}
+.manga-sfx-tr{
+  top:-8px;
+  right:-18px;
+  animation:mangaBadgePop 3s ease-in-out infinite;
+}
+.manga-sfx-bl{
+  bottom:36px;
+  left:-18px;
+  animation:mangaBadgeFloat 2.8s ease-in-out infinite 0.5s;
+}
+
+@keyframes mangaBadgePop{
+  0%,100%{transform:rotate(8deg) scale(0.96) translateY(0);opacity:0.98}
+  50%{transform:rotate(12deg) scale(1.08) translateY(-3px);opacity:1}
+}
+@keyframes mangaBadgeFloat{
+  0%,100%{transform:rotate(-10deg) scale(0.96) translateY(0);opacity:0.98}
+  50%{transform:rotate(-6deg) scale(1.08) translateY(-2px);opacity:1}
+}
+
+/* Subtle Action Halftones tucked near the badges */
+.manga-tone{position:absolute;z-index:195;opacity:0.65;animation:mangaToneBreathe 4s ease-in-out infinite}
+.manga-tone-tr{top:14px;right:-14px}
+.manga-tone-bl{bottom:60px;left:-14px;animation-delay:1.8s}
+
+@keyframes mangaToneBreathe{
+  0%,100%{opacity:0.35;transform:scale(0.92)}
+  50%{opacity:0.8;transform:scale(1.05)}
+}
+  50%{opacity:0.85;transform:scale(1.05)}
+}
+  50%{opacity:0.8;transform:scale(1.05)}
+}
+  50%{transform:scale(1.15) rotate(10deg);opacity:0.95}
+}
+
+@keyframes particleFly{
+  0%{transform:translate(0,0) scale(1);opacity:1}
+  100%{transform:translate(var(--tx), var(--ty)) scale(0);opacity:0}
+}
+
+/* Classic OS Hand Pointer Cursor */
+.hand-cursor{position:absolute;width:38px;height:38px;z-index:70;pointer-events:none;opacity:0;transform-origin:7px 2px;transition:transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.22))}
+.hand-cursor svg{width:100%;height:100%}
+.hand-cursor.press{transform:scale(0.84) translateY(2px)}
+</style>
+</head>
+<body>
+
+<div class="phone-wrapper">
+          <div class="phone-btn-power"></div>
+  <div class="phone-btn-vol-up"></div>
+  <div class="phone-btn-vol-down"></div>
+
+  <div class="phone">
+    <div class="screen" id="screenEl">
+      
+      <!-- Dynamic Camera Notch Island (Compact Hugging Pill) -->
+      <div class="notch-island" id="notchIsland">
+        <div class="notch-cam"></div>
+        <div class="notch-content">
+          <img src="aura_logo_mono.png" class="notch-logo" alt="AURA">
+          <span class="notch-verb" id="notchVerbText">Listening</span>
+        </div>
+      </div>
+
+      <!-- Clean Status Bar (Time: 6:00, Battery & Wifi, Date removed) -->
+      <div class="status-bar">
+        <div class="time-group">
+          <span class="time">6:00</span>
+        </div>
+        <div class="status-icons">
+          <div class="icon-bar"></div>
+          <div class="icon-wifi"></div>
+          <div class="icon-battery"></div>
+        </div>
+      </div>
+
+      <!-- Home Screen UI -->
+      <div class="home-canvas">
+        <div class="home-clock-widget">
+          <span class="widget-time">6:00</span>
+          <span class="widget-date">Sunday, August 23</span>
+        </div>
+
+        <!-- App Dock with White BG AURA App at Center -->
+        <div class="app-dock">
+          <div class="app-icon phone-app">
+            <svg class="app-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+          </div>
+
+          <!-- Official AURA App with White Background -->
+          <div class="app-icon aura-app" id="auraAppIcon">
+            <img src="aura_logo_color.png" class="aura-dock-img" alt="AURA">
+          </div>
+
+          <div class="app-icon msg-app">
+            <svg class="app-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+
+          <div class="app-icon camera-app">
+            <svg class="app-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dialogue Transcript Cards (Floating above the bottom overlay) -->
+      <div class="transcript-layer">
+        <div class="bubble-user" id="bubbleUser">"Hey AURA, what's my next task?"</div>
+        <div class="bubble-aura" id="bubbleAura">
+          <img src="aura_logo_color.png" class="aura-bubble-logo" alt="AURA">
+          <span id="auraSpeechText">You have a team sync at 6:30 PM.</span>
+        </div>
+      </div>
+
+      <!-- AURA Bottom Overlay Bar (Close Button + "Ask AURA..." / Wave + AURA Logo Mic Button) -->
+      <div class="aura-bottom-overlay" id="bottomOverlay">
+        
+        <!-- Left: Close Button -->
+        <div class="overlay-close-btn" id="closeBtn">
+          <svg class="close-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </div>
+
+        <!-- Middle: Text Area that morphs into Wave Animation -->
+        <div class="overlay-middle-area">
+          <span class="ask-aura-text" id="askAuraText">Ask AURA...</span>
+          <div class="wave-container" id="waveContainer">
+            <!-- 22 Bars generated by JS -->
+          </div>
+        </div>
+
+        <!-- Right: AURA Logo as Mic Button with Tooltip -->
+        <div class="mic-btn-wrapper">
+          <div class="mic-tooltip" id="micTooltip">Tap to speak</div>
+          <div class="aura-mic-btn" id="auraMicBtn">
+            <img src="aura_logo_color.png" class="aura-mic-logo" alt="Mic">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Lively Particle Burst (Kaboom Pop) -->
+      <div class="burst-effect" id="burstEffect"></div>
+
+      <!-- Hand Pointer Cursor -->
+      <div class="hand-cursor" id="handCursor">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M7.5 2V12.5H6.25C5.00736 12.5 4 13.5074 4 14.75C4 15.3526 4.23933 15.9298 4.66649 16.3541L7.54571 19.2136C9.17647 20.8335 11.3813 21.75 13.6845 21.75H14.5C18.0899 21.75 21 18.8399 21 15.25V12.5C21 11.2574 19.9926 10.25 18.75 10.25C18.4239 10.25 18.1147 10.3197 17.8358 10.4447C17.5137 9.43128 16.5684 8.75 15.5 8.75C15.2079 8.75 14.9293 8.80629 14.6756 8.90858C14.3312 7.93041 13.3986 7.25 12.25 7.25C11.9579 7.25 11.6793 7.30629 11.4256 7.40858V2C11.4256 0.89543 10.5302 0 9.4256 0C8.32103 0 7.5 0.89543 7.5 2Z" fill="#FFFFFF" stroke="#1C1A17" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M7.5 9.5H11.5M11.5 11.5H14.5M14.5 13H17.5" stroke="#1C1A17" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+    </div>
+  
+  <!-- Authentic Manga Action Accents (Top Layer: z-index 200+) -->
+  <div class="manga-accent-layer">
+    <!-- Clean Manga Comic Badges -->
+    <div class="manga-sfx manga-sfx-tr">VOICE!</div>
+    <div class="manga-sfx red-sfx manga-sfx-bl">WAKE!</div>
+
+    <!-- Screentone Halftone Cluster -->
+    <div class="manga-tone manga-tone-tr">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="4" cy="4" r="1.2" fill="#141110"/>
+        <circle cx="12" cy="4" r="1.5" fill="#141110"/>
+        <circle cx="20" cy="4" r="1.8" fill="#D62828"/>
+        <circle cx="4" cy="12" r="1.5" fill="#141110"/>
+        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
+        <circle cx="20" cy="12" r="2.2" fill="#D62828"/>
+        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
+        <circle cx="12" cy="20" r="2.2" fill="#D62828"/>
+        <circle cx="20" cy="20" r="2.5" fill="#D62828"/>
+      </svg>
+    </div>
+    <div class="manga-tone manga-tone-bl">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="4" cy="4" r="2.5" fill="#141110"/>
+        <circle cx="12" cy="4" r="2.2" fill="#141110"/>
+        <circle cx="20" cy="4" r="1.8" fill="#141110"/>
+        <circle cx="4" cy="12" r="2.2" fill="#141110"/>
+        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
+        <circle cx="20" cy="12" r="1.5" fill="#D62828"/>
+        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
+        <circle cx="12" cy="20" r="1.5" fill="#D62828"/>
+        <circle cx="20" cy="20" r="1.2" fill="#D62828"/>
+      </svg>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const notchIsland = document.getElementById('notchIsland');
+const notchVerbText = document.getElementById('notchVerbText');
+const auraAppIcon = document.getElementById('auraAppIcon');
+const bottomOverlay = document.getElementById('bottomOverlay');
+const askAuraText = document.getElementById('askAuraText');
+const waveContainer = document.getElementById('waveContainer');
+const micTooltip = document.getElementById('micTooltip');
+const auraMicBtn = document.getElementById('auraMicBtn');
+const bubbleUser = document.getElementById('bubbleUser');
+const bubbleAura = document.getElementById('bubbleAura');
+const burstEffect = document.getElementById('burstEffect');
+const hand = document.getElementById('handCursor');
+const screenEl = document.getElementById('screenEl');
+
+// Generate 22 spectrogram wave bars
+const BAR_COUNT = 22;
+const bars = [];
+for (let i = 0; i < BAR_COUNT; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'wave-bar';
+  waveContainer.appendChild(bar);
+  bars.push(bar);
+}
+
+const DURATION = 8000; // 8.0s complete logical flow
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function easeInOut(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2; }
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+function setFingertip(x, y) {
+  hand.style.left = (x - 7.5) + 'px';
+  hand.style.top = (y - 1) + 'px';
+}
+
+function getCenter(el) {
+  let curr = el;
+  let top = 0;
+  let left = 0;
+  while (curr && curr !== screenEl && curr !== document.body) {
+    left += curr.offsetLeft;
+    top += curr.offsetTop;
+    curr = curr.offsetParent;
+  }
+  return {
+    x: left + el.offsetWidth / 2,
+    y: top + el.offsetHeight / 2
+  };
+}
+
+function triggerBurst(x, y) {
+  burstEffect.style.left = x + 'px';
+  burstEffect.style.top = y + 'px';
+  burstEffect.innerHTML = '';
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement('div');
+    p.className = 'burst-particle';
+    const angle = (i / 8) * 2 * Math.PI;
+    const dist = 16 + Math.random() * 6;
+    p.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
+    p.style.setProperty('--ty', `${Math.sin(angle) * dist}px`);
+    burstEffect.appendChild(p);
+  }
+  burstEffect.classList.add('active');
+  setTimeout(() => burstEffect.classList.remove('active'), 450);
+}
+
+let startTime = null;
+
+function animate(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = (ts - startTime) % DURATION;
+  const t = elapsed / DURATION;
+
+  if (t < 0.03) {
+    // 0 - 0.25s: Reset State
+    bottomOverlay.classList.remove('show');
+    askAuraText.classList.remove('hidden');
+    waveContainer.classList.remove('active');
+    micTooltip.classList.remove('show');
+    auraMicBtn.classList.remove('active-pulse');
+    bubbleUser.classList.remove('show');
+    bubbleAura.classList.remove('show');
+    notchIsland.classList.remove('expanded');
+    notchVerbText.innerText = 'Listening';
+    auraAppIcon.classList.remove('press');
+    hand.style.opacity = '0';
+    setFingertip(200, 360);
+    bars.forEach(b => b.style.height = '4px');
+  } 
+  else if (t < 0.16) {
+    // 0.25s - 1.25s: Hand taps AURA App on Home Dock -> App opens bottom overlay bar
+    const p = (t - 0.03) / 0.13;
+    const ep = easeInOut(p);
+    hand.style.opacity = '1';
+    
+    const appPos = getCenter(auraAppIcon);
+    setFingertip(lerp(210, appPos.x, ep), lerp(380, appPos.y, ep));
+
+    if (p > 0.85 && !auraAppIcon.classList.contains('press')) {
+      auraAppIcon.classList.add('press');
+      hand.classList.add('press');
+      triggerBurst(appPos.x, appPos.y);
+      setTimeout(() => {
+        auraAppIcon.classList.remove('press');
+        hand.classList.remove('press');
+      }, 120);
+    }
+  }
+  else if (t < 0.30) {
+    // 1.25s - 2.4s: Bottom overlay appears with Close + "Ask AURA..." + AURA Mic button + Tooltip
+    bottomOverlay.classList.add('show');
+    micTooltip.classList.add('show');
+
+    const p = (t - 0.16) / 0.14;
+    const ep = easeInOut(p);
+    const micPos = getCenter(auraMicBtn);
+    setFingertip(lerp(120, micPos.x, ep), lerp(450, micPos.y, ep));
+  }
+  else if (t < 0.58) {
+    // 2.4s - 4.6s: Hand taps AURA Mic button -> Text morphs into Live Waveform! Notch expands to "Listening"
+    micTooltip.classList.remove('show');
+    askAuraText.classList.add('hidden');
+    waveContainer.classList.add('active');
+    notchIsland.classList.add('expanded');
+    notchVerbText.innerText = 'Listening';
+    bubbleUser.classList.add('show');
+    
+    const micPos = getCenter(auraMicBtn);
+    setFingertip(micPos.x, micPos.y);
+
+    if (t < 0.34) {
+      auraMicBtn.classList.add('active-pulse');
+      hand.classList.add('press');
+    } else {
+      auraMicBtn.classList.remove('active-pulse');
+      hand.classList.remove('press');
+      hand.style.opacity = '0';
+    }
+
+    // Voice Spectrogram Waveform Pulsing
+    const speechProgress = (t - 0.30) / 0.28;
+    bars.forEach((bar, idx) => {
+      const distFromCenter = Math.abs(idx - BAR_COUNT / 2) / (BAR_COUNT / 2);
+      const wave = Math.sin(speechProgress * 20 + idx * 0.7);
+      const height = Math.max(4, Math.sin(speechProgress * Math.PI) * (1 - distFromCenter * 0.45) * (18 + wave * 10));
+      bar.style.height = height + 'px';
+    });
+  } 
+  else if (t < 0.68) {
+    // 4.6s - 5.4s: Thinking State (Notch: "Planning")
+    notchVerbText.innerText = 'Planning';
+    bars.forEach(b => b.style.height = '4px');
+  } 
+  else if (t < 0.90) {
+    // 5.4s - 7.2s: AURA Voice Output (Notch: "Speaking" & response bubble streams in)
+    notchVerbText.innerText = 'Speaking';
+    bubbleAura.classList.add('show');
+
+    const voiceProgress = (t - 0.68) / 0.22;
+    bars.forEach((bar, idx) => {
+      const distFromCenter = Math.abs(idx - BAR_COUNT / 2) / (BAR_COUNT / 2);
+      const wave = Math.cos(voiceProgress * 16 + idx * 0.6);
+      const height = Math.max(4, Math.sin(voiceProgress * Math.PI) * (1 - distFromCenter * 0.4) * (20 + wave * 11));
+      bar.style.height = height + 'px';
+    });
+  } 
+  else {
+    // 7.2s - 8.0s: Overlay slides down, Notch collapses back into punch-hole
+    bottomOverlay.classList.remove('show');
+    bubbleUser.classList.remove('show');
+    bubbleAura.classList.remove('show');
+    notchIsland.classList.remove('expanded');
+  }
+
+  requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>

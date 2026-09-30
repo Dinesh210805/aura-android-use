@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash badge: the COLORED AURA mark on an ink circle. The system masks this
+     to a circle on the splash. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:top="32dp"
+        android:bottom="32dp"
+        android:left="32dp"
+        android:right="32dp">
+        <bitmap
+            android:src="@mipmap/ic_launcher_foreground"
+            android:gravity="fill" />
+    </item>
+</layer-list>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  flagIncludeNotImportantViews is LOAD-BEARING: React Native / Compose apps mark
+  large container subtrees importantForAccessibility="no", and without this flag
+  the framework hands us a collapsed tree (measured on Swiggy home: 13 nodes vs
+  the 220 uiautomator sees) — no search bar, no editable fields, so every
+  read_screen/type_text fails. flagReportViewIds is what populates viewId in the
+  extracted tree. android:packageNames must stay ABSENT: setting it whitelists
+  which apps' accessibility EVENTS reach the service, silently breaking
+  event-driven observation (screen_changed, watch_device_events) in every
+  non-listed app.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds|flagIncludeNotImportantViews|flagRequestEnhancedWebAccessibility|flagRequestFilterKeyEvents"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:isAccessibilityTool="true"
+    android:canRequestEnhancedWebAccessibility="true"
+    android:canRequestFilterKeyEvents="true"
+    android:canTakeScreenshot="true"
+    tools:targetApi="r"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="0"
+    android:settingsActivity="com.aura.aura_ui.MainActivity" />

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is permitted deliberately, with a narrow blast radius — this is a
+  release configuration, not a leftover development one.
+
+  What actually travels over http:
+    * the on-device MCP server (127.0.0.1) and its localhost daemon bridge;
+    * the OPTIONAL legacy Python backend, which users point at their own LAN
+      address (off by default — AssistantForegroundService.PREF_LEGACY_PYTHON_BACKEND).
+  Neither can be expressed as a domain rule: one is loopback, the other is a
+  user-supplied private IP that changes per network, and Android's config format
+  has no private-range matcher. A base-config denial would break both.
+
+  What does NOT depend on this: every endpoint that leaves the device is
+  https-enforced a layer above — user-supplied MCP server URLs go through
+  McpUrlValidator (https-only; the loopback exception is debug-builds-only) and
+  the model providers use their SDKs' https clients.
+
+  trust-anchors is restricted to `system` on purpose: user-installed CAs are NOT
+  trusted, so a device carrying a rogue or corporate MITM certificate cannot
+  silently intercept AURA's TLS traffic. That is the setting that matters for a
+  public release, and it is already the strict one.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+

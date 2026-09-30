@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG-ONLY manifest overlay. Merged into the app manifest for the debug variant only, so the
+  adb test-harness receiver below is physically absent from any release APK (no BuildConfig.DEBUG
+  guard to forget, no exported component shipped to users). See CompanionTestReceiver.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!-- exported=true is required so the `adb shell` uid can deliver the broadcast.
+             Debug-only, so this never reaches production. -->
+        <receiver
+            android:name=".debugtools.CompanionTestReceiver"
+            android:enabled="true"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="com.aura.aura_ui.debug.COMPANION_TEST" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive launcher icon background (mipmap-anydpi-v26/ic_launcher*.xml).
+         The app's own palette lives in Kotlin: ui/theme/Mono.kt. -->
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+</resources>

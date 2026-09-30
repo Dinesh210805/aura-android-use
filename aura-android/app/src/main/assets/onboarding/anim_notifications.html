@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none}
+body{display:flex;justify-content:center;align-items:center;min-height:100vh;background:transparent;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+
+/* Premium Realistic Smartphone Chassis */
+.phone-wrapper{position:relative;display:flex;justify-content:center;align-items:center;transform:scale(calc(min(calc(100vh / 520px), calc(100vw / 265px), 1) * 0.88));transform-origin:center center}
+.phone-btn-power{position:absolute;right:-3px;top:110px;width:3px;height:38px;background:#1A1916;border-radius:0 2px 2px 0}
+.phone-btn-vol-up{position:absolute;left:-3px;top:90px;width:3px;height:32px;background:#1A1916;border-radius:2px 0 0 2px}
+.phone-btn-vol-down{position:absolute;left:-3px;top:130px;width:3px;height:32px;background:#1A1916;border-radius:2px 0 0 2px}
+
+.phone{
+  position:relative;
+  width:248px;
+  height:498px;
+  background:#141110;
+  border-radius:40px;
+  padding:6px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 10px 24px rgba(36,27,21,0.09),
+    0 2px 6px rgba(36,27,21,0.04);
+}
+
+.screen{
+  position:relative;
+  width:100%;
+  height:100%;
+  background:linear-gradient(180deg, #E6E2D8 0%, #D8D2C4 100%);
+  border-radius:34px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+/* Dynamic Camera Notch Island */
+.notch-island{
+  position:absolute;
+  top:6px;
+  left:50%;
+  transform:translateX(-50%);
+  height:13px;
+  width:13px;
+  background:#1C1A17;
+  border-radius:7px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  z-index:70;
+  transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow:hidden;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+.notch-island.expanded{
+  height:20px;
+  width:auto;
+  max-width:fit-content;
+  border-radius:10px;
+  padding:2px 7px 2px 6px;
+  gap:5px;
+}
+.notch-cam{
+  width:7px;
+  height:7px;
+  background:#090909;
+  border-radius:50%;
+  flex-shrink:0;
+  border:1px solid rgba(255,255,255,0.12);
+}
+.notch-island.expanded .notch-cam{display:none}
+
+.notch-content{
+  display:none;
+  align-items:center;
+  gap:5px;
+  white-space:nowrap;
+}
+.notch-island.expanded .notch-content{display:inline-flex}
+
+.notch-logo{
+  width:11px;
+  height:11px;
+  object-fit:contain;
+  filter:brightness(0) invert(1);
+  flex-shrink:0;
+}
+.notch-verb{
+  font-size:8.5px;
+  font-weight:700;
+  color:#F4F1EA;
+  letter-spacing:0.3px;
+}
+
+/* Status Bar (6:00, Aug 21) */
+.status-bar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 16px 2px;
+  height:26px;
+  z-index:60;
+  flex-shrink:0;
+  background:transparent;
+}
+.time-group{display:flex;align-items:center;gap:4px}
+.time{font-size:9.5px;font-weight:700;color:#1C1A17;letter-spacing:-0.2px}
+.date-tag{font-size:7.5px;font-weight:600;color:#57534A}
+.status-icons{display:flex;gap:4px;align-items:center}
+.icon-bar{width:11px;height:7px;background:#1C1A17;opacity:0.85;border-radius:1px}
+.icon-wifi{width:8px;height:7px;background:#1C1A17;opacity:0.85;border-radius:2px}
+.icon-battery{width:13px;height:6px;border:1px solid #1C1A17;border-radius:2px;position:relative}
+.icon-battery::after{content:'';position:absolute;left:1px;top:1px;bottom:1px;width:7px;background:#1C1A17;border-radius:1px}
+
+/* ── Clean Authentic Manga Comic Badges (Top-Right & Bottom-Left) ── */
+.manga-accent-layer{position:absolute;inset:0;pointer-events:none;z-index:200;overflow:visible}
+.manga-sfx{
+  position:absolute;
+  z-index:210;
+  font-family:'Outfit','Impact',-apple-system,sans-serif;
+  font-weight:900;
+  font-size:12px;
+  line-height:1.1;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#141110;
+  background:#FFFDF8;
+  border:2px solid #141110;
+  padding:3px 8px;
+  border-radius:8px;
+  box-shadow:2.5px 2.5px 0 #D62828, 4px 4px 0 #141110;
+  white-space:nowrap;
+  user-select:none;
+}
+.manga-sfx.red-sfx{
+  background:#D62828;
+  color:#FFFDF8;
+  border:2px solid #141110;
+  box-shadow:2.5px 2.5px 0 #FFFDF8, 4px 4px 0 #141110;
+}
+.manga-sfx-tr{
+  top:-8px;
+  right:-18px;
+  animation:mangaBadgePop 3s ease-in-out infinite;
+}
+.manga-sfx-bl{
+  bottom:36px;
+  left:-18px;
+  animation:mangaBadgeFloat 2.8s ease-in-out infinite 0.5s;
+}
+
+@keyframes mangaBadgePop{
+  0%,100%{transform:rotate(8deg) scale(0.96) translateY(0);opacity:0.98}
+  50%{transform:rotate(12deg) scale(1.08) translateY(-3px);opacity:1}
+}
+@keyframes mangaBadgeFloat{
+  0%,100%{transform:rotate(-10deg) scale(0.96) translateY(0);opacity:0.98}
+  50%{transform:rotate(-6deg) scale(1.08) translateY(-2px);opacity:1}
+}
+
+/* Subtle Action Halftones tucked near the badges */
+.manga-tone{position:absolute;z-index:195;opacity:0.65;animation:mangaToneBreathe 4s ease-in-out infinite}
+.manga-tone-tr{top:14px;right:-14px}
+.manga-tone-bl{bottom:60px;left:-14px;animation-delay:1.8s}
+
+@keyframes mangaToneBreathe{
+  0%,100%{opacity:0.35;transform:scale(0.92)}
+  50%{opacity:0.8;transform:scale(1.05)}
+}
+
+/* Home Screen Canvas Base */
+.home-canvas{
+  flex:1;
+  padding:16px 14px 12px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  position:relative;
+  overflow:hidden;
+}
+.home-clock-widget{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:14px}
+.widget-time{font-size:32px;font-weight:800;color:#1C1A17;letter-spacing:-1px}
+.widget-date{font-size:9px;font-weight:600;color:#57534A}
+
+/* App Grid Dock with White BG AURA App Icon at Center */
+.app-dock{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.7);border-radius:22px;border:1px solid rgba(255,255,255,0.85)}
+.app-icon{width:34px;height:34px;border-radius:11px;display:flex;justify-content:center;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,0.06);transition:all 0.15s ease}
+.app-icon.phone-app{background:#34C759;color:#FFFFFF}
+.app-icon.aura-app{background:#FFFFFF;border:1px solid #E8E4D8;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+.aura-dock-img{width:22px;height:22px;object-fit:contain}
+.app-icon.msg-app{background:#007AFF;color:#FFFFFF}
+.app-icon.camera-app{background:#8E8E93;color:#FFFFFF}
+.app-svg{width:18px;height:18px}
+
+/* Android Notification Shade / Drawer - Solid, Opaque, Strict Clipping */
+.notification-shade{
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  background:#F4F2EC;
+  z-index:40;
+  transform:translateY(-100%);
+  transition:transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  display:flex;
+  flex-direction:column;
+  padding:0;
+  overflow:hidden;
+}
+.notification-shade.open{transform:translateY(0)}
+
+/* Pinned Solid Status Bar inside Drawer */
+.shade-top-bar{
+  width:100%;
+  background:#F4F2EC;
+  padding:6px 16px 2px;
+  height:26px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  z-index:60;
+  flex-shrink:0;
+}
+/* Pinned Solid Drawer Header */
+.shade-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 14px 8px;
+  background:#F4F2EC;
+  border-bottom:1px solid rgba(0,0,0,0.06);
+  z-index:60;
+  flex-shrink:0;
+  box-shadow:0 2px 6px rgba(0,0,0,0.03);
+}
+.shade-title{font-size:11px;font-weight:800;color:#1C1A17}
+.clear-all-btn{font-size:8.5px;font-weight:700;color:#D62828;background:#FFEAEA;padding:2px 8px;border-radius:8px;transition:all 0.15s;cursor:pointer}
+.clear-all-btn.active{background:#D62828;color:#FFFFFF}
+
+/* Strictly Clipped Scrollable Notifications Viewport */
+.notif-scroll-viewport{
+  flex:1;
+  overflow:hidden;
+  position:relative;
+  padding:8px 10px 14px;
+  contain:paint;
+}
+.notif-list{display:flex;flex-direction:column;gap:7px;transition:transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)}
+
+/* Notification Card */
+.notif-card{
+  background:#FFFFFF;
+  border:1px solid #E2DFD5;
+  border-radius:14px;
+  padding:8px 10px;
+  box-shadow:0 2px 6px rgba(28,26,23,0.03);
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  transition:all 0.25s ease;
+}
+.notif-card.cleared{opacity:0;transform:scale(0.9)}
+
+.card-top{display:flex;justify-content:space-between;align-items:center}
+.app-badge{display:flex;align-items:center;gap:5px}
+.app-badge-icon{width:14px;height:14px;border-radius:4px;display:flex;justify-content:center;align-items:center;color:#FFFFFF;flex-shrink:0}
+.app-badge-icon.whatsapp{background:#25D366}
+.app-badge-icon.gmail{background:#EA4335}
+.app-badge-icon.github{background:#24292E}
+.app-badge-icon.calendar{background:#007AFF}
+.app-badge-icon.coffee{background:#D62828}
+.badge-svg{width:9px;height:9px}
+.app-name{font-size:8px;font-weight:700;color:#1C1A17}
+.notif-time{font-size:7.5px;color:#8A867C;font-weight:500}
+
+.notif-title-text{font-size:9.5px;font-weight:800;color:#1C1A17}
+.notif-desc{font-size:8.5px;color:#57534A;line-height:1.3;font-weight:500}
+
+/* AURA Smart Brief Card in Drawer */
+.aura-brief-card{
+  background:#1C1A17;
+  border-radius:14px;
+  padding:8px 10px;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  color:#F4F1EA;
+  box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  margin-top:2px;
+}
+.brief-header{display:flex;align-items:center;gap:5px}
+.brief-logo{width:10px;height:10px;object-fit:contain;filter:brightness(0) invert(1)}
+.brief-title{font-size:8px;font-weight:800;color:#E4572E;letter-spacing:0.3px}
+.brief-text{font-size:8px;color:#F4F1EA;line-height:1.35;font-weight:500}
+
+/* Lively Micro-Burst Particles (Kaboom Tap Pop) */
+.burst-effect{position:absolute;pointer-events:none;z-index:65;opacity:0;transform:scale(0);transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1)}
+.burst-effect.active{opacity:1;transform:scale(1.4)}
+.burst-particle{position:absolute;width:4px;height:4px;border-radius:50%;background:#E4572E;animation:particleFly 0.5s ease-out forwards}
+@keyframes particleFly{
+  0%{transform:translate(0,0) scale(1);opacity:1}
+  100%{transform:translate(var(--tx), var(--ty)) scale(0);opacity:0}
+}
+
+/* Classic OS Hand Pointer Cursor */
+.hand-cursor{position:absolute;width:38px;height:38px;z-index:70;pointer-events:none;opacity:0;transform-origin:7px 2px;transition:transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.22))}
+.hand-cursor svg{width:100%;height:100%}
+.hand-cursor.press{transform:scale(0.84) translateY(2px)}
+</style>
+</head>
+<body>
+
+<div class="phone-wrapper">
+          <div class="phone-btn-power"></div>
+  <div class="phone-btn-vol-up"></div>
+  <div class="phone-btn-vol-down"></div>
+
+  <div class="phone">
+    <div class="screen" id="screenEl">
+      
+      <!-- Dynamic Camera Notch Island -->
+      <div class="notch-island" id="notchIsland">
+        <div class="notch-cam"></div>
+        <div class="notch-content">
+          <img src="aura_logo_mono.png" class="notch-logo" alt="AURA">
+          <span class="notch-verb" id="notchVerbText">Reading</span>
+        </div>
+      </div>
+
+      <!-- Clean Status Bar (Time: 6:00, Battery & Wifi, Date removed) -->
+      <div class="status-bar" id="statusBar">
+        <div class="time-group">
+          <span class="time">6:00</span>
+        </div>
+        <div class="status-icons">
+          <div class="icon-bar"></div>
+          <div class="icon-wifi"></div>
+          <div class="icon-battery"></div>
+        </div>
+      </div>
+
+      <!-- Home Screen Base -->
+      <div class="home-canvas">
+        <div class="home-clock-widget">
+          <span class="widget-time">6:00</span>
+          <span class="widget-date">Sunday, August 23</span>
+        </div>
+
+        <div class="app-dock">
+          <div class="app-icon phone-app">
+            <svg class="app-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+          </div>
+
+          <!-- White Background AURA App Icon -->
+          <div class="app-icon aura-app">
+            <img src="aura_logo_color.png" class="aura-dock-img" alt="AURA">
+          </div>
+
+          <div class="app-icon msg-app">
+            <svg class="app-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+          <div class="app-icon camera-app">
+            <svg class="app-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Android Notification Shade / Drawer -->
+      <div class="notification-shade" id="notifShade">
+        <!-- Solid Status Bar inside Drawer -->
+        <div class="shade-top-bar">
+          <div class="time-group"><span class="time">6:00</span></div>
+          <div class="status-icons">
+            <div class="icon-bar"></div>
+            <div class="icon-wifi"></div>
+            <div class="icon-battery"></div>
+          </div>
+        </div>
+        <div class="shade-header">
+          <span class="shade-title">Notification Center</span>
+          <div class="clear-all-btn" id="clearAllBtn">Clear all</div>
+        </div>
+
+        <div class="notif-scroll-viewport">
+          <div class="notif-list" id="notifList">
+            
+            <!-- Notif 1: WhatsApp (Joyboy) -->
+            <div class="notif-card" id="card1">
+              <div class="card-top">
+                <div class="app-badge">
+                  <div class="app-badge-icon whatsapp">
+                    <svg class="badge-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                    </svg>
+                  </div>
+                  <span class="app-name">WhatsApp</span>
+                </div>
+                <span class="notif-time">Just now</span>
+              </div>
+              <span class="notif-title-text">Joyboy</span>
+              <span class="notif-desc">The new AI deployment is live! Check the metrics when you are free.</span>
+            </div>
+
+            <!-- Notif 2: Gmail (Sarah / Design) -->
+            <div class="notif-card" id="card2">
+              <div class="card-top">
+                <div class="app-badge">
+                  <div class="app-badge-icon gmail">
+                    <svg class="badge-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                      <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                  </div>
+                  <span class="app-name">Gmail</span>
+                </div>
+                <span class="notif-time">3m ago</span>
+              </div>
+              <span class="notif-title-text">Sarah Jenkins (Design)</span>
+              <span class="notif-desc">Sprint Review: Mobile UI onboarding flow is ready for review.</span>
+            </div>
+
+            <!-- Notif 3: GitHub -->
+            <div class="notif-card" id="card3">
+              <div class="card-top">
+                <div class="app-badge">
+                  <div class="app-badge-icon github">
+                    <svg class="badge-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                    </svg>
+                  </div>
+                  <span class="app-name">GitHub</span>
+                </div>
+                <span class="notif-time">12m ago</span>
+              </div>
+              <span class="notif-title-text">aura</span>
+              <span class="notif-desc">PR #42 merged: Autonomous agent bridge & live tool execution.</span>
+            </div>
+
+            <!-- Notif 4: Google Calendar -->
+            <div class="notif-card" id="card4">
+              <div class="card-top">
+                <div class="app-badge">
+                  <div class="app-badge-icon calendar">
+                    <svg class="badge-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                  </div>
+                  <span class="app-name">Calendar</span>
+                </div>
+                <span class="notif-time">25m ago</span>
+              </div>
+              <span class="notif-title-text">Team Sync in 30 mins</span>
+              <span class="notif-desc">6:30 PM • Google Meet link attached</span>
+            </div>
+
+            <!-- Notif 5: QuickBrew Coffee -->
+            <div class="notif-card" id="card5">
+              <div class="card-top">
+                <div class="app-badge">
+                  <div class="app-badge-icon coffee">
+                    <svg class="badge-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                      <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                    </svg>
+                  </div>
+                  <span class="app-name">QuickBrew</span>
+                </div>
+                <span class="notif-time">40m ago</span>
+              </div>
+              <span class="notif-title-text">Order Out for Delivery</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Particle Burst Container -->
+      <div class="burst-effect" id="burstEffect"></div>
+
+      <!-- Hand Pointer Cursor -->
+      <div class="hand-cursor" id="handCursor">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M7.5 2V12.5H6.25C5.00736 12.5 4 13.5074 4 14.75C4 15.3526 4.23933 15.9298 4.66649 16.3541L7.54571 19.2136C9.17647 20.8335 11.3813 21.75 13.6845 21.75H14.5C18.0899 21.75 21 18.8399 21 15.25V12.5C21 11.2574 19.9926 10.25 18.75 10.25C18.4239 10.25 18.1147 10.3197 17.8358 10.4447C17.5137 9.43128 16.5684 8.75 15.5 8.75C15.2079 8.75 14.9293 8.80629 14.6756 8.90858C14.3312 7.93041 13.3986 7.25 12.25 7.25C11.9579 7.25 11.6793 7.30629 11.4256 7.40858V2C11.4256 0.89543 10.5302 0 9.4256 0C8.32103 0 7.5 0.89543 7.5 2Z" fill="#FFFFFF" stroke="#1C1A17" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M7.5 9.5H11.5M11.5 11.5H14.5M14.5 13H17.5" stroke="#1C1A17" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+    </div>
+  
+  <!-- Authentic Manga Action Accents (Top Layer: z-index 200+) -->
+  <div class="manga-accent-layer">
+    <!-- Clean Manga Comic Badges -->
+    <div class="manga-sfx manga-sfx-tr">PING!</div>
+    <div class="manga-sfx red-sfx manga-sfx-bl">ALERT!</div>
+
+    <!-- Screentone Halftone Cluster -->
+    <div class="manga-tone manga-tone-tr">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="4" cy="4" r="1.2" fill="#141110"/>
+        <circle cx="12" cy="4" r="1.5" fill="#141110"/>
+        <circle cx="20" cy="4" r="1.8" fill="#D62828"/>
+        <circle cx="4" cy="12" r="1.5" fill="#141110"/>
+        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
+        <circle cx="20" cy="12" r="2.2" fill="#D62828"/>
+        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
+        <circle cx="12" cy="20" r="2.2" fill="#D62828"/>
+        <circle cx="20" cy="20" r="2.5" fill="#D62828"/>
+      </svg>
+    </div>
+    <div class="manga-tone manga-tone-bl">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="4" cy="4" r="2.5" fill="#141110"/>
+        <circle cx="12" cy="4" r="2.2" fill="#141110"/>
+        <circle cx="20" cy="4" r="1.8" fill="#141110"/>
+        <circle cx="4" cy="12" r="2.2" fill="#141110"/>
+        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
+        <circle cx="20" cy="12" r="1.5" fill="#D62828"/>
+        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
+        <circle cx="12" cy="20" r="1.5" fill="#D62828"/>
+        <circle cx="20" cy="20" r="1.2" fill="#D62828"/>
+      </svg>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const notchIsland = document.getElementById('notchIsland');
+const notchVerbText = document.getElementById('notchVerbText');
+const notifShade = document.getElementById('notifShade');
+const notifList = document.getElementById('notifList');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const burstEffect = document.getElementById('burstEffect');
+const hand = document.getElementById('handCursor');
+const screenEl = document.getElementById('screenEl');
+
+const cards = [
+  document.getElementById('card1'),
+  document.getElementById('card2'),
+  document.getElementById('card3'),
+  document.getElementById('card4'),
+  document.getElementById('card5')
+];
+
+const DURATION = 8500; // 8.5s complete flow
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function easeInOut(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2; }
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+function setFingertip(x, y) {
+  hand.style.left = (x - 7.5) + 'px';
+  hand.style.top = (y - 1) + 'px';
+}
+
+function getCenter(el) {
+  let curr = el;
+  let top = 0;
+  let left = 0;
+  while (curr && curr !== screenEl && curr !== document.body) {
+    left += curr.offsetLeft;
+    top += curr.offsetTop;
+    curr = curr.offsetParent;
+  }
+  return {
+    x: left + el.offsetWidth / 2,
+    y: top + el.offsetHeight / 2
+  };
+}
+
+function triggerBurst(x, y) {
+  burstEffect.style.left = x + 'px';
+  burstEffect.style.top = y + 'px';
+  burstEffect.innerHTML = '';
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement('div');
+    p.className = 'burst-particle';
+    const angle = (i / 8) * 2 * Math.PI;
+    const dist = 16 + Math.random() * 6;
+    p.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
+    p.style.setProperty('--ty', `${Math.sin(angle) * dist}px`);
+    burstEffect.appendChild(p);
+  }
+  burstEffect.classList.add('active');
+  setTimeout(() => burstEffect.classList.remove('active'), 450);
+}
+
+let startTime = null;
+
+function animate(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = (ts - startTime) % DURATION;
+  const t = elapsed / DURATION;
+
+  if (t < 0.03) {
+    // 0 - 0.25s: Reset State (Home Screen, Notch collapsed)
+    notchIsland.classList.remove('expanded');
+    notchVerbText.innerText = 'Opening';
+    notifShade.classList.remove('open');
+    notifList.style.transform = 'translateY(0)';
+    clearAllBtn.classList.remove('active');
+    cards.forEach(c => c.classList.remove('cleared'));
+    hand.style.opacity = '0';
+    setFingertip(124, 20);
+  } 
+  else if (t < 0.16) {
+    // 0.25s - 1.35s: Hand appears at top status bar, drags down to pull shade open
+    notchIsland.classList.add('expanded');
+    notchVerbText.innerText = 'Opening';
+    const p = (t - 0.03) / 0.13;
+    const ep = easeInOut(p);
+    hand.style.opacity = '1';
+    
+    // Swipe down from top edge to mid screen
+    setFingertip(124, lerp(12, 180, ep));
+
+    if (p > 0.45) {
+      notifShade.classList.add('open');
+    }
+  } 
+  else if (t < 0.42) {
+    // 1.35s - 3.55s: Notch switches to "Scrolling" as hand scrolls through the 5 notifications
+    notchVerbText.innerText = 'Scrolling';
+    const p = (t - 0.16) / 0.26;
+    const ep = easeInOut(p);
+    
+    // Scroll list up to show all 5 cards & AURA Smart Brief
+    notifList.style.transform = `translateY(${-ep * 140}px)`;
+    setFingertip(lerp(124, 140, ep), lerp(260, 160, ep));
+  } 
+  else if (t < 0.65) {
+    // 3.55s - 5.5s: Notch switches to "Reading" as AURA reads and generates the Smart Brief
+    notchVerbText.innerText = 'Reading';
+    const p = (t - 0.42) / 0.23;
+    const ep = easeInOut(p);
+    
+    // Hand glides towards "Clear all" button
+    const clearPos = getCenter(clearAllBtn);
+    setFingertip(lerp(140, clearPos.x, ep), lerp(160, clearPos.y, ep));
+  } 
+  else if (t < 0.78) {
+    // 5.5s - 6.6s: Hand taps "Clear all", Notch switches to "Clearing"
+    notchVerbText.innerText = 'Clearing';
+    const clearPos = getCenter(clearAllBtn);
+    setFingertip(clearPos.x, clearPos.y);
+
+    const p = (t - 0.65) / 0.13;
+    if (p > 0.4 && !clearAllBtn.classList.contains('active')) {
+      clearAllBtn.classList.add('active');
+      hand.classList.add('press');
+      triggerBurst(clearPos.x, clearPos.y);
+      
+      // Clear cards with staggered pop
+      cards.forEach((c, idx) => {
+        setTimeout(() => c.classList.add('cleared'), idx * 50);
+      });
+      setTimeout(() => hand.classList.remove('press'), 120);
+    }
+  } 
+  else if (t < 0.92) {
+    // 6.6s - 7.8s: Shade slides back up to home screen
+    hand.classList.remove('press');
+    notifShade.classList.remove('open');
+    const p = (t - 0.78) / 0.14;
+    const ep = easeOut(p);
+    hand.style.opacity = String(1 - ep);
+    setFingertip(lerp(200, 220, ep), lerp(40, 10, ep));
+  } 
+  else {
+    // 7.8s - 8.5s: Notch collapses back into punch-hole
+    hand.style.opacity = '0';
+    notchIsland.classList.remove('expanded');
+  }
+
+  requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AURA keyboard IME metadata. Used only as a programmatic text-injection conduit for
+     apps that expose no editable accessibility node (React Native / Flutter / canvas). -->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsSwitchingToNextInputMethod="true">
+    <subtype
+        android:label="AURA"
+        android:imeSubtypeMode="keyboard" />
+</input-method>

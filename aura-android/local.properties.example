@@ -1,0 +1,12 @@
+# Copy this file to `local.properties` (git-ignored) in this folder. Nothing here is a secret
+# except the release signing values, which must never be committed.
+
+# Path to your Android SDK. Android Studio writes this line for you.
+sdk.dir=C\:\\Users\\YOU\\AppData\\Local\\Android\\Sdk
+
+# Release signing (optional). Without these, `assembleRelease` builds an unsigned APK.
+# Keep the keystore file outside the repository.
+# aura.releaseStoreFile=C:/keys/aura-release.jks
+# aura.releaseStorePassword=
+# aura.releaseKeyAlias=aura
+# aura.releaseKeyPassword=

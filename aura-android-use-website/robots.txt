@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aura-android-use.vercel.app/sitemap.xml

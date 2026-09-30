@@ -1,0 +1,96 @@
+/* Phone and small-tablet fixes. The page markup uses inline styles, so overrides here need !important.
+   Heights use svh (the viewport with the browser's address bar and bottom bar showing) so pinned
+   sections never hide their last lines behind browser chrome. */
+
+html { -webkit-tap-highlight-color: transparent; }
+
+/* grid columns may not shrink below their content by default; a nowrap URL was forcing ~464px.
+   Inline grid-template-columns still wins over this, so only implicit single-column grids change. */
+section[style*="grid-template-columns"] > * { min-width: 0; }
+section[style*="grid-template-columns"] > [style*="display: grid"] { grid-template-columns: minmax(0, 1fr); }
+
+@media (max-width: 759px) {
+  [data-m="hide-sm"] { display: none !important; }
+
+  /* hero: headline on one line, compact subline and buttons, so the phone below has room */
+  [data-cap="0"] h1 { gap: 10px !important; }
+  [data-cap="0"] h1 > span:first-child { font-size: min(46px, calc((100vw - 40px) / 10.4)) !important; }
+  [data-cap="0"] h1 > span:last-child { font-size: 17px !important; }
+  [data-cap="0"] > div { margin-top: 16px !important; }
+  [data-cap="0"] a { height: 40px !important; padding: 0 16px !important; font-size: 14px !important; }
+
+  /* film captions: smaller display type so the drawn phone and the words share the screen */
+  [data-cap] h2 { font-size: clamp(30px, 9vw, 40px) !important; }
+  [data-cap] p { font-size: 15px !important; }
+  [data-cap="1"], [data-cap="2"], [data-cap="3"], [data-cap="4"], [data-cap="7"], [data-cap="8"], [data-cap="9"] { bottom: 28px !important; }
+  [data-cap="7"] ul { display: none !important; } /* the Safety section below lists these in full */
+
+  /* "Read every line": keep the code sample clear of the caption below it, even on short phones */
+  [data-code] { max-height: max(0px, min(500px, 32svh, calc(100svh - 480px))) !important; }
+
+  /* tools board fits a phone: no forced height, chips wrap and shrink */
+  [data-m="board"] { min-height: 0 !important; }
+  [data-bd-name] { font-size: min(44px, 9vw) !important; }
+  div:has(> [data-bd-name]) { flex-wrap: wrap; }
+  [data-bd-desc] { font-size: 16px !important; margin: 12px 0 16px !important; }
+  [data-bd-tools] { gap: 8px !important; }
+  [data-bd-tools] > span { font-size: 13px !important; padding: 6px 10px !important; white-space: normal !important; overflow-wrap: anywhere; max-width: 100%; }
+
+  /* real apps: a narrower headline so the tiles sit around it, as on desktop; the three notes go (see hide-sm) */
+  [data-ctext] { width: 64% !important; }
+  [data-ctext] h2 { font-size: 36px !important; }
+  [data-mq-cap] { font-size: 20px !important; }
+
+  /* browser: no sideways pin on phones; the panels stack and read top to bottom */
+  [data-hstack] { height: auto !important; }
+  [data-hstack] > div { position: static !important; height: auto !important; overflow: visible !important; display: block !important; }
+  [data-hstack] [data-htrack] { flex-direction: column; align-items: stretch !important; width: auto !important; transform: none !important;
+    padding: 72px 20px 64px !important; gap: 56px !important; }
+  [data-hstack] [data-htrack] > * { width: auto !important; max-width: none !important; }
+  [data-m="bphone"] { height: min(60svh, 130vw) !important; }
+  [data-htrack] h2 { font-size: 40px !important; }
+  [data-htrack] p { font-size: 16px !important; }
+  [data-htrack] figcaption p { font-size: 18px !important; }
+
+  /* safety: heading, then the gate card (which carries each rule's title and text) */
+  [data-m="safety-h"] { font-size: 26px !important; max-width: none !important; }
+  [data-m="gate"] { min-height: 0 !important; }
+  [data-g-verdict] { font-size: 40px !important; }
+
+  /* download steps: cards take what the screen has left under the heading */
+  #download h2 { font-size: 36px !important; }
+  [data-m="dcard"] { height: clamp(170px, calc(100svh - 360px), 320px) !important; }
+  [data-m="dcard"] [style*="font-family: Doto"] { font-size: 56px !important; }
+
+  /* legible minimum for small labels (Google flags text under 12px on mobile).
+     The runtime re-serialises inline styles with a space after the colon, so match that form. */
+  [style*="font-size: 11px"], [style*="font-size: 11.5px"],
+  [style*="font: 500 11px"], [style*="font: 500 11.5px"], [style*="font: 600 11px"] { font-size: 12px !important; }
+
+  /* footer links: finger-sized tap targets */
+  footer ul { gap: 0 !important; }
+  footer li a { display: inline-block; padding: 11px 0; }
+}
+
+/* very short phone screens (iPhone SE class with browser bars showing) */
+@media (max-width: 759px) and (max-height: 560px) {
+  #safety > div > div { padding-top: 66px !important; }
+  [data-m="safety-h"] { font-size: 22px !important; }
+  div:has(> [data-g-src]) { display: none !important; } /* the "incoming from …" line */
+  [data-g-req] { margin-top: 0 !important; }
+  [data-g-verdict] { font-size: 28px !important; padding: 6px 12px 8px !important; }
+  [data-g-why] { display: none !important; }
+  [data-m="gate"] > div[style*="flex: 1"] { min-height: 0 !important; }
+  [data-g-desc] { font-size: 13.5px !important; line-height: 1.4 !important; }
+  #download h2 + p { display: none !important; }
+  /* download cards: use the space the hidden intro freed, and drop the one-line explainer */
+  [data-m="dcard"] { height: calc(100svh - 250px) !important; }
+  [data-m="dcard"] > div:last-child > p:nth-child(2) { display: none !important; }
+}
+
+@media (max-width: 479px) {
+  /* header must fit logo, star pill, sound and menu down to 320px */
+  [data-m="hdr"] { gap: 8px !important; }
+  [data-m="gh-txt"], [data-m="snd-txt"], [data-m="theme"] { display: none !important; }
+  [data-m="snd"] { width: 36px; padding: 0 !important; justify-content: center; }
+}

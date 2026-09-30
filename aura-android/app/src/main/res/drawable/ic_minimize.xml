@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Browser/overlay chrome icon. White fill so callers tint it (ink vs. on-ink)
+     rather than shipping one drawable per colour. See BrowserChrome.kt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M19,13H5v-2h14v2z" />
+</vector>

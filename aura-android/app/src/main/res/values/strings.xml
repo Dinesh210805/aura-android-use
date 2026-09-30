@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AURA Assistant</string>
+    <string name="accessibility_service_description">AURA Accessibility Service enables voice-controlled automation of your device. It can read screen content, capture UI structure, and perform actions like clicking and swiping to execute your voice commands. This service requires accessibility permissions to function properly.</string>
+</resources>
