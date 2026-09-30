@@ -1,5 +1,6 @@
 package com.aura.aura_ui.presentation.screens.onboarding
 
+import com.aura.aura_ui.BuildConfig
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -222,8 +223,11 @@ fun OnboardingScreen(
     // Step 2 is the hard gate: AURA does not run for an unsigned account. Everything below it
     // (permissions, provider key) is wasted effort for someone who cannot pass it, so it blocks
     // here rather than at the end.
+    // Why debug builds may skip: a contributor building from source may have no Firebase project
+    // with Google sign-in, and would otherwise be stuck on this step.
+    val signInSkippable = BuildConfig.DEBUG && !isSignedIn
     val canProceed = (step != 1 || policyAccepted) &&
-        (step != 2 || isSignedIn) &&
+        (step != 2 || isSignedIn || signInSkippable) &&
         (step != 8 || keyVerified)
 
     // Standard Ink / TextOnInk button colors matching AURA
@@ -436,7 +440,11 @@ fun OnboardingScreen(
                         Text(
                             text = when (step) {
                                 1 -> if (policyAccepted) "I Understand" else "Accept Terms"
-                                2 -> if (isSignedIn) "Next" else "Sign in to continue"
+                                2 -> when {
+                                    isSignedIn -> "Next"
+                                    signInSkippable -> "Skip (debug build)"
+                                    else -> "Sign in to continue"
+                                }
                                 3 -> "Next"
                                 4 -> "Next"
                                 5 -> "Next"
