@@ -12,7 +12,7 @@ gives the project a licence to use your work.
 ## 1. Definitions
 
 - **"You"** means the individual who submits a Contribution.
-- **"Maintainer"** means Dinesh, the copyright holder and maintainer of the AURA project, and any
+- **"Maintainer"** means Dinesh Kumar C, the copyright holder and maintainer of the AURA project, and any
   person or entity the Maintainer transfers the project to.
 - **"Contribution"** means any original work of authorship, including changes to existing work,
   that You intentionally submit to the Maintainer for inclusion in the AURA project: through a pull

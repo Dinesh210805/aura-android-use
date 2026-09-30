@@ -209,12 +209,13 @@ Issues and pull requests are welcome.
 
 ## License
 
-AURA is free software under the **GNU Affero General Public License v3.0 or later**. See
+Copyright (C) 2026 Dinesh Kumar C. AURA is free software under the **GNU Affero General Public
+License v3.0 or later**. See
 [`LICENSE`](LICENSE).
 
 - **Use it, change it, share it, even sell it.** Anything you distribute or run as a service that's
   built on AURA must publish its full source under the same licence.
-- **The Android app links a few closed Google and Picovoice libraries.** An extra permission in
+- **The Android app links a few closed Google libraries.** An extra permission in
   [`LICENSE-EXCEPTION.md`](LICENSE-EXCEPTION.md) makes that legal to distribute.
 - **Want to ship it closed-source?** That needs a commercial licence. See
   [`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md).

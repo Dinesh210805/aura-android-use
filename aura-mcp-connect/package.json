@@ -30,6 +30,7 @@
     "lan"
   ],
   "license": "MIT",
+  "author": "Dinesh Kumar C",
   "homepage": "https://github.com/Dinesh210805/aura-releases",
   "scripts": {
     "postinstall": "node src/postinstall.js",

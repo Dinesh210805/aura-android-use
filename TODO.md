@@ -80,7 +80,7 @@ Order: dead code first, then the small folders, then medium, and `agent/` last.
       `agent/` round.
 - [ ] `di/AppModule.kt`: Room database and repository providers only fed the deleted
       `AssistantViewModel`
-- [ ] `PorcupineWakeWordDetector` + the `ai.picovoice` dependency, then remove Picovoice from
+- [x] `PorcupineWakeWordDetector` + the `ai.picovoice` dependency, then remove Picovoice from
       `LICENSE-EXCEPTION.md` and `THIRD_PARTY_NOTICES.md`
 - [ ] Location permission: requested, but no code reads the location
 - [ ] Legacy Python-backend WebSocket path is dead since the backend left the repo:
@@ -142,10 +142,10 @@ Analytics (step ④), done in code:
 ## 5. Licence checks
 - [x] 8 voice previews in `res/raw/` named after Microsoft neural voices: dropped; Preview speaks through the phone TTS
 - [x] `res/raw/overlay_open_chime.mp3`: source unknown, dropped; the overlay opens with the haptic only
-- [ ] Copyright holder's legal name in `CLA.md` and `LICENSE-EXCEPTION.md`
+- [x] Copyright holder's legal name in `CLA.md` and `LICENSE-EXCEPTION.md`
 - [ ] Have `CLA.md` reviewed
 
 ## 6. Going public
 - [x] Secret scan over the final tree (`gitleaks`)
-- [ ] Create the public repo, push `prod` as one squashed commit
+- [x] Create the public repo, push `prod` as one squashed commit
 - [x] Remove `prod/` before publishing

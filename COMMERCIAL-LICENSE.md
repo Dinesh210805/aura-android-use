@@ -18,7 +18,7 @@ AURA is free, open-source software under the **GNU AGPL v3** (see [`LICENSE`](LI
 - offer a hosted or embedded version of AURA while keeping your changes private
 
 A commercial licence gives you the same code under terms that let you keep your changes closed.
-Licences are granted case by case by the copyright holder.
+Licences are granted case by case by the copyright holder, Dinesh Kumar C.
 
 ## How to ask
 
