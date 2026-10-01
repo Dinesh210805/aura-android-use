@@ -52,6 +52,18 @@ interface SessionLogSink {
     )
 
     /**
+     * Called when a gate refuses a call before its handler runs (scope, policy, control lock,
+     * browser handoff, foreground gate, action guard). [reason] is the refusal's error code.
+     *
+     * - Contract: implementations must NOT capture a screenshot or store args here. Refusals
+     *   fire exactly when the screen is sensitive (a banking app is foreground, the user has
+     *   the phone) or the args are (a blocked card number).
+     * - Why a separate method: [onToolStart] screenshots; reusing it would leak what the gate
+     *   just protected.
+     */
+    fun onToolRefused(toolName: String, reason: String, tokenId: String?, agentLabel: String?) = Unit
+
+    /**
      * Called by the `end_session` tool. Closes the current session log
      * entry. Future tool calls open a new session. The MCP server
      * itself keeps listening — this is a soft boundary, not a hard

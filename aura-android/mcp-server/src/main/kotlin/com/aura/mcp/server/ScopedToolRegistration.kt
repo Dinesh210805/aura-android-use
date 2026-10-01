@@ -166,19 +166,26 @@ internal fun Server.scopedTool(
         val started = System.currentTimeMillis()
         val trail = ToolTrail(name, sinks.trail)
 
-        if (principal != null && required !in principal.scopes) {
-            trail.step("gate", "Scope", "refuse", "needs ${required.name.lowercase()}")
-            val result = scopeDeniedResult(name, required, principal.scopes)
-            sinks.phase.onPhase(name, required, ToolPhaseSink.Phase.SCOPE_DENIED)
+        // Every gate refusal goes through here so the audit ring and the session log record the
+        // same event. The session sink gets no args and takes no screenshot (see onToolRefused).
+        fun refused(result: CallToolResult, reason: String, scopeDenied: Boolean = false): CallToolResult {
             sinks.audit.log(
                 toolName = name,
                 tokenId = tokenId,
                 success = false,
-                scopeDenied = true,
+                scopeDenied = scopeDenied,
                 durationMs = System.currentTimeMillis() - started,
-                errorSummary = "scope_denied (required=${required.name.lowercase()})",
+                errorSummary = reason,
             )
-            return@addTool result
+            sinks.session.onToolRefused(name, reason, tokenId, principal?.label)
+            return result
+        }
+
+        if (principal != null && required !in principal.scopes) {
+            trail.step("gate", "Scope", "refuse", "needs ${required.name.lowercase()}")
+            val result = scopeDeniedResult(name, required, principal.scopes)
+            sinks.phase.onPhase(name, required, ToolPhaseSink.Phase.SCOPE_DENIED)
+            return@addTool refused(result, "scope_denied (required=${required.name.lowercase()})", scopeDenied = true)
         }
 
         // Policy gate — hard-block sensitive actions (banking/auth apps,
@@ -190,15 +197,7 @@ internal fun Server.scopedTool(
                 trail.step("gate", "SensitivePolicy", "refuse", decision.category.id)
                 val result = policyBlockedResult(name, decision)
                 sinks.phase.onPhase(name, required, ToolPhaseSink.Phase.SCOPE_DENIED)
-                sinks.audit.log(
-                    toolName = name,
-                    tokenId = tokenId,
-                    success = false,
-                    scopeDenied = false,
-                    durationMs = System.currentTimeMillis() - started,
-                    errorSummary = "policy_blocked:${decision.category.id}",
-                )
-                return@addTool result
+                return@addTool refused(result, "policy_blocked:${decision.category.id}")
             }
             SensitivePolicy.Decision.Allow -> {
                 trail.step("gate", "Scope", "pass", required.name.lowercase())
@@ -223,15 +222,7 @@ internal fun Server.scopedTool(
             // status pill HIDES — the agent is not doing anything, so a "doing" chip would
             // be a lie, and the Pause pill owns the screen instead. Auditing still happens:
             // a refusal is a real event worth a record even when it is not worth a pixel.
-            sinks.audit.log(
-                toolName = name,
-                tokenId = tokenId,
-                success = false,
-                scopeDenied = false,
-                durationMs = System.currentTimeMillis() - started,
-                errorSummary = "paused_by_user",
-            )
-            return@addTool result
+            return@addTool refused(result, "paused_by_user")
         }
 
         trail.step("gate", "ControlLock", "pass")
@@ -252,15 +243,7 @@ internal fun Server.scopedTool(
                     content = listOf(TextContent(verdict.message)),
                     isError = true,
                 )
-                sinks.audit.log(
-                    toolName = name,
-                    tokenId = tokenId,
-                    success = false,
-                    scopeDenied = false,
-                    durationMs = System.currentTimeMillis() - started,
-                    errorSummary = "browser_handed_off",
-                )
-                return@addTool result
+                return@addTool refused(result, "browser_handed_off")
             }
         }
 
@@ -272,15 +255,7 @@ internal fun Server.scopedTool(
             trail.step("gate", "ForegroundGate", "refuse", block.category.id)
             val result = foregroundBlockedResult(name, block)
             sinks.phase.onPhase(name, required, ToolPhaseSink.Phase.SCOPE_DENIED)
-            sinks.audit.log(
-                toolName = name,
-                tokenId = tokenId,
-                success = false,
-                scopeDenied = false,
-                durationMs = System.currentTimeMillis() - started,
-                errorSummary = "foreground_blocked:${block.category.id}",
-            )
-            return@addTool result
+            return@addTool refused(result, "foreground_blocked:${block.category.id}")
         }
 
         // Fire STARTED only after auth/scope/policy passed — the chip should
