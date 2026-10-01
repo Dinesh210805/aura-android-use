@@ -37,13 +37,6 @@
 
 ## See it work
 
-<p align="center">
-  <a href="https://youtu.be/u2PS767kdMI">
-    <img src="https://i.ytimg.com/vi/u2PS767kdMI/maxresdefault.jpg" alt="Watch the launch film on YouTube: The Barrier Is Down, AI agents can now control your phone" width="100%"/>
-  </a>
-  <br/>
-  <sub><b>▶ The launch film</b> (4:25, with sound): <a href="https://youtu.be/u2PS767kdMI">The Barrier Is Down: AI agents can now control your phone</a>.</sub>
-</p>
 
 <p align="center">
   <a href="https://aura-android-use.vercel.app/media/mcp-instagram.mp4">
@@ -53,6 +46,13 @@
   <sub><b>Over MCP:</b> Claude on a laptop shares an Instagram post to a story, on a real phone, through AURA.</sub>
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/u2PS767kdMI">
+    <img src="https://i.ytimg.com/vi/u2PS767kdMI/maxresdefault.jpg" alt="Watch the launch film on YouTube: The Barrier Is Down, AI agents can now control your phone" width="100%"/>
+  </a>
+  <br/>
+  <sub><b>▶ The launch film</b> (4:25, with sound): <a href="https://youtu.be/u2PS767kdMI">The Barrier Is Down: AI agents can now control your phone</a>.</sub>
+</p>
 <table>
   <tr>
     <td align="center" valign="top" width="25%">
