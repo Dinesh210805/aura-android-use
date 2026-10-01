@@ -76,6 +76,7 @@ function fakePhone({ deviceId = "dev-e2e" } = {}) {
     let approved = false;
     let challenge = null;
     let enroll = null;
+    let sas = null;
     dc.onmessage = ({ data }) => {
       const text = typeof data === "string" ? data : Buffer.from(data).toString("utf8");
       if (approved) {
@@ -88,7 +89,7 @@ function fakePhone({ deviceId = "dev-e2e" } = {}) {
       }
       const m = JSON.parse(text);
       if (m.type === "init") {
-        assert.equal(m.proto, 2);
+        assert.equal(m.proto, 3);
         if (auth.kind === "token" && m.tokenHash !== auth.hash) return dc.send(JSON.stringify({ type: "denied", reason: "mismatch" }));
         const token = state.tokens.find((t) => crypto.tokenHash(t) === m.tokenHash);
         if (token) {
@@ -96,8 +97,14 @@ function fakePhone({ deviceId = "dev-e2e" } = {}) {
           return dc.send(JSON.stringify({ type: "challenge", nonce: challenge.nonce }));
         }
         if (auth.kind !== "pin") return dc.send(JSON.stringify({ type: "denied", reason: "not paired" }));
-        state.shownCodes.push(crypto.verificationCode(bindingOf())); // "the user compares and approves"
-        enroll = m.tokenHash;
+        sas = { commit: m.commit, nonce: "ffeeddccbbaa99887766554433221100", tokenHash: m.tokenHash };
+        return dc.send(JSON.stringify({ type: "sas", nonce: sas.nonce }));
+      }
+      if (m.type === "reveal" && sas) {
+        if (crypto.commitment(m.nonce) !== sas.commit) return dc.send(JSON.stringify({ type: "denied", reason: "commitment" }));
+        state.shownCodes.push(crypto.verificationCode(bindingOf(), m.nonce, sas.nonce)); // "the user compares and approves"
+        enroll = sas.tokenHash;
+        sas = null;
         return dc.send(JSON.stringify({ type: "enroll" }));
       }
       if (m.type === "proof" && challenge) {

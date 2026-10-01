@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  * would be skipped entirely (fail-open). The supplied [principal] is the
  * identity the device approved during the WebRTC handshake — approval grants
  * full device control, so it carries READ+WRITE. The [SensitivePolicy] gate and
- * audit logging then run unchanged, just like the SSE and in-process paths.
+ * audit logging then run unchanged, just like the in-process path.
  */
 class WebRtcMcpTransport(
     private val webRtcTransport: WebRtcTransport,
@@ -61,11 +61,9 @@ class WebRtcMcpTransport(
             }
         }
 
-        webRtcTransport.onConnectionStateChange = { isConnected ->
-            if (!isConnected) {
-                readBuffer.clear()
-                closeHandler?.invoke()
-            }
+        webRtcTransport.onDisconnected = {
+            readBuffer.clear()
+            closeHandler?.invoke()
         }
     }
 

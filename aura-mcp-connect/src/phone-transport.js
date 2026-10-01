@@ -36,6 +36,8 @@ import {
   proofMac,
   tokenHash,
   verificationCode,
+  commitment,
+  newNonce,
 } from "./pairing-crypto.js";
 import { VERSION } from "./version.js";
 
@@ -208,6 +210,9 @@ export class PhoneTransport {
     // ── Handshake: wait for DataChannel open, then device approval ────
     let openTimer = null;
     let approvalTimer = null;
+    // First pairing: committed in `init`, revealed only after the phone sends its own nonce.
+    const pcNonce = newNonce();
+    let revealed = false;
     const approved = new Promise((resolve, reject) => {
       openTimer = setTimeout(() => {
         reject(new PhoneUnreachableError("the WebRTC connect"));
@@ -231,12 +236,9 @@ export class PhoneTransport {
             host: os.hostname(),
             platform: process.platform,
             tokenHash: tokenHash(clientToken),
+            commit: commitment(pcNonce),
           }),
         );
-        if (!pairing.enrolled) {
-          const code = verificationCode(bound);
-          this._onVerificationCode(`${code.slice(0, 3)} ${code.slice(3)}`);
-        }
         approvalTimer = setTimeout(() => {
           reject(new PhoneUnreachableError("device approval (tap Approve on the phone)"));
         }, this._approvalTimeoutMs);
@@ -266,6 +268,15 @@ export class PhoneTransport {
               mac: bound ? proofMac(clientToken, bound, String(msg.nonce ?? "")) : "",
             }),
           );
+        } else if (msg.type === "sas" && !revealed) {
+          // The phone has committed to its nonce by sending it; now reveal ours.
+          revealed = true;
+          dataChannel.send(JSON.stringify({ type: "reveal", nonce: pcNonce }));
+          const bound = this._binding();
+          if (bound) {
+            const code = verificationCode(bound, pcNonce, String(msg.nonce ?? ""));
+            this._onVerificationCode(`${code.slice(0, 3)} ${code.slice(3)}`);
+          }
         } else if (msg.type === "enroll") {
           dataChannel.send(JSON.stringify({ type: "token", clientToken }));
         } else if (msg.type === "approved") {
