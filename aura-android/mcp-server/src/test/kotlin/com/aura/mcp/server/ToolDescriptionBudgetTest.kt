@@ -45,12 +45,14 @@ class ToolDescriptionBudgetTest {
 
     /**
      * Registration is the only place a description's FINAL text exists, so the budget is measured
-     * against a real server built with the same inert fakes `ToolNameListsTest` uses. Guarded on
-     * emptiness because both tests share the process-global recorder and either may run first.
+     * against a real server built with the same inert fakes `ToolNameListsTest` uses. Rebuilt every
+     * time, not only when empty: the recorder is process-global, and a test that registers a stub
+     * under a real name (`tap` with "test tap") overwrites that tool's description until the real
+     * server registers again.
      */
     @BeforeTest
-    fun buildServerOnce() {
-        if (RegisteredToolNames.descriptions.isEmpty()) buildTestServer()
+    fun buildRealServer() {
+        buildTestServer()
     }
 
 

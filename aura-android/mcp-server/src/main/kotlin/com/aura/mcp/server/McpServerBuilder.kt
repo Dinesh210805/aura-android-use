@@ -86,6 +86,8 @@ internal object McpServerBuilder {
         learningsGateway: LearningsGateway = NoOpLearningsGateway,
         /** Spec 2026-09-23 — per-call gate/post trail for the host's run log. */
         trailSink: ToolTrailSink = ToolTrailSink.NOOP,
+        /** Wasted-turn guard for this server; pass one in to read its counters afterwards. */
+        actionGuard: ActionGuard = ActionGuard(),
         // Spec 2026-07-17 — device skills exposed as MCP prompts (slash-commands).
         promptSkills: List<PromptSkill> = emptyList(),
         /**
@@ -203,6 +205,7 @@ internal object McpServerBuilder {
                 browserHandedOff = { browserBridge?.isHandedOff == true },
                 learnings = learningsGateway,
                 trail = trailSink,
+                guard = actionGuard,
             ),
         )
 
