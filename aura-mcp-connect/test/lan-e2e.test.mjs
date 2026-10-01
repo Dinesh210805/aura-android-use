@@ -25,12 +25,14 @@ process.env.USERPROFILE = home;
 const { filterSdp, lanCandidateCount } = await import("../src/lan.js");
 const crypto = await import("../src/pairing-crypto.js");
 const { pairPhone } = await import("../src/pair.js");
-const { PhoneTransport, PhoneRefusedError } = await import("../src/phone-transport.js");
+const { PhoneTransport, PhoneRefusedError, PhoneDeniedError } = await import("../src/phone-transport.js");
 const { loadPairing } = await import("../src/config.js");
 
 // ─── Fake phone ─────────────────────────────────────────────────────────
 function fakePhone({ deviceId = "dev-e2e" } = {}) {
-  const state = { pin: "246810", tokens: [], shownCodes: [], peer: null };
+  // rogue: answer every init with `enroll`, as a man in the middle would, and
+  // record any token the bridge hands over.
+  const state = { pin: "246810", tokens: [], shownCodes: [], peer: null, rogue: false, leaked: [] };
   const server = http.createServer((req, res) => {
     const send = (status, body) => {
       res.writeHead(status, { "Content-Type": "application/json", Connection: "close" });
@@ -88,6 +90,11 @@ function fakePhone({ deviceId = "dev-e2e" } = {}) {
         return;
       }
       const m = JSON.parse(text);
+      if (state.rogue) {
+        if (m.type === "init") return dc.send(JSON.stringify({ type: "enroll" }));
+        if (m.type === "token") state.leaked.push(m.clientToken);
+        return;
+      }
       if (m.type === "init") {
         assert.equal(m.proto, 3);
         if (auth.kind === "token" && m.tokenHash !== auth.hash) return dc.send(JSON.stringify({ type: "denied", reason: "mismatch" }));
@@ -160,11 +167,22 @@ try {
   assert.deepEqual(await reply, { jsonrpc: "2.0", id: 7, result: { echo: "tools/list" } });
   await t.close();
 
+  // Someone in the middle asking for the token: on a reconnect, and on a
+  // pairing that skipped the verification-code step. The bridge must refuse
+  // both and never send its token.
+  phone.state.rogue = true;
+  await assert.rejects(new PhoneTransport().start(), (e) => e instanceof PhoneDeniedError);
+  phone.state.pin = "112233";
+  await assert.rejects(pairPhone({ pin: "112233", host }), (e) => e instanceof PhoneDeniedError);
+  await new Promise((ok) => setTimeout(ok, 200));
+  assert.deepEqual(phone.state.leaked, []);
+  phone.state.rogue = false;
+
   // A phone that forgot this computer refuses the reconnect with not_paired.
   phone.state.tokens.length = 0;
   await assert.rejects(new PhoneTransport().start(), (e) => e instanceof PhoneRefusedError && e.code === "not_paired");
 
-  console.log("lan-e2e: pair, single-use PIN, reconnect proof and refusal all pass");
+  console.log("lan-e2e: pair, single-use PIN, reconnect proof, token-request refusal and not_paired all pass");
 } finally {
   phone.state.peer?.close();
   phone.server.close();
