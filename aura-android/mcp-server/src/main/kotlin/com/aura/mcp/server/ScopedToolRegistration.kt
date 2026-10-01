@@ -134,9 +134,9 @@ private val OTP_SOURCE_TOOLS = setOf(
  *  2. **Audit logging** of every call — name, principal id, success flag,
  *     duration, and short error string if the handler returned `isError`.
  *
- * Why a wrapper instead of a routing-level interceptor: the MCP SDK owns
- * SSE body parsing and JSON-RPC dispatch, so the tool name only becomes
- * known inside the SDK's pipeline.
+ * Why a wrapper instead of a transport-level interceptor: the MCP SDK owns
+ * JSON-RPC parsing and dispatch, so the tool name only becomes known inside
+ * the SDK's pipeline.
  */
 internal fun Server.scopedTool(
     name: String,
@@ -543,9 +543,8 @@ private fun scopeDeniedResult(
                 }
                 put(
                     "hint",
-                    "This client paired with read-only scope. Re-pair from " +
-                        "AURA Settings → MCP Pairing and enable 'Allow device control' " +
-                        "to issue a write-capable token.",
+                    "This client's identity does not carry the required scope. " +
+                        "Do not retry; tell the user this action isn't permitted for this client.",
                 )
             }.toString(),
         ),

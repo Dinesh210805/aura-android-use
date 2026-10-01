@@ -12,8 +12,8 @@ package com.aura.mcp.bridge
  *     SoM-annotated one — annotation belongs to the agent's reasoning;
  *     the raw image is the audit ground truth)
  *   • the tool name + args + textual output
- *   • the calling agent's identity (from the bearer-token label set at
- *     pairing time — e.g. "Laptop / VS Code")
+ *   • the calling agent's identity (the client name the PC reported when
+ *     it was approved — e.g. "Laptop / VS Code")
  *   • an explicit session boundary, so multiple tool calls in close
  *     temporal proximity get grouped into one navigable entry
  *
