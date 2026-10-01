@@ -249,16 +249,21 @@ curl http://127.0.0.1:4816/health     # → {"ok":true, …, "adbToolEnabled":fa
 
 ### What connecting agents are told
 
-When armed, the daemon appends a guidance section to the handshake
-`instructions` every MCP client receives (the phone's own instructions stay
-first and unedited — it owns the safety doctrine). That section tells agents to
-treat adb as a **second, independent channel to the device**, not just an
-install/logcat utility: fall back to it when accessibility gestures mis-target
-or a Flutter/RN/WebView surface exposes no usable tree, use `dumpsys`/`logcat`
-to diagnose a failure instead of retrying blindly, and use `am force-stop` /
-`am start` to reach a known state cheaply.
+When armed, the daemon appends one short paragraph (at most 400 bytes) to the
+handshake `instructions` every MCP client receives. The phone's own instructions
+stay first and unedited, and are capped at 1,600 bytes, so the total stays under
+the ~2 KB that Claude Code keeps — a longer note would be cut off from the end,
+safety rule first. The paragraph says adb exists, that it bypasses the device's
+safety checks, and to read the tool's description before using it.
 
-It also states one hard rule. `adb shell input tap` reaches the same pixels
+The detail lives in the `aura-adb` tool description, which agents load right
+before calling it: treat adb as a **second, independent channel to the device**,
+fall back to it when accessibility gestures mis-target or a Flutter/RN/WebView
+surface exposes no usable tree, use `dumpsys`/`logcat` to diagnose a failure
+instead of retrying blindly, and use `am force-stop` / `am start` to reach a
+known state cheaply.
+
+Both places state one hard rule. `adb shell input tap` reaches the same pixels
 **without passing through the on-device MCP server**, so none of the device-side
 safety checks fire. Anything the phone refused with `policy_blocked` (banking,
 payments, authenticator apps, card numbers, PINs, passwords) must stay refused —

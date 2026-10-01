@@ -27,100 +27,47 @@ function truncate(text) {
   return `${text.slice(0, MAX_OUTPUT_CHARS)}\n…(truncated, ${cut} more chars)`;
 }
 
-const DESCRIPTION =
-  "Run an ADB command against the phone paired to this workstation. Pass " +
-  "exactly what you'd type after `adb` — e.g. `install app-debug.apk`, " +
-  "`logcat -d -t 200`, `shell pm list packages -3`, `shell am force-stop " +
-  "com.example`. Runs on THIS machine's local adb binary; the phone must " +
-  "already be paired (USB debugging authorized once, or `adb pair`/" +
-  "`adb connect` already completed) — this tool does not perform pairing " +
-  "itself. Arguments are split on whitespace and quotes are NOT stripped, so " +
-  "write `shell dumpsys window | grep mCurrentFocus` unquoted — the device's " +
-  "shell handles the pipe. Output is truncated at 20k chars, so filter with " +
-  "grep/head rather than dumping. Set the AURA_ADB_SERIAL env var to target " +
-  "one device when more than one is attached.";
+/**
+ * What the handshake says about aura-adb. Kept to a few lines on purpose.
+ *
+ * - Why short: Claude Code keeps only ~2 KB of a server's handshake `instructions`, and the
+ *   phone's own text already uses most of it. Anything long appended here is cut off — the
+ *   safety rule first of all, because it would sit at the end.
+ * - Why it exists at all: a tool description is read only once a model is already picking a
+ *   tool, so without this line agents never learn there is a second channel to the device.
+ * - Why the safety rule is here and not only in the description: `adb shell input tap` reaches
+ *   the same pixels without passing through the on-device MCP server, so no device-side check
+ *   fires. An agent that learns about adb must learn the rule in the same breath.
+ * - Change together: `test/daemon.test.mjs` pins the combined handshake length.
+ */
+const INSTRUCTIONS =
+  "You also have `aura-adb`: raw ADB from this computer to the same phone. It BYPASSES every " +
+  "on-device safety check — never use it to reach anything the device refused with " +
+  "`policy_blocked`, or to type a credential; tell the user instead. Prefer the device tools; " +
+  "use adb when they cannot see or reach something, or to diagnose. Read its description first.";
 
 /**
- * Appended to the phone's own handshake instructions when this tool is armed.
- *
- * A tool description is read once a model is already choosing between tools;
- * handshake instructions shape strategy before the first call — which is the
- * difference between an agent that reaches for adb only when the user says
- * "adb" and one that knows it has a second, independent channel to the device.
- *
- * The policy paragraph is not boilerplate: `adb shell input tap` reaches the
- * same pixels without passing through the on-device MCP server, so none of the
- * device-side safety checks fire. An agent told "use adb when tap fails" and
- * nothing else would have a documented bypass for them.
+ * The tool's full guidance. Agents load a tool's description right before calling it, so the
+ * detail lives here rather than in the size-capped handshake (see [INSTRUCTIONS]).
  */
-const INSTRUCTIONS = `
-## aura-adb — a second, independent channel to this device
+const DESCRIPTION = `
+Run an ADB command against the phone paired to this workstation. Pass exactly what you'd type after \`adb\` — e.g. \`install app-debug.apk\`, \`logcat -d -t 200\`, \`shell pm list packages -3\`. Runs THIS machine's adb; the phone must already be paired (USB debugging authorized, or \`adb pair\`/\`adb connect\` done). Set AURA_ADB_SERIAL to pick one device when several are attached.
 
-You also have \`aura-adb\`, which runs any ADB command on the computer hosting
-this MCP connection, against the same phone. Pass exactly what you'd type after
-\`adb\` (e.g. \`shell dumpsys window\`). It does NOT go through the phone's MCP
-server — it is a separate path to the same device.
+SAFETY: this does NOT go through the phone's MCP server, so it skips every on-device check. Anything refused with \`policy_blocked\` (banking, payments, authenticator/password apps, card numbers, CVVs, PINs, passwords) stays refused. Never use adb to reach it or to type a credential. Confirm destructive commands with the user first (\`pm clear\`, \`uninstall\`, \`rm\`, settings writes).
 
-Two things that follow from that, and they pull in opposite directions:
+WHEN: prefer the device tools for ordinary interaction (policy-checked and verified). Switch to adb when they fail — a target with no UI-tree node, a Flutter/React-Native/Unity/WebView surface, a stuck screen — instead of retrying the same gesture.
 
-**1. It is a real fallback.** When the accessibility path fails — \`tap\`/\`swipe\`
-mis-target, an element has no node in the UI tree, a Flutter/React-Native/Unity
-surface exposes nothing useful, a WebView is opaque, the screen is stuck — do
-not keep retrying the same gesture. Switch channels.
+USEFUL:
+- Focused activity: \`shell dumpsys window | grep mCurrentFocus\`. Raw hierarchy: \`shell uiautomator dump\` then \`shell cat /sdcard/window_dump.xml\`. Screen size: \`shell wm size\`.
+- Diagnose a failure: \`logcat -d -t 300\`, errors only \`logcat -d *:E\`, permissions \`shell dumpsys package <pkg>\`.
+- Reset fast: \`shell am force-stop <pkg>\`, \`shell am start -n <pkg>/<activity>\`, \`shell input keyevent HOME\`.
+- Dev loops: \`install -r\`, \`uninstall\`, \`pull\`/\`push\`, \`shell screencap -p /sdcard/s.png\`, \`shell settings get/put\`, \`shell svc wifi disable\`.
 
-**2. It skips every on-device safety check.** Anything the device refused with
-\`policy_blocked\` (banking, payments, authenticator/password apps, card numbers,
-CVVs, PINs, passwords) stays refused. NEVER use aura-adb to reach a target the
-device declined, or to type a credential. A refusal is a decision, not an
-obstacle to route around. Tell the user instead.
-
-Use it for far more than installs and logcat:
-
-- **See what the UI tools can't** — \`shell dumpsys window | grep
-  mCurrentFocus\` names the focused activity in one line, \`shell dumpsys
-  activity top\`, \`shell uiautomator dump\` then \`shell cat
-  /sdcard/window_dump.xml\` for a raw hierarchy independent of the accessibility
-  tree, \`shell wm size\` / \`wm density\` when coordinates look wrong.
-- **Diagnose instead of guess** — \`logcat -d -t 300\` right after a failure
-  (crash, ANR, silent no-op) usually says why. \`logcat -d *:E\` for errors only.
-  \`shell dumpsys package <pkg>\` for permissions actually granted.
-- **Get to a known state fast** — \`shell am force-stop <pkg>\`,
-  \`shell pm clear <pkg>\` (destructive: ask first), \`shell am start -n
-  <pkg>/<activity>\`, \`shell input keyevent HOME\`. Cheaper and more reliable
-  than navigating back through many screens.
-- **Development and test loops** — \`install -r app.apk\`, \`uninstall\`,
-  \`shell pm list packages -3\`, \`shell am instrument\`, \`pull\`/\`push\`,
-  \`shell screencap -p /sdcard/s.png\`, \`shell settings get/put\`,
-  \`shell content query\`, \`shell svc wifi disable\` to test offline paths.
-- **Reproduce conditions** — rotate (\`shell settings put system
-  user_rotation\`), simulate low battery, toggle radios, change density, then
-  verify with the normal perception tools.
-
-Working rules:
-
-- Prefer the device's own tools for ordinary interaction. They are
-  policy-checked, coordinate-aware, and verified. Reach for adb when they
-  cannot see or cannot reach something, or when you need evidence.
-- **Read before you write.** \`dumpsys\`/\`logcat\` cost nothing and are always
-  safe. \`input tap\`, \`pm clear\`, \`rm\`, \`svc\` change real state.
-- Confirm destructive commands with the user first (\`pm clear\`,
-  \`uninstall\`, \`rm\`, factory-reset-adjacent settings writes).
-- **No shell runs on the host computer**, so \`;\`, \`&&\` and \`|\` never chain
-  commands *there*. But everything after \`adb shell\` is handed to the DEVICE's
-  shell, which DOES chain and pipe. So \`shell rm x; reboot\` really does both —
-  treat any \`adb shell\` line as a shell command on the phone.
-- **Do NOT quote.** Arguments are split on whitespace and quotes survive as
-  literal characters, so \`shell "dumpsys window | grep x"\` fails with
-  "inaccessible or not found". Write it unquoted: \`shell dumpsys window | grep
-  mCurrentFocus\` works and is the single most useful thing here.
-- **Filter on the device, don't drown.** Output is truncated at 20,000
-  characters keeping the START, and \`dumpsys window\` or a \`uiautomator\` dump
-  of a busy screen blows past that — leaving you the top of the hierarchy, which
-  is rarely where your target is. Pipe through \`grep\`/\`head\` instead:
-  \`shell dumpsys window | grep mCurrentFocus\` returns one line naming the
-  focused activity. Use \`logcat -d -t 200\` rather than unbounded \`logcat\`.
-- If it returns \`no devices/emulators found\`, the phone is not adb-paired to
-  that computer. Say so — you cannot fix it from here, the user must pair it.
+RULES:
+- Do NOT quote. Arguments split on whitespace and quotes stay literal: write \`shell dumpsys window | grep x\`, not \`shell "dumpsys window | grep x"\`.
+- Nothing runs in a shell on this computer, but everything after \`shell\` runs in the PHONE's shell, which does chain and pipe: \`shell rm x; reboot\` does both.
+- Output is cut at 20,000 chars keeping the start — filter on the device with grep/head.
+- "no devices/emulators found" means the phone is not adb-paired to this computer; tell the user, you cannot fix it.
 `.trim();
 
 /**

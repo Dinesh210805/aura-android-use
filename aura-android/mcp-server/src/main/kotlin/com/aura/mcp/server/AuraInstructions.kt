@@ -380,34 +380,36 @@ internal object AuraInstructions {
     """.trimIndent()
 
     /**
-     * The ≤1,900-char handshake contract. Clients truncate the MCP
-     * `instructions` field (Claude Code cuts at ~2,048 chars — measured
-     * 2026-07-17: only 15% of the full playbook survived), so THIS string is
-     * the only guaranteed-delivered context. It must be self-sufficient:
-     * stakes, compressed decision tree, safety hard-blocks, stop rules, and
-     * pointers to the full playbook (get_usage_guide) + learned hints.
-     * Guarded by a unit test asserting length < 2000.
+     * The handshake text: the one piece of guidance an agent sees before its first call.
+     *
+     * - Contract: at most [SURVIVAL_KIT_MAX_BYTES] UTF-8 bytes, plain ASCII. Claude Code keeps
+     *   ~2 KB of a server's `instructions` and other clients may keep less or nothing, so this
+     *   holds only what must be known before acting: stakes, safety, stop rules, tool routing.
+     *   How each tool works lives in its description; what to do next lives in tool replies.
+     * - Order: SAFETY and STOP come first because truncation cuts from the end.
+     * - Change together: the desktop bridge appends up to 400 bytes when `aura-adb` is armed
+     *   (`aura-mcp-connect/src/adb-tool.js`); the two budgets must sum under 2,000.
+     *   `ContextDeliveryTest` pins this side.
      */
     val survivalKit: String = """
-        You are driving a REAL Android device. Every tool call moves real pixels and sends real keystrokes; there is no undo. Act deliberately, verify, stop when unsure.
+        You drive a REAL Android phone: real taps, real keystrokes, no undo. Verify each step; stop when unsure.
 
-        Full playbook: get_usage_guide (lists its topics; `browser` for web). Learned hints from past verified runs arrive in launch_app / open_deeplink results — the live screen always wins.
+        SAFETY: banking/payment apps, authenticator/password managers, and typing card numbers, CVVs, SSNs, PINs or passwords are refused with error=policy_blocked. Never retry or work around it; tell the user. Buy, pay, apply or send: ask first, every time.
+        STOP and ask the user when two checks in a row surprise you, scrolling finds nothing, or before anything irreversible.
 
-        TOOL SELECTION — pick the right tool FIRST:
-        • Unfamiliar multi-step flow → web_search("how to <task> in <app>") first.
-        • Standard verb (alarm, timer, call, SMS, calendar, share, navigate) → system_intent in ONE call — opens the app PRE-FILLED; the USER taps final send/confirm unless they explicitly asked you to.
-        • Call/message a PERSON by name → resolve_contact FIRST; on 'disambiguate' ask by NAME — never read numbers aloud, and never navigate Contacts by gesture.
-        • Music/media → media_control / get_media_sessions — never open the app to tap buttons.
-        • Read/reply to a message → read_notifications, then notification_action (direct reply).
-        • Open a file → find_files → open_file. A screen inside an app → list_app_deeplinks → open_deeplink; else launch_app(app_name).
-        • WEB page → browser_read/find/extract, NEVER perceive_screen+taps (the DOM is truth, far cheaper). Login → browser_handoff. Buy/pay/apply/send → ask first.
-        • To tap anything → read_screen (or perceive_screen for visual targets) first, then tap its numbered som_id. NEVER guess or reuse coordinates.
-        • After EVERY gesture read its post_action_observation and decide from that — don't re-perceive just to check. som_ids die when the screen changes. ONE consequential action per turn.
-
-        SAFETY — hard-blocked on-device (error=policy_blocked): banking/payment apps, authenticator/password managers, typing card numbers/CVVs/SSNs/PINs/passwords. Never retry or work around — tell the user. Unsure? validate_action first.
-
-        STOP and ask when two checks in a row surprise you, when scrolling exhausts, or before anything irreversible the user did not explicitly request.
+        PICK THE TOOL FIRST:
+        - Alarm, timer, call, SMS, calendar, share, navigate -> system_intent (opens pre-filled; the user taps send).
+        - Person by name -> resolve_contact; if ambiguous ask by name, never read numbers aloud.
+        - Music -> media_control. Messages -> read_notifications, then notification_action to reply.
+        - File -> find_files, open_file. Screen inside an app -> list_app_deeplinks, open_deeplink; else launch_app(app_name). Its learned hints are past routes; the live screen wins.
+        - Unfamiliar flow -> web_search("how to <task> in <app>") first.
+        - Web page -> browser_read/find/act, NEVER perceive_screen+taps. Login -> browser_handoff.
+        - To tap -> read_screen (perceive_screen if visual), then tap its som_id. Never guess coordinates; som_ids die when the screen changes.
+        - After a gesture, decide from its post_action_observation. One consequential action per turn.
     """.trimIndent()
+
+    /** Byte budget for [survivalKit]; see its KDoc for the split with the desktop bridge. */
+    const val SURVIVAL_KIT_MAX_BYTES = 1_600
 
     /**
      * The full playbook split by its `── ` headers into stable topic keys —
