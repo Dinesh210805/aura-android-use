@@ -116,6 +116,28 @@ class McpSessionLogger(
         }
     }
 
+    override fun onToolRefused(toolName: String, reason: String, tokenId: String?, agentLabel: String?) {
+        scope.launch {
+            mutex.withLock {
+                val now = System.currentTimeMillis()
+                rotateIfNeeded(now, tokenId, agentLabel)
+                val session = currentSession ?: return@launch
+                session.invocations.add(
+                    ToolInvocation(
+                        index = session.invocations.size,
+                        timestampMillis = now,
+                        toolName = toolName,
+                        argsJson = null,
+                        success = false,
+                        outputSummary = "refused: $reason",
+                    ),
+                )
+                lastActivityMillis = now
+                persist(session)
+            }
+        }
+    }
+
     override fun endSession(reason: String) {
         scope.launch {
             mutex.withLock { closeCurrent(reason) }
