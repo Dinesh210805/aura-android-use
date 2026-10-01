@@ -23,11 +23,26 @@ class PendingUpload {
 
     private val armed = AtomicReference<String?>(null)
 
-    /** Offer exactly one file to the next chooser. Replaces anything previously armed. */
-    fun arm(uri: String) {
-        armed.set(uri)
+    /**
+     * Offer exactly one file to the next chooser. Replaces anything previously armed.
+     *
+     * - Contract: returns false, and leaves nothing armed, unless [uri] passes [isMediaStoreUri].
+     * - Why: the chooser callback reads the URI with AURA's own permissions, so a `file://`
+     *   path or an AURA provider URI would upload AURA's private storage (pairing tokens
+     *   included) to the page.
+     */
+    fun arm(uri: String): Boolean {
+        val ok = isMediaStoreUri(uri)
+        armed.set(uri.takeIf { ok })
+        return ok
     }
 
     /** Take the armed file, clearing it. Null means: cancel this chooser. */
     fun consume(): String? = armed.getAndSet(null)
+}
+
+/** True for `content://media/…`, the only URIs `find_files` returns. */
+fun isMediaStoreUri(uri: String): Boolean {
+    val parsed = runCatching { java.net.URI(uri.trim()) }.getOrNull() ?: return false
+    return parsed.scheme.equals("content", ignoreCase = true) && parsed.rawAuthority == "media"
 }
