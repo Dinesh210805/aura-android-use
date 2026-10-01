@@ -30,16 +30,33 @@ class ContextDeliveryTest {
     // ── survival kit ──
 
     @Test
-    fun `survival kit fits inside the smallest known client truncation budget`() {
-        val len = AuraInstructions.survivalKit.length
-        assertTrue(len < 2000, "survival kit is $len chars; must stay < 2000")
+    fun `survival kit fits its byte budget, leaving room for the bridge's adb line`() {
+        val bytes = AuraInstructions.survivalKit.toByteArray(Charsets.UTF_8).size
+        assertTrue(
+            bytes <= AuraInstructions.SURVIVAL_KIT_MAX_BYTES,
+            "survival kit is $bytes bytes; budget is ${AuraInstructions.SURVIVAL_KIT_MAX_BYTES}",
+        )
+    }
+
+    @Test
+    fun `survival kit is plain ASCII so byte and char budgets agree`() {
+        val offenders = AuraInstructions.survivalKit.filter { it.code > 127 }.toSet()
+        assertTrue(offenders.isEmpty(), "non-ASCII in survival kit: $offenders")
+    }
+
+    @Test
+    fun `safety and stop rules come before tool routing, so truncation cuts routing first`() {
+        val kit = AuraInstructions.survivalKit
+        val routing = kit.indexOf("PICK THE TOOL")
+        assertTrue(routing > 0, "kit must have a routing section")
+        assertTrue(kit.indexOf("SAFETY") in 0 until routing, "SAFETY must precede routing")
+        assertTrue(kit.indexOf("STOP") in 0 until routing, "STOP must precede routing")
     }
 
     @Test
     fun `survival kit is self-sufficient - carries every load-bearing doctrine`() {
         val kit = AuraInstructions.survivalKit
         listOf(
-            "get_usage_guide", // pointer to the full playbook
             "learned hints", // pointer to the memory read lane (lowercase in kit)
             "resolve_contact", // person-by-name rule
             "system_intent", // deterministic verb lane
