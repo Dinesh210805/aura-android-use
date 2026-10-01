@@ -1,6 +1,6 @@
-package com.aura.aura_ui.agent.mcpbridge
+package com.aura.mcp.server
 
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -10,8 +10,8 @@ import org.junit.Test
  * Unit tests for the Phase 1 reliability guard. [ActionGuard] is pure (only a
  * coroutine Mutex), so no Android/Robolectric runner is needed.
  *
- * Lifecycle modelled in each test mirrors [McpTool.execute]:
- * `blockReasonFor(...)` is consulted first; if it allows, the tool "runs" and
+ * Lifecycle modelled in each test mirrors `scopedTool`:
+ * `refusalFor(...)` is consulted first; if it allows, the tool "runs" and
  * `recordAfter(...)` updates state. A perception passes its element text so the
  * guard can fingerprint the screen for loop detection.
  */
@@ -25,74 +25,119 @@ class ActionGuardTest {
     private suspend fun ActionGuard.ranTap(args: String = tapArgs) =
         recordAfter("tap", args, success = true, screenText = "")
 
+    private fun observed(changed: Boolean, confidence: String? = null): String =
+        """{"success":true}""" + "\n" + """{"post_action_observation":{"settled":true,"screen_changed":$changed""" +
+            (confidence?.let { ""","screen_changed_confidence":"$it"""" } ?: "") + "}}"
+
+    // ── a gesture that provably changed nothing keeps the last look ───────────
+
+    @Test
+    fun `a tap whose observation says nothing changed keeps the screen grounded`() = runBlocking<Unit> {
+        val guard = ActionGuard()
+        guard.perceive("settings")
+        guard.recordAfter("tap", tapArgs, success = true, screenText = observed(changed = false))
+        assertNull(
+            "re-reading an identical screen before the next tap is a wasted turn",
+            guard.refusalFor("tap", """{"som_id":9}"""),
+        )
+    }
+
+    @Test
+    fun `a tap whose observation says the screen changed requires a new look`() = runBlocking<Unit> {
+        val guard = ActionGuard()
+        guard.perceive("settings")
+        guard.recordAfter("tap", tapArgs, success = true, screenText = observed(changed = true))
+        assertNotNull(guard.refusalFor("tap", """{"som_id":9}"""))
+    }
+
+    @Test
+    fun `a low-confidence unchanged verdict is not trusted`() = runBlocking<Unit> {
+        // Apps that hide content from accessibility can only be judged by pixels.
+        val guard = ActionGuard()
+        guard.perceive("game")
+        guard.recordAfter("tap", tapArgs, success = true, screenText = observed(changed = false, confidence = "low"))
+        assertNotNull(guard.refusalFor("tap", """{"som_id":9}"""))
+    }
+
+    @Test
+    fun `a no-op tap repeated on an unchanged screen is still caught as a loop`() = runBlocking<Unit> {
+        val guard = ActionGuard()
+        guard.perceive("settings")
+        repeat(ActionGuard.MAX_SAME_SCREEN_ACTION) {
+            assertNull(guard.refusalFor("tap", tapArgs))
+            guard.recordAfter("tap", tapArgs, success = true, screenText = observed(changed = false))
+        }
+        assertEquals("loop", guard.refusalFor("tap", tapArgs)?.kind)
+    }
+
     // ── 1a — perceive before act ──────────────────────────────────────────────
 
     @Test
-    fun `gesture before any perception is blocked`() = runTest {
+    fun `gesture before any perception is blocked`() = runBlocking<Unit> {
         val guard = ActionGuard()
-        assertNotNull("tap on unperceived screen must be blocked", guard.blockReasonFor("tap", tapArgs))
+        assertNotNull("tap on unperceived screen must be blocked", guard.refusalFor("tap", tapArgs))
         assertEquals(1, guard.blindBlocks)
     }
 
     @Test
-    fun `gesture is allowed once the screen is perceived`() = runTest {
+    fun `gesture is allowed once the screen is perceived`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.perceive("home screen")
-        assertNull("tap after perceive must be allowed", guard.blockReasonFor("tap", tapArgs))
+        assertNull("tap after perceive must be allowed", guard.refusalFor("tap", tapArgs))
     }
 
     @Test
-    fun `gesture is re-blocked after a screen change until re-perceived`() = runTest {
+    fun `gesture is re-blocked after a screen change until re-perceived`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.perceive("home")
-        assertNull(guard.blockReasonFor("launch_app", """{"package":"x"}"""))
+        assertNull(guard.refusalFor("launch_app", """{"package":"x"}"""))
         guard.recordAfter("launch_app", """{"package":"x"}""", success = true, screenText = "")
         // Screen changed → stale again; the next gesture must be blocked.
-        assertNotNull("tap after launch_app (stale screen) must be blocked", guard.blockReasonFor("tap", tapArgs))
+        assertNotNull("tap after launch_app (stale screen) must be blocked", guard.refusalFor("tap", tapArgs))
     }
 
     @Test
-    fun `type_text is allowed after a tap without a forced re-perceive`() = runTest {
+    fun `type_text is allowed after a tap without a forced re-perceive`() = runBlocking<Unit> {
         // Regression for the livelock: gating type_text forced a perceive between
         // tap-to-focus and the type, so "tap search box -> type query" never advanced.
         val guard = ActionGuard()
         guard.perceive("search screen")
-        assertNull(guard.blockReasonFor("tap", tapArgs)); guard.ranTap() // focus the field; screen now "stale"
-        assertNull("type_text after a tap must NOT be blocked", guard.blockReasonFor("type_text", """{"text":"python"}"""))
+        assertNull(guard.refusalFor("tap", tapArgs)); guard.ranTap() // focus the field; screen now "stale"
+        assertNull("type_text after a tap must NOT be blocked", guard.refusalFor("type_text", """{"text":"python"}"""))
     }
 
     @Test
-    fun `non-targeted tools are never perceive-blocked`() = runTest {
+    fun `non-targeted tools are never perceive-blocked`() = runBlocking<Unit> {
         val guard = ActionGuard()
-        assertNull(guard.blockReasonFor("launch_app", """{"package":"x"}"""))
-        assertNull(guard.blockReasonFor("read_screen", "{}"))
-        assertNull(guard.blockReasonFor("scroll_down", "{}"))
+        assertNull(guard.refusalFor("launch_app", """{"package":"x"}"""))
+        assertNull(guard.refusalFor("read_screen", "{}"))
+        assertNull(guard.refusalFor("scroll_down", "{}"))
     }
 
     // ── 1c — loop / stuck detection ───────────────────────────────────────────
 
     @Test
-    fun `same gesture on the same screen is blocked after the threshold`() = runTest {
+    fun `same gesture on the same screen is blocked after the threshold`() = runBlocking<Unit> {
         val guard = ActionGuard()
         // Two identical taps on the SAME screen signature, re-perceiving the same screen between.
-        guard.perceive("screenA"); assertNull(guard.blockReasonFor("tap", tapArgs)); guard.ranTap()
-        guard.perceive("screenA"); assertNull(guard.blockReasonFor("tap", tapArgs)); guard.ranTap()
+        guard.perceive("screenA"); assertNull(guard.refusalFor("tap", tapArgs)); guard.ranTap()
+        guard.perceive("screenA"); assertNull(guard.refusalFor("tap", tapArgs)); guard.ranTap()
         // Third identical attempt on the unchanged screen → loop block.
         guard.perceive("screenA")
-        assertNotNull("3rd identical tap on unchanged screen must be loop-blocked", guard.blockReasonFor("tap", tapArgs))
+        assertNotNull("3rd identical tap on unchanged screen must be loop-blocked", guard.refusalFor("tap", tapArgs))
         assertEquals(1, guard.loopBlocks)
     }
 
     /** A6 — the harness reads the screen after each tap; IDLE vs BUSY must not hide a loop. */
     @Test
-    fun `read_screen grids that differ only in the IDLE-BUSY header still loop`() = runTest {
+    fun `read_screen grids that differ only in the IDLE-BUSY header still loop`() = runBlocking<Unit> {
         val guard = ActionGuard()
         fun grid(state: String) = "SEEN: com.x | Play\nSCREEN 1080x2400  com.x  $state  3 elements\n┌──┐\n│2 │\n└──┘"
         suspend fun look(state: String) = guard.recordAfter("read_screen", "{}", success = true, screenText = grid(state))
-        look("IDLE"); assertNull(guard.blockReasonFor("tap", tapArgs)); guard.ranTap()
-        look("BUSY"); assertNull(guard.blockReasonFor("tap", tapArgs)); guard.ranTap()
+        look("IDLE"); assertNull(guard.refusalFor("tap", tapArgs)); guard.ranTap()
+        look("BUSY"); assertNull(guard.refusalFor("tap", tapArgs)); guard.ranTap()
         look("IDLE")
-        assertNotNull("same grid, same tap — must loop-block", guard.blockReasonFor("tap", tapArgs))
+        assertNotNull("same grid, same tap — must loop-block", guard.refusalFor("tap", tapArgs))
     }
 
     /**
@@ -124,19 +169,19 @@ class ActionGuardTest {
     }
 
     @Test
-    fun `identical mis-tap loops even when CV output varies between perceives`() = runTest {
+    fun `identical mis-tap loops even when CV output varies between perceives`() = runBlocking<Unit> {
         val guard = ActionGuard()
         val tap24 = """{"som_id":24}"""
         // Same home screen three times, differing ONLY in the CV (red-box) output.
         guard.perceive(homePerceive(omniElements = "", omniCount = 0))
-        assertNull(guard.blockReasonFor("tap", tap24)); guard.ranTap(tap24)
+        assertNull(guard.refusalFor("tap", tap24)); guard.ranTap(tap24)
         guard.perceive(
             homePerceive(
                 omniElements = """[300,1500,"banner"],[900,1500,"deal"]""",
                 omniCount = 2,
             ),
         )
-        assertNull(guard.blockReasonFor("tap", tap24)); guard.ranTap(tap24)
+        assertNull(guard.refusalFor("tap", tap24)); guard.ranTap(tap24)
         guard.perceive(
             homePerceive(
                 omniElements = """[500,1600,"promo"]""",
@@ -145,7 +190,7 @@ class ActionGuardTest {
         )
         assertNotNull(
             "the 3rd identical tap on the same home screen must be loop-blocked despite CV variance",
-            guard.blockReasonFor("tap", tap24),
+            guard.refusalFor("tap", tap24),
         )
         assertEquals(1, guard.loopBlocks)
     }
@@ -158,17 +203,17 @@ class ActionGuardTest {
      * element it is currently hunting for.
      */
     @Test
-    fun `signature ignores the prose block so a reworded description still loops`() = runTest {
+    fun `signature ignores the prose block so a reworded description still loops`() = runBlocking<Unit> {
         val guard = ActionGuard()
         val tap7 = """{"som_id":7}"""
         guard.perceive(homePerceive("", 0, description = "search bar"))
-        assertNull(guard.blockReasonFor("tap", tap7)); guard.ranTap(tap7)
+        assertNull(guard.refusalFor("tap", tap7)); guard.ranTap(tap7)
         guard.perceive(homePerceive("", 0, description = "the search field at the top"))
-        assertNull(guard.blockReasonFor("tap", tap7)); guard.ranTap(tap7)
+        assertNull(guard.refusalFor("tap", tap7)); guard.ranTap(tap7)
         guard.perceive(homePerceive("", 0, description = "Search Amazon box"))
         assertNotNull(
             "rewording the description must not disguise an unchanged screen",
-            guard.blockReasonFor("tap", tap7),
+            guard.refusalFor("tap", tap7),
         )
     }
 
@@ -178,64 +223,64 @@ class ActionGuardTest {
      * stable signature from jittery YOLO output.
      */
     @Test
-    fun `vision-only screen falls back instead of claiming a stable signature`() = runTest {
+    fun `vision-only screen falls back instead of claiming a stable signature`() = runBlocking<Unit> {
         val guard = ActionGuard()
         val blind = { n: Int ->
             """{"element_count":1,"ui_tree_count":0,"omniparser_count":1,"e":[[10,$n,"blob"]]}"""
         }
         val tap1 = """{"som_id":1}"""
-        guard.perceive(blind(100)); assertNull(guard.blockReasonFor("tap", tap1)); guard.ranTap(tap1)
-        guard.perceive(blind(140)); assertNull(guard.blockReasonFor("tap", tap1)); guard.ranTap(tap1)
+        guard.perceive(blind(100)); assertNull(guard.refusalFor("tap", tap1)); guard.ranTap(tap1)
+        guard.perceive(blind(140)); assertNull(guard.refusalFor("tap", tap1)); guard.ranTap(tap1)
         guard.perceive(blind(180))
         assertNull(
             "differing CV geometry is a differing screen — nothing here proves a loop",
-            guard.blockReasonFor("tap", tap1),
+            guard.refusalFor("tap", tap1),
         )
     }
 
     @Test
-    fun `repeated gesture is NOT a loop when the screen changes between taps`() = runTest {
+    fun `repeated gesture is NOT a loop when the screen changes between taps`() = runBlocking<Unit> {
         val guard = ActionGuard()
         // Same tap coords, but each perception shows a DIFFERENT screen (e.g. a counter
         // incrementing) → different signature → never flagged as a loop.
-        guard.perceive("count=1"); assertNull(guard.blockReasonFor("tap", tapArgs)); guard.ranTap()
-        guard.perceive("count=2"); assertNull(guard.blockReasonFor("tap", tapArgs)); guard.ranTap()
+        guard.perceive("count=1"); assertNull(guard.refusalFor("tap", tapArgs)); guard.ranTap()
+        guard.perceive("count=2"); assertNull(guard.refusalFor("tap", tapArgs)); guard.ranTap()
         guard.perceive("count=3")
-        assertNull("legitimate repeated tap that changes the screen must NOT be blocked", guard.blockReasonFor("tap", tapArgs))
+        assertNull("legitimate repeated tap that changes the screen must NOT be blocked", guard.refusalFor("tap", tapArgs))
         assertEquals(0, guard.loopBlocks)
     }
 
     // ── 1e — verify before finish ─────────────────────────────────────────────
 
     @Test
-    fun `end_session is blocked when an action happened with no confirming perception`() = runTest {
+    fun `end_session is blocked when an action happened with no confirming perception`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.perceive("home")
         guard.recordAfter("launch_app", """{"package":"x"}""", success = true, screenText = "")
-        assertNotNull("end_session on a stale screen after acting must be blocked", guard.blockReasonFor("end_session", "{}"))
+        assertNotNull("end_session on a stale screen after acting must be blocked", guard.refusalFor("end_session", "{}"))
     }
 
     @Test
-    fun `end_session is allowed once the result is perceived`() = runTest {
+    fun `end_session is allowed once the result is perceived`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.recordAfter("launch_app", """{"package":"x"}""", success = true, screenText = "")
         guard.perceive("app open, goal visible")
-        assertNull("end_session after a confirming perception must be allowed", guard.blockReasonFor("end_session", "{}"))
+        assertNull("end_session after a confirming perception must be allowed", guard.refusalFor("end_session", "{}"))
     }
 
     @Test
-    fun `end_session is allowed for an info-only task that never touched the screen`() = runTest {
+    fun `end_session is allowed for an info-only task that never touched the screen`() = runBlocking<Unit> {
         val guard = ActionGuard()
-        assertNull("conversational task may end without perceiving", guard.blockReasonFor("end_session", "{}"))
+        assertNull("conversational task may end without perceiving", guard.refusalFor("end_session", "{}"))
     }
 
     @Test
-    fun `end_session block is capped so the agent cannot deadlock`() = runTest {
+    fun `end_session block is capped so the agent cannot deadlock`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.recordAfter("tap", tapArgs, success = true, screenText = "") // acted, now stale
-        assertNotNull(guard.blockReasonFor("end_session", "{}")) // block 1
-        assertNotNull(guard.blockReasonFor("end_session", "{}")) // block 2
-        assertNull("end_session must pass after the block cap to avoid a deadlock", guard.blockReasonFor("end_session", "{}"))
+        assertNotNull(guard.refusalFor("end_session", "{}")) // block 1
+        assertNotNull(guard.refusalFor("end_session", "{}")) // block 2
+        assertNull("end_session must pass after the block cap to avoid a deadlock", guard.refusalFor("end_session", "{}"))
     }
 
     // ── 1e — the post-action observation IS verification ─────────────────────
@@ -245,7 +290,7 @@ class ActionGuardTest {
            {"post_action_observation":{"settled":true,"foreground_app":"com.whatsapp","top_labels":["Chats"]}}"""
 
     @Test
-    fun `end_session is allowed when the action carried a post_action_observation`() = runTest {
+    fun `end_session is allowed when the action carried a post_action_observation`() = runBlocking<Unit> {
         // The WhatsApp trace regression: launch_app returned a settled observation
         // proving foreground=com.whatsapp, yet 1e still demanded a redundant
         // perceive_screen before end_session (+2 LLM calls, +2s per run).
@@ -253,47 +298,47 @@ class ActionGuardTest {
         guard.recordAfter("launch_app", """{"app_name":"WhatsApp"}""", success = true, screenText = observedResultText)
         assertNull(
             "end_session after an observed action must be allowed",
-            guard.blockReasonFor("end_session", "{}"),
+            guard.refusalFor("end_session", "{}"),
         )
     }
 
     @Test
-    fun `observation does NOT ground som-targeted gestures`() = runTest {
+    fun `observation does NOT ground som-targeted gestures`() = runBlocking<Unit> {
         // The observation is a summary, not a som map — taps still need a real perceive.
         val guard = ActionGuard()
         guard.perceive("home")
         guard.recordAfter("launch_app", """{"app_name":"WhatsApp"}""", success = true, screenText = observedResultText)
-        assertNotNull("tap after an observed action must still require perceive", guard.blockReasonFor("tap", tapArgs))
+        assertNotNull("tap after an observed action must still require perceive", guard.refusalFor("tap", tapArgs))
     }
 
     @Test
-    fun `an unobserved screen change after an observed one re-arms the finish gate`() = runTest {
+    fun `an unobserved screen change after an observed one re-arms the finish gate`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.recordAfter("launch_app", """{"app_name":"WhatsApp"}""", success = true, screenText = observedResultText)
         guard.recordAfter("wait_for", """{"seconds":2}""", success = true, screenText = """{"success":true}""")
         assertNotNull(
             "end_session after a later un-observed change must be blocked again",
-            guard.blockReasonFor("end_session", "{}"),
+            guard.refusalFor("end_session", "{}"),
         )
     }
 
     @Test
-    fun `audio-only tools stale nothing — grounding and finish survive them`() = runTest {
+    fun `audio-only tools stale nothing — grounding and finish survive them`() = runBlocking<Unit> {
         // media_control / volume change no pixels: forcing a perceive_screen after
         // "pause the music" before end_session was pure waste.
         val guard = ActionGuard()
         guard.perceive("player screen")
         guard.recordAfter("media_control", """{"action":"pause"}""", success = true, screenText = """{"success":true}""")
-        assertNull("tap grounding must survive an audio-only tool", guard.blockReasonFor("tap", tapArgs))
-        assertNull("end_session must be allowed after an audio-only task", guard.blockReasonFor("end_session", "{}"))
+        assertNull("tap grounding must survive an audio-only tool", guard.refusalFor("tap", tapArgs))
+        assertNull("end_session must be allowed after an audio-only task", guard.refusalFor("end_session", "{}"))
     }
 
     // ── failures do not move state ────────────────────────────────────────────
 
     @Test
-    fun `a failed perception does not ground the screen`() = runTest {
+    fun `a failed perception does not ground the screen`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.recordAfter("perceive_screen", "{}", success = false, screenText = "noise")
-        assertNotNull("tap after a FAILED perceive must still be blocked", guard.blockReasonFor("tap", tapArgs))
+        assertNotNull("tap after a FAILED perceive must still be blocked", guard.refusalFor("tap", tapArgs))
     }
 }

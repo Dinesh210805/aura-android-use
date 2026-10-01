@@ -67,6 +67,8 @@ internal data class ServerSinks(
     val learnings: LearningsGateway = NoOpLearningsGateway,
     /** Spec 2026-09-23 — every gate and post step, for the host's run log. */
     val trail: ToolTrailSink = ToolTrailSink.NOOP,
+    /** Wasted-turn guard; null on bare test servers. [McpServerBuilder.build] always installs one. */
+    val guard: ActionGuard? = null,
 )
 
 /**
@@ -257,6 +259,16 @@ internal fun Server.scopedTool(
             sinks.phase.onPhase(name, required, ToolPhaseSink.Phase.SCOPE_DENIED)
             return@addTool refused(result, "foreground_blocked:${block.category.id}")
         }
+        trail.step("gate", "ForegroundGate", "pass")
+
+        // After every permanent gate, so a blocked or paused call is reported as that, not as a
+        // wasted turn. See [ActionGuard] for the rules.
+        val argsJson = request.arguments?.toString() ?: "{}"
+        sinks.guard?.refusalFor(name, argsJson)?.let { refusal ->
+            trail.step("gate", "ActionGuard", "refuse", refusal.kind)
+            return@addTool refused(actionGuardResult(name, refusal), "action_guard:${refusal.kind}")
+        }
+        if (sinks.guard != null) trail.step("gate", "ActionGuard", "pass")
 
         // Fire STARTED only after auth/scope/policy passed — the chip should
         // never flip to "Acting" for a call we're about to reject.
@@ -268,7 +280,6 @@ internal fun Server.scopedTool(
             agentLabel = principal?.label,
         )
 
-        trail.step("gate", "ForegroundGate", "pass")
         val dispatched = System.currentTimeMillis()
         val result = runCatching { kotlinx.coroutines.withContext(trail) { handler(request) } }
             .also { r ->
@@ -370,6 +381,11 @@ internal fun Server.scopedTool(
         )
 
         val isError = finalResult.isError == true
+        sinks.guard?.let { guard ->
+            guard.recordAfter(name, argsJson, finalResult)
+            // A finished task leaves nothing for the next one to inherit on a long-lived server.
+            if (name == "end_session" && !isError) guard.reset()
+        }
         val durationMs = System.currentTimeMillis() - started
         sinks.phase.onPhase(
             name,
@@ -418,6 +434,25 @@ private fun extractErrorSummary(result: CallToolResult): String? {
     val firstText = result.content.firstOrNull { it is TextContent } as? TextContent
     return firstText?.text?.take(200)
 }
+
+/**
+ * The [ActionGuard] refusal in the shared refusal shape; `error` is `action_guard` and `reason`
+ * carries the rule ([ActionGuard.Refusal.kind]) so clients can branch without reading prose.
+ */
+private fun actionGuardResult(toolName: String, refusal: ActionGuard.Refusal): CallToolResult = CallToolResult(
+    content = listOf(
+        TextContent(
+            buildJsonObject {
+                put("success", false)
+                put("error", "action_guard")
+                put("reason", refusal.kind)
+                put("tool", toolName)
+                put("message", refusal.message)
+            }.toString(),
+        ),
+    ),
+    isError = true,
+)
 
 private fun policyBlockedResult(
     toolName: String,
