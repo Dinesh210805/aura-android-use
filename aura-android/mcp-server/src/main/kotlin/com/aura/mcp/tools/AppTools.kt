@@ -1,5 +1,6 @@
 package com.aura.mcp.tools
 
+import com.aura.mcp.bridge.DeepLinkBridge
 import com.aura.mcp.bridge.DeviceBridge
 import com.aura.mcp.cache.PerceptionCache
 import com.aura.mcp.server.ResourceRequired
@@ -19,13 +20,17 @@ import kotlinx.serialization.json.putJsonObject
 /**
  * Phase 3 — app-management tools: launch_app, lookup_app, type_text.
  */
-internal fun Server.registerAppTools(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
-    registerLaunchApp(bridge)
+internal fun Server.registerAppTools(
+    bridge: DeviceBridge,
+    perceptionCache: PerceptionCache,
+    deepLinks: DeepLinkBridge? = null,
+) {
+    registerLaunchApp(bridge, deepLinks)
     registerLookupApp(bridge)
     registerTypeText(bridge, perceptionCache)
 }
 
-private fun Server.registerLaunchApp(bridge: DeviceBridge) {
+private fun Server.registerLaunchApp(bridge: DeviceBridge, deepLinks: DeepLinkBridge?) {
     scopedTool(
         name = "launch_app",
         // Cut: "prefer a deep link over launching then navigating" (Doctrine route_by_determinism)
@@ -59,7 +64,7 @@ private fun Server.registerLaunchApp(bridge: DeviceBridge) {
             lookup = bridge::lookupApp,
         )
         val force = request.arguments?.boolArg("force") ?: false
-        when (outcome) {
+        val result = when (outcome) {
             is LaunchAppResolution.Outcome.Launch -> {
                 val extra = buildMap {
                     put("action", "launch_app")
@@ -128,6 +133,12 @@ private fun Server.registerLaunchApp(bridge: DeviceBridge) {
                 success = false,
             )
             is LaunchAppResolution.Outcome.Invalid -> errorResult(outcome.message)
+        }
+        val launched = (outcome as? LaunchAppResolution.Outcome.Launch)?.packageName
+        if (launched != null && deepLinks != null && result.isError != true) {
+            LaunchDirectLinks.appendTo(result, deepLinks, launched)
+        } else {
+            result
         }
     }
 }

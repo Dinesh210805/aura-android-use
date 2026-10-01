@@ -217,7 +217,7 @@ internal object McpServerBuilder {
 
         // Phase 3 — gestures, apps, keys, and policy stubs
         server.registerGestureTools(deviceBridge, perceptionCache)
-        server.registerAppTools(deviceBridge, perceptionCache)
+        server.registerAppTools(deviceBridge, perceptionCache, deepLinkBridge)
         server.registerKeyTools(deviceBridge)
         // Pass lookup so validate_action resolves app NAMES to packages and screens
         // the resolved package (raw names match no package pattern) — advisory verdict
