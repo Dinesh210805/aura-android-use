@@ -21,6 +21,7 @@ class PairingCryptoTest {
     private val token = "3f2c9b1e-7d4a-4c8e-9a1f-0b6d5e4c3a21"
     private val nonce = "00112233445566778899aabbccddeeff"
     private val binding = "aura-pair-v2|AA:BB|CC:DD"
+    private val phoneNonce = "ffeeddccbbaa99887766554433221100"
 
     @Test fun `extracts and upper-cases the sha-256 fingerprint`() {
         assertEquals(
@@ -34,8 +35,17 @@ class PairingCryptoTest {
     @Test fun `binding matches the bridge`() =
         assertEquals(binding, PairingCrypto.binding("AA:BB", "CC:DD"))
 
-    @Test fun `verification code matches the bridge`() =
-        assertEquals("479832", PairingCrypto.verificationCode(binding))
+    @Test fun `commitment matches the bridge`() =
+        assertEquals(
+            "a40c58008695d70e9ec94ffe11db6227af052b22181df105422b7f254ab1819a",
+            PairingCrypto.commitment(nonce),
+        )
+
+    @Test fun `verification code matches the bridge`() {
+        assertEquals("830847", PairingCrypto.verificationCode(binding, nonce, phoneNonce))
+        // The two nonces are not interchangeable.
+        assertEquals("407646", PairingCrypto.verificationCode(binding, phoneNonce, nonce))
+    }
 
     @Test fun `token hash matches the bridge`() =
         assertEquals("4f914ee5edc16944", PairingCrypto.tokenHash(token))

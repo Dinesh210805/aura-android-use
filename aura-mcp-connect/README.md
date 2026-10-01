@@ -234,7 +234,8 @@ Two things that bite:
 
 - **Upgrade first.** `npm publish` does not update your own machine — run
   `npm install -g aura-mcp-connect@latest` and check `aura-mcp --version`
-  reports 0.9.0 or newer; older bridges can't reach the current app at all.
+  reports 0.10.0 or newer. Older bridges can't pair a new computer with the
+  current app (0.9.x can still reconnect one that is already paired).
 - **A running daemon cannot be re-armed** — its tool set is fixed at startup.
   Stop the old one first (it may be an older version still holding port 4816).
 

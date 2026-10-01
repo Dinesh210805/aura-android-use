@@ -4,9 +4,8 @@ package com.aura.mcp.bridge
  * Identity of a connecting MCP client, captured at connect time so the host
  * app can show the user *exactly who* is driving the device.
  *
- * For WebRTC clients these fields come from the `init` handshake the
- * `aura-mcp-connect` bridge sends over the DataChannel; for the (legacy) SSE
- * path only [tokenId]/[agentLabel]/[remoteAddr] are populated.
+ * These fields come from the `init` handshake the `aura-mcp-connect` bridge
+ * sends over the DataChannel. They are self-declared and only for display.
  *
  * @param tokenId      stable id for the client (WebRTC: short client-token prefix)
  * @param agentLabel   human name to show ("AURA MCP Bridge", a paired label, …)
@@ -14,7 +13,7 @@ package com.aura.mcp.bridge
  * @param clientVersion bridge/client version string, if reported
  * @param host         the PC's host name, if reported
  * @param platform     the PC's OS platform (win32 / darwin / linux), if reported
- * @param transport    how this client is connected — "WebRTC" or "SSE"
+ * @param transport    how this client is connected, for display
  */
 data class ClientInfo(
     val tokenId: String,
@@ -43,14 +42,6 @@ interface ConnectionTracker {
      *   request a disconnect of *this specific* session.
      */
     fun onConnect(info: ClientInfo): String
-
-    /**
-     * Legacy 3-arg form used by the SSE path. Delegates to the rich
-     * [onConnect] so a single implementation covers both. Removed once the
-     * SSE/LAN transport is retired.
-     */
-    fun onConnect(tokenId: String, agentLabel: String, remoteAddr: String?): String =
-        onConnect(ClientInfo(tokenId, agentLabel, remoteAddr, transport = "SSE"))
 
     /** Bump the session's lastActivity timestamp. Cheap — called per tool dispatch. */
     fun onActivity(sessionKey: String)

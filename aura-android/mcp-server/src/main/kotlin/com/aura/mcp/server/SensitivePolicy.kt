@@ -150,8 +150,8 @@ object SensitivePolicy {
     // ── Public API ───────────────────────────────────────────────────────────
 
     /**
-     * Evaluate a tool call. Only the three consequential entry points are
-     * inspected; every other tool returns [Decision.Allow].
+     * Evaluate a tool call. Only app entry points and arguments that carry text or a URL off
+     * the device are inspected; every other tool returns [Decision.Allow].
      */
     fun evaluate(toolName: String, args: JsonObject?): Decision = when (toolName) {
         // E3 — launch_app accepts `app_name` too; screen BOTH the raw package
@@ -167,6 +167,8 @@ object SensitivePolicy {
             // (the handler re-screens the RESOLVED package after lookup).
             evalPackage(stringArg(args, "app_name")),
             evalUriTarget(stringArg(args, "uri")),
+            // A query string (`smsto:…?body=`, `wa.me/…?text=`) carries text off the device.
+            evalUrl(stringArg(args, "uri")),
         )
         "type_text" -> evalText(stringArg(args, "text"))
         // Assistant plane — free-text that leaves the device (a reply, an SMS
@@ -176,10 +178,16 @@ object SensitivePolicy {
             evalText(stringArg(args, "body")),
             evalText(stringArg(args, "text")),
             evalText(stringArg(args, "notes")),
+            evalText(stringArg(args, "subject")),
         )
         // The browser is an exfiltration path like any other: a code typed into a form
         // field leaves the device just as surely as one sent by SMS.
         "browser_act" -> evalText(stringArg(args, "value"))
+        // A URL reaches its server the moment it loads, with nothing on screen: the same
+        // exfiltration path as a typed form value. Banking sites get the deep-link host rule.
+        "browser_open", "browser_tabs" -> stringArg(args, "url").let { firstBlock(evalUrl(it), evalHost(it)) }
+        // The query is sent to the search provider.
+        "web_search" -> evalText(stringArg(args, "query"))
         else -> Decision.Allow
     }
 
@@ -324,6 +332,13 @@ object SensitivePolicy {
         }
     }
 
+    /**
+     * The OTP rule alone, for URLs. The card-number and SSN rules are text rules: long numeric
+     * ids in paths (19-digit status ids) are Luhn-valid one time in ten.
+     */
+    private fun evalUrl(url: String?): Decision =
+        if (OtpSighting.codeIn(url) != null) Decision.Block(Category.OTP_EXFILTRATION, OTP_MSG) else Decision.Allow
+
     private fun evalText(text: String?): Decision {
         if (text.isNullOrBlank()) return Decision.Allow
         // Checked first, and reported as its own category: "you are forwarding the code this
@@ -382,6 +397,10 @@ object SensitivePolicy {
           host matching a banking domain.
         - **type_text** — blocked when the text looks like a credit-card number
           (Luhn-checked), CVV, SSN, or contains "password is…" / "pin is…".
+        - **browser_open / browser_tabs** — blocked for banking & payment domains.
+        - **Anything that sends text or a URL off the device** (type_text, replies, SMS and
+          share text, browser URLs and form values, deep-link queries, web_search) — blocked
+          when it contains a verification code this phone was just shown.
         - **All gestures & screen perception while a blocked app is foreground** —
           if a banking/payment/authenticator app is on screen (however it got
           there), taps, scrolls, typing, screenshots, UI-tree reads, and

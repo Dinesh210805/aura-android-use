@@ -11,6 +11,7 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.aura.mcp.bridge.PairingCrypto
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.Socket
@@ -98,7 +99,7 @@ internal class LanNetwork(context: Context, private val log: (String) -> Unit = 
     private var registration: NsdManager.RegistrationListener? = null
 
     /**
-     * Advertises `_aura-mcp._tcp` on [port] with TXT `id=<deviceId>` and `proto=2`, replacing any
+     * Advertises `_aura-mcp._tcp` on [port] with TXT `id=<deviceId>` and `proto=<protocol>`, replacing any
      * earlier advert.
      *
      * - Fails: logs and carries on. The bridge also finds the phone by its saved address and by
@@ -111,7 +112,7 @@ internal class LanNetwork(context: Context, private val log: (String) -> Unit = 
             serviceType = SERVICE_TYPE
             setPort(port)
             setAttribute("id", deviceId)
-            setAttribute("proto", "2")
+            setAttribute("proto", PairingCrypto.PROTOCOL_VERSION.toString())
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(s: NsdServiceInfo) = log("mDNS advert up: ${s.serviceName}")

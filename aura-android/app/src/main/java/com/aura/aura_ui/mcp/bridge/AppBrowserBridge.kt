@@ -470,7 +470,12 @@ class AppBrowserBridge(
                 // Arm FIRST, then tap. The chooser callback can arrive synchronously
                 // inside the tap dispatch, so arming afterwards would race and cancel
                 // our own upload.
-                pendingUpload.arm(fileUri)
+                if (!pendingUpload.arm(fileUri)) {
+                    return@withContext BrowserResult.Failure(
+                        BrowserErrorKind.ACT_FAILED,
+                        "Only content://media/… URIs from find_files can be uploaded.",
+                    )
+                }
                 dispatchRealTap(view, rect.first, rect.second)
 
                 delay(SETTLE_MS)
@@ -666,7 +671,7 @@ class AppBrowserBridge(
      * When true, a browser window this plane pops up opens as the minimized ball instead of full
      * screen. Set for runs that came from a voice conversation: the user is talking to AURA, not
      * watching a page, so a full-screen browser would cover what they are doing. The bubble still
-     * shows the browser is working, and a tap expands it. A login handoff ignores this � the user
+     * shows the browser is working, and a tap expands it. A login handoff ignores this — the user
      * has to see that page.
      */
     @Volatile

@@ -2,7 +2,9 @@ package com.aura.mcp.tools
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Spec 2026-07-31 — `browser_upload`, and the security property it turns on.
@@ -21,9 +23,9 @@ class PendingUploadTest {
     @Test
     fun `an armed file is handed to the next chooser`() {
         val pending = PendingUpload()
-        pending.arm("content://docs/resume.pdf")
+        pending.arm("content://media/external/file/41")
 
-        assertEquals("content://docs/resume.pdf", pending.consume())
+        assertEquals("content://media/external/file/41", pending.consume())
     }
 
     @Test
@@ -31,7 +33,7 @@ class PendingUploadTest {
         // The property that matters. A page that opens a second picker after the agent's
         // upload must not receive the same file again.
         val pending = PendingUpload()
-        pending.arm("content://docs/resume.pdf")
+        pending.arm("content://media/external/file/41")
         pending.consume()
 
         assertNull(pending.consume())
@@ -48,10 +50,30 @@ class PendingUploadTest {
     fun `arming again replaces the previous file rather than queueing it`() {
         // A queue would let an abandoned upload fire later against an unrelated page.
         val pending = PendingUpload()
-        pending.arm("content://docs/old.pdf")
-        pending.arm("content://docs/new.pdf")
+        pending.arm("content://media/external/file/7")
+        pending.arm("content://media/external/file/8")
 
-        assertEquals("content://docs/new.pdf", pending.consume())
+        assertEquals("content://media/external/file/8", pending.consume())
         assertNull(pending.consume())
+    }
+
+    @Test
+    fun `only MediaStore content URIs can be armed`() {
+        // find_files only returns content://media/… URIs. Anything else could point the
+        // chooser at AURA's own storage (prefs, databases) and upload it to the page.
+        val pending = PendingUpload()
+        listOf(
+            "file:///data/data/com.aura.aura_ui/shared_prefs/aura_prefs.xml",
+            "/data/user/0/com.aura.aura_ui/shared_prefs/aura_prefs.xml",
+            "content://com.aura.aura_ui.fileprovider/files/x",
+            "content://media.evil/external/file/1",
+            "content://media@other/external/file/1",
+            "javascript:alert(1)",
+            "",
+        ).forEach { uri ->
+            assertFalse(pending.arm(uri), uri)
+            assertNull(pending.consume(), uri)
+        }
+        assertTrue(pending.arm("CONTENT://media/external/images/media/12"))
     }
 }

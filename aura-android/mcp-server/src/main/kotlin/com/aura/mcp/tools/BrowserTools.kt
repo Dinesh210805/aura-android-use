@@ -312,7 +312,7 @@ private fun Server.registerBrowserUpload(bridge: BrowserBridge, sessions: Browse
     inputSchema = browserSchema(
         extra = mapOf(
             "el_id" to numberSchema("The upload control's el_id from browser_read."),
-            "file" to stringSchema("File URI or path, as returned by find_files."),
+            "file" to stringSchema("A content://media/… URI returned by find_files."),
             "generation" to numberSchema("The 'generation' from the page result your el_id came from."),
         ),
         required = listOf("el_id", "file"),
@@ -325,6 +325,9 @@ private fun Server.registerBrowserUpload(bridge: BrowserBridge, sessions: Browse
 
     if (elId == null || file.isNullOrEmpty()) {
         return@scopedTool errorResult("browser_upload requires 'el_id' and 'file'")
+    }
+    if (!isMediaStoreUri(file)) {
+        return@scopedTool errorResult("browser_upload 'file' must be a content://media/… URI returned by find_files")
     }
 
     // Same generation-stamped resolution as browser_act. An upload aimed at a stale

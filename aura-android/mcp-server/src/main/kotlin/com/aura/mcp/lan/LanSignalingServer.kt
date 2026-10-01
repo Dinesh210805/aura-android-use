@@ -14,6 +14,8 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
@@ -31,7 +33,9 @@ import java.util.concurrent.TimeUnit
  *
  * - Contract: pure JVM (no Android APIs), so it is unit tested on the desktop JVM. Binds IPv4
  *   only, on the first free port of [LanPolicy.PORTS]. At most [MAX_CONCURRENT] requests run at
- *   once; extra connections are closed unanswered.
+ *   once, and at most [MAX_PER_PEER] from one address; extra connections are closed unanswered.
+ *   A request must arrive in full within `requestDeadlineMs`, so a client trickling bytes can't
+ *   hold a worker.
  * - Refuses, before any handler runs: peers that fail [acceptPeer] (not on the LAN, or arriving
  *   over mobile data), any request with an `Origin` header, and a POST that isn't
  *   `application/json`. Why the last two: a web page open on a computer in the same network can
@@ -45,6 +49,7 @@ class LanSignalingServer(
     private val handler: Handler,
     private val acceptPeer: (socket: Socket) -> Boolean = { LanPolicy.isLanPeer(it.inetAddress) },
     private val log: (String) -> Unit = {},
+    private val requestDeadlineMs: Long = REQUEST_DEADLINE_MS,
 ) {
     interface Handler {
         fun info(): JsonObject
@@ -78,6 +83,7 @@ class LanSignalingServer(
     private val workers = ThreadPoolExecutor(
         0, MAX_CONCURRENT, 30, TimeUnit.SECONDS, SynchronousQueue(),
     ) { r -> Thread(r, "aura-lan-signaling").apply { isDaemon = true } }
+    private val perPeer = ConcurrentHashMap<InetAddress, Int>()
 
     /** The bound port, or 0 when stopped. */
     val port: Int get() = serverSocket?.localPort ?: 0
@@ -131,19 +137,33 @@ class LanSignalingServer(
                 runCatching { socket.close() }
                 continue
             }
+            val peer = socket.inetAddress
+            if (perPeer.merge(peer, 1, Int::plus)!! > MAX_PER_PEER) {
+                release(peer)
+                runCatching { socket.close() }
+                continue
+            }
             try {
-                workers.execute { serve(socket) }
+                workers.execute {
+                    try { serve(socket) } finally { release(peer) }
+                }
             } catch (e: RejectedExecutionException) {
+                release(peer)
                 runCatching { socket.close() }
             }
         }
     }
 
+    private fun release(peer: InetAddress) {
+        perPeer.compute(peer) { _, n -> if (n == null || n <= 1) null else n - 1 }
+    }
+
     private fun serve(socket: Socket) {
         socket.use { s ->
-            s.soTimeout = READ_TIMEOUT_MS
             val response = try {
-                route(readRequest(s.getInputStream()), s.inetAddress)
+                route(readRequest(DeadlineInput(s, System.currentTimeMillis() + requestDeadlineMs)), s.inetAddress)
+            } catch (e: SocketTimeoutException) {
+                return // too slow: close without an answer
             } catch (e: BadRequest) {
                 Response.error(400, "bad_request", e.message ?: "Bad request")
             } catch (e: Exception) {
@@ -169,13 +189,28 @@ class LanSignalingServer(
         }
     }
 
+    /** Reads from [socket], failing with [SocketTimeoutException] once [deadline] (epoch ms) passes. */
+    private class DeadlineInput(private val socket: Socket, private val deadline: Long) : InputStream() {
+        private val inner = socket.getInputStream()
+
+        private fun arm() {
+            val left = deadline - System.currentTimeMillis()
+            if (left <= 0) throw SocketTimeoutException("request deadline passed")
+            socket.soTimeout = left.toInt()
+        }
+
+        override fun read(): Int { arm(); return inner.read() }
+        override fun read(b: ByteArray, off: Int, len: Int): Int { arm(); return inner.read(b, off, len) }
+    }
+
     internal data class Request(val method: String, val path: String, val headers: Map<String, String>, val body: String)
 
     private class BadRequest(message: String) : Exception(message)
 
     companion object {
-        const val MAX_CONCURRENT = 4
-        private const val READ_TIMEOUT_MS = 10_000
+        const val MAX_CONCURRENT = 8
+        const val MAX_PER_PEER = 2
+        private const val REQUEST_DEADLINE_MS = 5_000L
         private const val MAX_HEADER_BYTES = 8 * 1024
         private const val MAX_BODY_BYTES = 64 * 1024
         private const val MAX_SDP_CHARS = 32 * 1024

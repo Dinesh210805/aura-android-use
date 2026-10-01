@@ -4,11 +4,11 @@ package com.aura.mcp.bridge
  * Per-call principal carried on the request coroutine context so the tool
  * dispatcher can enforce per-tool scopes and attribute audit-log entries.
  *
- * For WebRTC clients this is a fixed full-scope identity built when the device
- * approves the connection (see `McpServerController.startWebRtc`).
+ * For a PC this is a full-scope identity built when the phone approves it
+ * (`McpServerController.bindFreshMcpSession`).
  *
- * @param tokenId opaque short id used in audit logs without exposing the full
- *   secret (WebRTC: a short prefix of the client token)
+ * @param tokenId short id used in audit logs without exposing the secret
+ *   (for a PC: the first 8 chars of its pairing token)
  * @param scopes capability set granted to this principal — see [McpScope]
  * @param label optional human label shown in the activity log
  */

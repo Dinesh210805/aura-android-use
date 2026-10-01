@@ -1,6 +1,6 @@
 {
   "name": "aura-mcp-connect",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Connect any MCP client to AURA's on-device MCP server over your local network. One shared local daemon owns the WebRTC link to the phone and serves MCP over Streamable HTTP on localhost, so every client (Claude Code, Claude Desktop, VS Code, Cursor, Cline, Windsurf, Zed) shares the single phone connection. End-to-end encrypted over WebRTC DTLS; no cloud relay.",
   "type": "module",
   "main": "src/index.js",

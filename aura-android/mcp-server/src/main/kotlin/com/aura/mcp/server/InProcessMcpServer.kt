@@ -31,14 +31,13 @@ import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * In-process bridge between the on-device agent (an MCP **client**) and the
- * on-device MCP **server**, without a socket, TLS, or bearer auth.
+ * on-device MCP **server**, without a socket or a pairing handshake.
  *
- * The MCP Kotlin SDK (0.8.3) ships only WebSocket/SSE transports, so we
- * implement the [Transport] interface as a linked pair: each end's [send]
+ * The MCP Kotlin SDK has no in-memory transport, so we implement the [Transport] interface as a linked pair: each end's [send]
  * delivers the message to the *other* end's registered `onMessage` handler.
  * The agent connects its [Client] to the [clientTransport]; a dedicated
  * [Server] (built from [McpServerBuilder] with the SAME app bridges as the
- * external SSE server) is connected to the server end.
+ * external LAN server) is connected to the server end.
  *
  * **Why this reuses the security model for free:** the server-end transport
  * delivers every inbound message inside a coroutine carrying an
@@ -120,7 +119,7 @@ class InProcessMcpHandle internal constructor(
 
 /**
  * Builds a dedicated [Server] (sharing the supplied app bridges with the
- * external SSE server) and connects it to an in-memory transport pair.
+ * external LAN server) and connects it to an in-memory transport pair.
  * Returns the client-side transport wrapped in an [InProcessMcpHandle].
  *
  * The single public entry point :app needs — everything `internal`

@@ -75,7 +75,7 @@ internal object McpServerBuilder {
         browserBridge: BrowserBridge? = null,
         auditLogger: McpAuditLogger,
         // Nullable, default null = "leave the installed sink alone". `phaseSink` is a
-        // process-global, and TWO servers are built per process (the external SSE/WebRTC
+        // process-global, and TWO servers are built per process (the external WebRTC
         // server AND the agent's in-process server). The in-process build omits this arg,
         // so it must NOT reset the sink the external server installed — otherwise the
         // status-bar verb freezes during every on-device agent run. See
@@ -103,7 +103,7 @@ internal object McpServerBuilder {
          * and giving it a whole port would imply state this layer has no business owning.
          *
          * It must be passed to BOTH servers built in this process — the external
-         * WebRTC/SSE server and the agent's in-process one. The spec's ordering is
+         * WebRTC server and the agent's in-process one. The spec's ordering is
          * `human > local agent > MCP client`, so a pause that only reached remote clients
          * would leave the on-device agent still driving, which is the wrong half.
          */

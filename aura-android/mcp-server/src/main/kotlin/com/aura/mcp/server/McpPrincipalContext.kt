@@ -9,8 +9,8 @@ import kotlin.coroutines.coroutineContext
  * Coroutine context element that carries the authenticated [TokenPrincipal]
  * of the currently-dispatching MCP request.
  *
- * Set by [com.aura.mcp.McpServerController]'s auth interceptor immediately
- * after the bearer-auth block validates the token, and read by per-tool
+ * Set by the server-side transports ([WebRtcMcpTransport] with the approved
+ * PC's principal, [InProcessMcpServer] with the on-device agent's), and read by per-tool
  * scope guards via [currentMcpPrincipalOrNull]. Because MCP tool handlers
  * are `suspend` lambdas, the element propagates from the request coroutine
  * to the handler invocation automatically — no thread-locals, no manual
