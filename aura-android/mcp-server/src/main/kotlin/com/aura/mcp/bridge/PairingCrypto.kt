@@ -6,7 +6,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Crypto for the PC ↔ phone pairing handshake (protocol 2).
+ * Crypto for the PC ↔ phone pairing handshake (protocol 3).
  *
  * - Contract: byte-identical to `aura-mcp-connect/src/pairing-crypto.js`. Both sides are checked
  *   against the same vectors (`PairingCryptoTest.kt`, `test/pairing-crypto.test.mjs`).
@@ -15,14 +15,17 @@ import javax.crypto.spec.SecretKeySpec
  *   is untrusted. Anyone who can rewrite the SDP on the way can sit between phone and PC, but
  *   can't make both sides see the same pair of DTLS fingerprints.
  *   Every trust decision is bound to those fingerprints:
- *   - first pairing: phone and PC both show [verificationCode]; the user approves only if they
- *     match
+ *   - first pairing: the PC sends [commitment] to its nonce before it sees the phone's nonce,
+ *     then reveals it. Phone and PC both show [verificationCode] over the binding and both
+ *     nonces; the user approves only if they match. The commitment is what makes 6 digits
+ *     enough: without it, whoever sits in the middle could choose its own values last and
+ *     search for a pair of fingerprints that gives equal codes.
  *   - reconnect: the PC proves it holds the pairing token with [proofMac] over the binding and a
  *     fresh nonce. The token itself is never sent again.
  */
 object PairingCrypto {
 
-    const val PROTOCOL_VERSION = 2
+    const val PROTOCOL_VERSION = 3
 
     private val secureRandom = SecureRandom()
     private val FINGERPRINT = Regex("""(?m)^a=fingerprint:sha-256\s+([0-9A-Fa-f:]+)\s*$""")
@@ -35,9 +38,12 @@ object PairingCrypto {
     fun binding(phoneFingerprint: String, pcFingerprint: String): String =
         "aura-pair-v2|$phoneFingerprint|$pcFingerprint"
 
+    /** Hex sha256 commitment to [nonce]; the PC sends it before revealing the nonce. */
+    fun commitment(nonce: String): String = hex(sha256("aura-commit-v3|$nonce".toByteArray(Charsets.UTF_8)))
+
     /** 6-digit code shown on both screens during first pairing. */
-    fun verificationCode(binding: String): String {
-        val d = sha256(binding.toByteArray(Charsets.UTF_8))
+    fun verificationCode(binding: String, pcNonce: String, phoneNonce: String): String {
+        val d = sha256("aura-sas-v3|$binding|$pcNonce|$phoneNonce".toByteArray(Charsets.UTF_8))
         val n = ((d[0].toLong() and 0xFF) shl 24) or ((d[1].toLong() and 0xFF) shl 16) or
             ((d[2].toLong() and 0xFF) shl 8) or (d[3].toLong() and 0xFF)
         return (n % 1_000_000).toString().padStart(6, '0')

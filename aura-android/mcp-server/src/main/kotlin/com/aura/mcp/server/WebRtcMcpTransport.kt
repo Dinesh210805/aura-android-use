@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  * would be skipped entirely (fail-open). The supplied [principal] is the
  * identity the device approved during the WebRTC handshake — approval grants
  * full device control, so it carries READ+WRITE. The [SensitivePolicy] gate and
- * audit logging then run unchanged, just like the SSE and in-process paths.
+ * audit logging then run unchanged, just like the in-process path.
  */
 class WebRtcMcpTransport(
     private val webRtcTransport: WebRtcTransport,
@@ -36,36 +36,29 @@ class WebRtcMcpTransport(
     private val principal: TokenPrincipal,
 ) : Transport {
 
-    private var messageHandler: (suspend (JSONRPCMessage) -> Unit)? = null
+    @Volatile private var messageHandler: (suspend (JSONRPCMessage) -> Unit)? = null
     private var closeHandler: (() -> Unit)? = null
     private var errorHandler: ((Throwable) -> Unit)? = null
 
-    /** SDK newline-framer. Fed from the DataChannel's single-threaded callback,
-     *  so no external synchronization is required. */
+    /**
+     * SDK newline-framer, guarded by itself: bytes arrive on the DataChannel thread while the
+     * SDK registers its handler on another.
+     *
+     * - Why frames stay buffered until [onMessage]: the session is bound the moment the PC is
+     *   approved, and the PC sends `initialize` right after. A frame read out before the SDK
+     *   has a handler would be lost, and the client would wait forever for its reply.
+     */
     private val readBuffer = ReadBuffer()
 
     init {
         webRtcTransport.onBytesReceived = { bytes ->
-            try {
-                readBuffer.append(bytes)
-                while (true) {
-                    val message = readBuffer.readMessage() ?: break
-                    messageHandler?.let { handler ->
-                        scope.launch(McpPrincipalElement(principal) + Dispatchers.Default) {
-                            handler(message)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                errorHandler?.invoke(e)
-            }
+            synchronized(readBuffer) { readBuffer.append(bytes) }
+            drain()
         }
 
-        webRtcTransport.onConnectionStateChange = { isConnected ->
-            if (!isConnected) {
-                readBuffer.clear()
-                closeHandler?.invoke()
-            }
+        webRtcTransport.onDisconnected = {
+            synchronized(readBuffer) { readBuffer.clear() }
+            closeHandler?.invoke()
         }
     }
 
@@ -95,5 +88,20 @@ class WebRtcMcpTransport(
 
     override fun onMessage(block: suspend (JSONRPCMessage) -> Unit) {
         messageHandler = block
+        drain()
+    }
+
+    /** Dispatches every complete frame, each in a coroutine carrying [principal]. */
+    private fun drain() {
+        val handler = messageHandler ?: return
+        while (true) {
+            val message = try {
+                synchronized(readBuffer) { readBuffer.readMessage() }
+            } catch (e: Exception) {
+                errorHandler?.invoke(e)
+                return
+            } ?: return
+            scope.launch(McpPrincipalElement(principal) + Dispatchers.Default) { handler(message) }
+        }
     }
 }

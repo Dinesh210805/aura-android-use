@@ -104,6 +104,9 @@ Security (step ①), done in code:
 - [x] Pairing protocol 2: PIN-derived verification code on first pairing, HMAC proof on
       reconnect, both bound to the DTLS fingerprints (`PairingCrypto.kt`, `pairing-crypto.js`,
       shared test vectors)
+- [x] Pairing protocol 3: the PC commits to a nonce before the phone reveals its own, so the
+      6-digit code can't be forced by a man in the middle (#3). Bridge 0.10.0 needed to pair;
+      0.9.x still reconnects. Publish aura-mcp-connect 0.10.0 before shipping the app.
 - [x] Analytics + Crashlytics obey the diagnostics switch; advertising ID / SSAID / ad signals off
 
 Free tier (step ②), done in code:

@@ -87,9 +87,8 @@ class McpServerController(
      */
     private val promptSkillsProvider: () -> List<com.aura.mcp.server.PromptSkill> = { emptyList() },
     private val connectionTracker: ConnectionTracker = NoOpConnectionTracker,
-    /** Trust ledger for WebRTC clients (token → metadata). Null = legacy
-     *  bare-token prefs fallback inside the transport. */
-    private val trustedClients: TrustedClientsStore? = null,
+    /** Trust ledger for WebRTC clients (token → metadata). */
+    private val trustedClients: TrustedClientsStore,
     private val serverName: String = "aura-on-device",
     private val version: String = "0.8.0-phase8",
     /** Host app package — its overlay's accessibility events are ignored while settling (E1). */
@@ -160,12 +159,12 @@ class McpServerController(
             )
         }
 
-        // A new MCP session is bound per client connection (first connect and
-        // every reconnect). Each `aura-mcp` process is its own MCP client with
-        // its own `initialize` handshake, so it needs a fresh SDK session — the
-        // previous client's session is closed when its peer drops and must never
-        // be reused, or the new client's initialize goes unanswered.
-        webRtcTransport.onNewClient = { bindFreshMcpSession(webRtcTransport) }
+        // A new MCP session is bound per approved client (first connect and every
+        // reconnect). Each `aura-mcp` process is its own MCP client with its own
+        // `initialize` handshake, so it needs a fresh SDK session — the previous
+        // client's session is closed when its peer drops and must never be reused,
+        // or the new client's initialize goes unanswered.
+        webRtcTransport.onNewClient = { client -> bindFreshMcpSession(webRtcTransport, client) }
         webRtcTransport.onStatusChanged = { status ->
             if (webRtcTransportRef.get() === webRtcTransport) _health.value = listening(status)
         }
@@ -193,26 +192,26 @@ class McpServerController(
     )
 
     /**
-     * Build and bind a fresh MCP SDK session for the client now connecting on
+     * Build and bind a fresh MCP SDK session for the [client] just approved on
      * [webRtcTransport]. Cancels the previous client's session scope first, so at
      * most one session is live at a time and a reconnect always gets a clean
      * server (fresh `initialize` handshake, fresh tool registration), mirroring
      * the exact construction the very first connection uses.
      */
-    private fun bindFreshMcpSession(webRtcTransport: WebRtcTransport) {
+    private fun bindFreshMcpSession(webRtcTransport: WebRtcTransport, client: WebRtcTransport.ApprovedClient) {
         // Retire the previous client's session before standing up the new one.
         webRtcScopeRef.getAndSet(null)?.let { prev -> runCatching { prev.cancel() } }
 
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        // The device-approved WebRTC client is granted full device control
-        // (the approval dialog is the trust boundary), so it carries READ+WRITE.
-        // Binding this principal makes scopedTool's scope check, the sensitive-
-        // action policy gate, and audit logging all apply to remote WebRTC calls
+        // The device-approved client is granted full device control (the approval
+        // dialog is the trust boundary), so it carries READ+WRITE. Binding this
+        // principal makes scopedTool's scope check, the sensitive-action policy gate
+        // and audit logging apply to remote calls, attributed to this PC's token id
         // — without it, the null-principal path would skip scope enforcement.
         val webRtcPrincipal = TokenPrincipal(
-            tokenId = "webrtc",
+            tokenId = client.tokenId,
             scopes = setOf(McpScope.READ, McpScope.WRITE),
-            label = "WebRTC Client",
+            label = client.name,
         )
         val mcpTransport = WebRtcMcpTransport(webRtcTransport, scope, webRtcPrincipal)
 

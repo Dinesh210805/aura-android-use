@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.net.InetAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -25,6 +26,7 @@ class LanSignalingServerTest {
                 return LanSignalingServer.Response(200, buildJsonObject { put("ok", true) })
             }
         },
+        requestDeadlineMs = 500,
     )
     private val port = server.start(40000..40100)
 
@@ -96,6 +98,37 @@ class LanSignalingServerTest {
             assertEquals(0, text.size)
         } finally {
             closed.stop()
+        }
+    }
+
+    /** A socket that sends one byte and then nothing, holding a worker for as long as it is allowed. */
+    private fun stall(): Socket = Socket("127.0.0.1", port).apply { getOutputStream().write('G'.code) }
+
+    @Test fun `slow requests are cut off at the deadline, not per read`() {
+        val stalls = List(LanSignalingServer.MAX_PER_PEER) { stall() }
+        try {
+            Thread.sleep(900)
+            stalls.forEach { s ->
+                s.soTimeout = 1_000
+                assertEquals(-1, s.getInputStream().read(), "server should have closed the stalled request")
+            }
+            assertEquals(200, call("GET /aura/info HTTP/1.1\r\nHost: x\r\n\r\n").first)
+        } finally {
+            stalls.forEach { it.close() }
+        }
+    }
+
+    @Test fun `one peer cannot hold more than its share of workers`() {
+        val stalls = List(LanSignalingServer.MAX_PER_PEER) { stall() }
+        try {
+            Thread.sleep(100)
+            Socket("127.0.0.1", port).use { extra ->
+                extra.soTimeout = 300 // shorter than the deadline: only an immediate close reads -1
+                val first = try { extra.getInputStream().read() } catch (e: SocketTimeoutException) { -2 }
+                assertEquals(-1, first, "a request over the per-peer cap should be closed at once")
+            }
+        } finally {
+            stalls.forEach { it.close() }
         }
     }
 }
