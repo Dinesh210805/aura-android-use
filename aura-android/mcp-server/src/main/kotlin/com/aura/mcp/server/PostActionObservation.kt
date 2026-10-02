@@ -176,7 +176,14 @@ internal object PostActionObservation {
                             summary.topLabels.forEach { add(JsonPrimitive(it)) }
                         }
                         seenAgo?.let { put("seen_before", seenBeforeNote(it)) }
-                        put("hint", hintFor(toolName))
+                        put(
+                            "hint",
+                            hintFor(
+                                toolName,
+                                changed = settle.screenChanged || settle.degradedToEvents,
+                                loading = summary.loadingIndicatorPresent,
+                            ),
+                        )
                     }
                 }
             }.getOrNull() // observation must never fail the action it rides on
@@ -190,29 +197,42 @@ internal object PostActionObservation {
     )
 
     /**
-     * The instruction riding on every screen-mutating result — the freshest, last, and
-     * therefore highest-priority text in the whole context.
+     * What to do next, riding on every screen-mutating result: the freshest text in the
+     * agent's context, and the one channel every MCP client is guaranteed to show.
      *
-     * It used to be one blanket line telling the agent not to look again after any
-     * action. That is right for `tap` (the summary below already says what happened)
-     * and actively wrong for a scroll, whose ENTIRE PURPOSE is to reveal content the
-     * summary's few top labels cannot convey. Traces showed the agent following it
-     * literally: scroll, be told not to look, conclude nothing was there, stop. This is
-     * finding O-1, and it is why the two cases now get different text.
+     * - Nothing changed (confident verdict): don't repeat the action; the last look and its
+     *   som_ids are still valid ([ActionGuard] agrees, so no re-read is forced).
+     * - Scroll: look again — the summary's few top labels cannot show what scrolled in.
+     * - Still loading: `wait_for` is justified now.
+     * - Otherwise: verify from the summary; don't look again just to check.
      *
-     * Both branches now name `read_screen` rather than `perceive_screen`. The old
-     * discouragement was largely a cost argument — a re-look meant a screenshot, a CV
-     * pass and an image in context. A settled tree read costs none of that, so "do not
-     * look" can go back to being advice about *redundancy* instead of about expense.
+     * Why `read_screen`, never `perceive_screen`: a settled tree read costs no screenshot
+     * or CV pass, so it is the right re-look to point at.
+     * Change together: `ActionGuard.provedUnchanged` must agree on what "unchanged" means.
      */
-    internal fun hintFor(toolName: String): String = if (toolName in SCROLL_TOOLS) {
-        "Only the top labels are listed here — call read_screen before deciding the item is " +
-            "not there. Earlier som_ids are stale."
-    } else {
-        "Screen after the action, settled. Verify the action from this — do not call wait_for " +
-            "or look again just to see what happened. Earlier som_ids are stale; read_screen " +
-            "gives current ones."
-    }
+    internal fun hintFor(toolName: String, changed: Boolean = true, loading: Boolean = false): String =
+        when {
+            // A confident "nothing changed" means the action did nothing, and the last look is
+            // still the screen. ActionGuard keeps that look valid, so the som_ids still work.
+            !changed && toolName in SCROLL_TOOLS ->
+                "Nothing moved: this list ends in that direction. Earlier som_ids are still valid; " +
+                    "read_screen only if you need more than the labels above."
+            !changed ->
+                "Nothing changed on screen — do not repeat this action. If the target has flag d " +
+                    "it is disabled; otherwise pick another element, scroll to it, or try long_press. " +
+                    "Earlier som_ids are still valid; no need to read_screen again."
+            toolName in SCROLL_TOOLS ->
+                "Only the top labels are listed here — call read_screen before deciding the item is " +
+                    "not there. Earlier som_ids are stale."
+            loading ->
+                "Screen after the action, but a loading indicator is still visible: wait_for the " +
+                    "element you need before acting on it. Earlier som_ids are stale; read_screen " +
+                    "gives current ones."
+            else ->
+                "Screen after the action, settled. Verify the action from this — do not call wait_for " +
+                    "or look again just to see what happened. Earlier som_ids are stale; read_screen " +
+                    "gives current ones."
+        }
 
     /**
      * Said only when an action lands on an EARLIER screen — the one signal that separates
