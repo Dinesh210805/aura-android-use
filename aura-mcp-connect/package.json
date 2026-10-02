@@ -10,6 +10,7 @@
   },
   "files": [
     "src",
+    "skills",
     "README.md",
     "LICENSE"
   ],
@@ -34,6 +35,6 @@
   "homepage": "https://github.com/Dinesh210805/aura-releases",
   "scripts": {
     "postinstall": "node src/postinstall.js",
-    "test": "node --check src/index.js && node --check src/config.js && node --check src/lan.js && node --check src/pair.js && node --check src/phone-transport.js && node --check src/proxy-core.js && node --check src/daemon.js && node --check src/stdio-shim.js && node --check src/adb-tool.js && node --check src/pairing-crypto.js && node --check src/version.js && node test/adb-tool.test.mjs && node test/daemon.test.mjs && node test/shim.test.mjs && node test/stale-link.test.mjs && node test/pairing-crypto.test.mjs && node test/lan.test.mjs && node test/lan-e2e.test.mjs"
+    "test": "node --check src/index.js && node --check src/config.js && node --check src/lan.js && node --check src/pair.js && node --check src/phone-transport.js && node --check src/proxy-core.js && node --check src/daemon.js && node --check src/stdio-shim.js && node --check src/adb-tool.js && node --check src/pairing-crypto.js && node --check src/version.js && node --check src/skill.js && node test/adb-tool.test.mjs && node test/daemon.test.mjs && node test/shim.test.mjs && node test/stale-link.test.mjs && node test/pairing-crypto.test.mjs && node test/lan.test.mjs && node test/lan-e2e.test.mjs && node test/skill.test.mjs"
   }
 }

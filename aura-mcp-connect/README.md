@@ -131,6 +131,30 @@ stop advertising that route.
 | `--enable-adb` / `AURA_MCP_ENABLE_ADB=1` | Arm the host-side `aura-adb` tool (off by default). See below. |
 | `AURA_ADB_SERIAL=<serial>` | Which device `aura-adb` targets when several are attached. |
 | `AURA_DEBUG=1` | Print full stack traces instead of short error messages. |
+| `aura-mcp skill install` | Install the optional `aura-phone` skill for Claude Code. `--dir=<path>` installs elsewhere. |
+| `aura-mcp skill path` | Print where the skill file is, to use it with other clients. |
+
+## The optional `aura-phone` skill
+
+The phone's MCP server works on its own: it enforces its rules on the phone (a blind tap, a
+repeated no-op or an unverified "done" is refused with the reason) and every tool reply says what
+to do next. The skill is a bonus: a short guide an agent can read before its first call, with the
+routing table (system intents, deep links, notifications, browser), how to look and act by
+`som_id`, and when to stop and ask.
+
+```bash
+aura-mcp skill install    # copies it to ~/.claude/skills/aura-phone/SKILL.md
+```
+
+Claude Code loads it in new sessions when a task involves the phone. For Cursor, Codex or other
+clients, `aura-mcp skill path` prints the file; add it as a project rule or paste it into
+`AGENTS.md`. Re-run the install after upgrading this package to get the current tool names.
+
+The phone decides which tools a computer sees: core tools always, plus **Notifications & media**
+and **Browser** per computer in AURA → Settings → Trusted Devices (applies on the next connect).
+Browser is off by default, because some clients cap their tool list (Cursor keeps about 40 across
+every server) and drop the rest silently. Every agent on one computer shares one phone session, so
+they all get the same tools.
 
 ## Pairing your phone to this machine (adb)
 
