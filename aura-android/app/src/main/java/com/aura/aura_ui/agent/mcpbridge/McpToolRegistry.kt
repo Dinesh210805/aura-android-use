@@ -54,12 +54,7 @@ internal suspend fun buildMcpToolRegistry(
     /** The status strip's headline — the plan step in progress; null before a plan exists. */
     headline: suspend () -> String? = { null },
 ): GatedToolRegistry {
-    // The server registers for two audiences; the agent is only one of them. A tool that exists
-    // to explain the device to a stranger costs this lane tokens on every request and adds a
-    // candidate the model must weigh every turn. See [AgentLaneTools] for the bar an exclusion
-    // has to clear — it is "can never be the right move here", not "rarely used".
     val sdkTools = client.listTools()?.tools.orEmpty()
-        .filter { com.aura.mcp.server.AgentLaneTools.availableToAgent(it.name) }
     // Sub-project #4 appends a LearningsWriteHook via [extraPostHooks].
     // E6 — hooks are registered ONCE; the chain routes lanes. A hook that also
     // implements PostToolFailureHook gets isError results on its failure method.

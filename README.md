@@ -187,14 +187,14 @@ Away from home? Put both devices on [Tailscale](https://tailscale.com) and pair 
 | Group | Tools |
 |---|---|
 | **See** | `perceive_screen` · `read_screen` · `get_screenshot` · `watch_device_events` · `get_device_status` |
-| **Touch** | `tap` · `double_tap` · `long_press` · `swipe` · `scroll_to` · `type_text` · `press_enter` |
-| **Move around** | `press_home` · `press_back` · `open_recent_apps` · `launch_app` · `lookup_app` |
+| **Touch** | `tap` (single, double, long) · `swipe` · `scroll` · `type_text` · `press_enter` |
+| **Move around** | `press_key` (back, home, recents) · `launch_app` · `lookup_app` |
 | **Shortcuts** | `list_app_deeplinks` · `resolve_deeplink` · `open_deeplink` · `system_intent` (call, SMS, alarm, timer, calendar, share, navigate) |
 | **Browser** | `browser_open` · `browser_read` · `browser_act` · `browser_extract` · `browser_find` · `browser_wait` · `browser_tabs` · `browser_upload` · `browser_handoff` · `browser_screenshot` · `browser_close` |
-| **Notifications & media** | `read_notifications` · `notification_action` · `dismiss_notification` · `get_media_sessions` · `media_control` · volume keys |
+| **Notifications & media** | `read_notifications` · `notification_action` · `dismiss_notification` · `get_media_sessions` · `media_control` · `volume` |
 | **Contacts & files** | `resolve_contact` · `find_files` · `open_file` |
-| **Check & finish** | `verify_action` · `wait_for` · `validate_action` · `end_session` |
-| **Help** | `get_usage_guide` · `web_search` · `echo` |
+| **Check & finish** | `verify_action` · `wait_for` · `end_session` |
+| **Help** | `web_search` |
 
 </details>
 

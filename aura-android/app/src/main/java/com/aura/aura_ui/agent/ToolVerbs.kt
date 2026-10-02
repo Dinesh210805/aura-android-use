@@ -16,15 +16,13 @@ object ToolVerbs {
 
     fun verbFor(tool: String): String = when (tool) {
         "launch_app", "open_deeplink", "open_file" -> "Opening"
-        "tap", "double_tap", "long_press" -> "Tapping"
-        "swipe", "scroll_to", "scroll_up", "scroll_down",
-        "scroll_left", "scroll_right" -> "Scrolling"
+        "tap" -> "Tapping"
+        "swipe", "scroll" -> "Scrolling"
         "type_text" -> "Typing"
-        "press_back" -> "Going back"
-        "press_home", "open_recent_apps" -> "Navigating"
+        "press_key" -> "Navigating"
         "press_enter" -> "Submitting"
         "perceive_screen", "get_screenshot", "read_screen" -> "Seeing"
-        "verify_action", "wait_for", "validate_action" -> "Checking"
+        "verify_action", "wait_for" -> "Checking"
         "web_search" -> "Searching"
         "browser_open", "browser_act" -> "Browsing"
         "browser_read", "browser_screenshot" -> "Reading page"
@@ -35,11 +33,10 @@ object ToolVerbs {
         "browser_find" -> "Looking"
         "browser_wait" -> "Waiting"
         "browser_close" -> "Closing"
-        "echo", "get_device_status", "lookup_app", "watch_device_events",
+        "get_device_status", "lookup_app", "watch_device_events",
         "list_app_deeplinks", "resolve_deeplink", "resolve_contact", "find_files" -> "Looking"
-        "get_usage_guide" -> "Reading"
-        "request_screen_capture_permission", "connect_device" -> "Connecting"
-        "volume_up", "volume_down", "mute" -> "Adjusting"
+        "request_screen_capture_permission" -> "Connecting"
+        "volume" -> "Adjusting"
         "read_notifications" -> "Reading"
         "notification_action" -> "Replying"
         "dismiss_notification" -> "Clearing"

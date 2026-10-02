@@ -111,7 +111,7 @@ class ActionGuardTest {
         val guard = ActionGuard()
         assertNull(guard.refusalFor("launch_app", """{"package":"x"}"""))
         assertNull(guard.refusalFor("read_screen", "{}"))
-        assertNull(guard.refusalFor("scroll_down", "{}"))
+        assertNull(guard.refusalFor("scroll", """{"direction":"down"}"""))
     }
 
     // ── 1c — loop / stuck detection ───────────────────────────────────────────

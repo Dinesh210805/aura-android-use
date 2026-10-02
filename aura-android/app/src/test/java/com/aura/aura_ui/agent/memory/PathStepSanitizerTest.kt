@@ -97,9 +97,9 @@ class PathStepSanitizerTest {
         assertTrue("tap" == step)
     }
 
-    @Test fun `scroll_to description is the nav label`() {
+    @Test fun `scroll description is the nav label`() {
         val step = PathStepSanitizer.sanitize(
-            "scroll_to",
+            "scroll",
             buildJsonObject { put("direction", "down"); put("description", "Add to Cart") },
         )!!
         assertTrue(step.contains("Add to Cart"))
@@ -142,8 +142,8 @@ class PathStepSanitizerTest {
 
     @Test fun `mcp-lane grounding tools contribute no path step`() {
         listOf(
-            "get_device_status", "verify_action", "validate_action", "wait_for",
-            "lookup_app", "list_app_deeplinks", "resolve_deeplink", "echo",
+            "get_device_status", "verify_action", "wait_for",
+            "lookup_app", "list_app_deeplinks", "resolve_deeplink",
             "web_search", "watch_device_events",
         ).forEach { tool ->
             assertTrue("$tool must not be a path step", PathStepSanitizer.sanitize(tool, buildJsonObject {}) == null)

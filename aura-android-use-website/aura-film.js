@@ -131,16 +131,16 @@
   var CLIENTS = [['Claude', 'claude'], ['Cursor', 'cursor'], ['VS Code', 'vscode'], ['any MCP app', 'mcp']];
   var CATS = [
     ['seeing', 'Reads the screen and numbers everything you can touch.', ['perceive_screen', 'read_screen', 'get_screenshot', 'request_screen_capture_permission', 'watch_device_events', 'wait_for']],
-    ['touching', 'Taps, swipes and scrolls like a finger.', ['tap', 'double_tap', 'long_press', 'swipe', 'scroll_up', 'scroll_down', 'scroll_left', 'scroll_right', 'scroll_to']],
+    ['touching', 'Taps, swipes and scrolls like a finger.', ['tap', 'swipe', 'scroll']],
     ['typing', 'Types into any field, even in React Native and Flutter apps.', ['type_text', 'press_enter']],
-    ['apps', 'Opens apps and moves between them.', ['launch_app', 'lookup_app', 'open_recent_apps', 'press_home', 'press_back']],
+    ['apps', 'Opens apps and moves between them.', ['launch_app', 'lookup_app', 'press_key']],
     ['browser', 'Drives its own browser, tab by tab.', ['browser_open', 'browser_read', 'browser_act', 'browser_find', 'browser_extract', 'browser_tabs', 'browser_wait', 'browser_screenshot', 'browser_upload', 'browser_handoff', 'browser_close', 'web_search']],
     ['notifications', 'Reads, replies to and clears notifications.', ['read_notifications', 'notification_action', 'dismiss_notification']],
-    ['media', 'Controls music, video and volume.', ['get_media_sessions', 'media_control', 'volume_up', 'volume_down', 'mute']],
+    ['media', 'Controls music, video and volume.', ['get_media_sessions', 'media_control', 'volume']],
     ['contacts', 'Finds the right person on the phone.', ['resolve_contact']],
     ['files', 'Finds and opens your files.', ['find_files', 'open_file']],
     ['deep links', 'Jumps straight to the right screen.', ['list_app_deeplinks', 'resolve_deeplink', 'open_deeplink']],
-    ['system', 'Alarms, calls, sharing, and checking its own work.', ['system_intent', 'get_device_status', 'validate_action', 'verify_action', 'connect_device', 'get_usage_guide', 'echo', 'end_session']]
+    ['system', 'Alarms, calls, sharing, and checking its own work.', ['system_intent', 'get_device_status', 'verify_action', 'end_session']]
   ];
 
   function rr(w, h, r, step, cx, cy) {

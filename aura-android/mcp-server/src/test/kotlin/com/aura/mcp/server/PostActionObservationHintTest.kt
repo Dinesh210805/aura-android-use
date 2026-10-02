@@ -16,7 +16,7 @@ class PostActionObservationHintTest {
 
     @Test
     fun `scroll is told to look again, because the summary cannot show what scrolled in`() {
-        for (tool in listOf("scroll_down", "scroll_up", "scroll_to", "swipe")) {
+        for (tool in listOf("scroll", "swipe")) {
             val hint = PostActionObservation.hintFor(tool)
             assertTrue(hint.contains("read_screen"), "$tool must be pointed at a fresh look")
             assertFalse(
@@ -59,7 +59,7 @@ class PostActionObservationHintTest {
 
     @Test
     fun `a scroll that moved nothing says the list ends there`() {
-        val hint = PostActionObservation.hintFor("scroll_down", changed = false)
+        val hint = PostActionObservation.hintFor("scroll", changed = false)
         assertTrue(hint.contains("ends"), hint)
         assertFalse(hint.contains("stale"), hint)
     }

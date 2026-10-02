@@ -37,7 +37,7 @@ internal fun Server.registerPrompts() {
 
     addPrompt(
         name = "open_app",
-        description = "Open an app by name the reliable way: resolve → policy-check → launch/deep-link → wait → perceive.",
+        description = "Open an app by name the reliable way: deep link if one fits, else launch_app, then read the reply.",
         arguments = listOf(
             PromptArgument(
                 name = "app_name",
@@ -111,18 +111,18 @@ private fun automateTaskRunbook(goal: String): String = """
     6. SAFETY (hard-blocked, cannot be overridden): banking/payment apps,
        authenticator/password managers, and typing card numbers / PINs / SSNs /
        passwords. If the goal requires one of these, stop and tell the user to do
-       it themselves. Check uncertain targets with validate_action first.
+       it themselves. A blocked call returns policy_blocked — never retry it.
     7. Stop and ask the user if two verifications fail, or before anything
        irreversible (sending money, deleting data) they didn't explicitly request.
 """.trimIndent()
 
 private fun openAppRunbook(app: String): String = """
     Open "$app" reliably:
-    1. lookup_app(app_name="$app") → resolve the package name.
-    2. validate_action(target="$app") → if blocked, stop and tell the user (the
-       device refuses banking/payment and authenticator/password apps).
-    3. If you need a specific screen inside the app, prefer
-       list_app_deeplinks(package) → open_deeplink; otherwise launch_app(package).
-    4. wait_for, then perceive_screen to confirm the app is foregrounded and fully
-       loaded before the next action.
+    1. If you need a specific screen inside the app, prefer
+       list_app_deeplinks(package) → open_deeplink; otherwise launch_app(app_name="$app").
+       If it returns policy_blocked, stop and tell the user (the device refuses
+       banking/payment and authenticator/password apps).
+    2. Read the reply: its post_action_observation says what is on screen, and
+       direct_links lists one-call routes into the app.
+    3. read_screen before the first tap inside the app.
 """.trimIndent()

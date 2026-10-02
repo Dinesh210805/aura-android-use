@@ -25,8 +25,6 @@ import com.aura.mcp.bridge.McpScope
  *    capture itself happens in `get_screenshot` (also READ — inspection).
  *  - `web_search` is **READ** because no device state changes; the worst
  *    case is burning a Tavily API credit.
- *  - `validate_action` and `connect_device` are READ — Phase 3 stubs that
- *    don't touch hardware.
  */
 // Public (was internal): the on-device agent UI in :app reads this to detect an
 // automation run — the first WRITE-scoped tool means "driving the device", which
@@ -36,8 +34,6 @@ object McpToolScopes {
 
     val toolScopeMap: Map<String, McpScope> = mapOf(
         // ── READ ───────────────────────────────────────────────
-        "echo" to McpScope.READ,
-        "get_usage_guide" to McpScope.READ,
         "get_device_status" to McpScope.READ,
         "get_screenshot" to McpScope.READ,
         "request_screen_capture_permission" to McpScope.READ,
@@ -53,8 +49,6 @@ object McpToolScopes {
         "end_session" to McpScope.READ,
         "lookup_app" to McpScope.READ,
         "web_search" to McpScope.READ,
-        "validate_action" to McpScope.READ,
-        "connect_device" to McpScope.READ,
         // Deep links — discovery is passive inspection.
         "list_app_deeplinks" to McpScope.READ,
         "resolve_deeplink" to McpScope.READ,
@@ -83,21 +77,11 @@ object McpToolScopes {
 
         // ── WRITE ──────────────────────────────────────────────
         "tap" to McpScope.WRITE,
-        "press_home" to McpScope.WRITE,
-        "press_back" to McpScope.WRITE,
+        "press_key" to McpScope.WRITE,
+        "volume" to McpScope.WRITE,
+        "scroll" to McpScope.WRITE,
         "press_enter" to McpScope.WRITE,
-        "volume_up" to McpScope.WRITE,
-        "volume_down" to McpScope.WRITE,
-        "mute" to McpScope.WRITE,
-        "open_recent_apps" to McpScope.WRITE,
         "swipe" to McpScope.WRITE,
-        "scroll_to" to McpScope.WRITE,
-        "double_tap" to McpScope.WRITE,
-        "long_press" to McpScope.WRITE,
-        "scroll_up" to McpScope.WRITE,
-        "scroll_down" to McpScope.WRITE,
-        "scroll_left" to McpScope.WRITE,
-        "scroll_right" to McpScope.WRITE,
         "type_text" to McpScope.WRITE,
         // E4 — taps a real element (resolved from the live tree at dispatch time).
         "launch_app" to McpScope.WRITE,
