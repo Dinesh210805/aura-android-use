@@ -1,14 +1,13 @@
 package com.aura.mcp.server
 
-import com.aura.mcp.tools.UsageGuide
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
  * Spec 2026-07-17 context delivery: the handshake survival kit must survive
- * client truncation (~2,048 chars in Claude Code), the full playbook must be
- * servable topic-by-topic, and skills must map to legal prompt names.
+ * client truncation (~2,048 chars in Claude Code) and the full playbook must carry
+ * the doctrine the kit had no room for.
  */
 class ContextDeliveryTest {
 
@@ -18,7 +17,7 @@ class ContextDeliveryTest {
         // guide never says so, the agent ignores it and still turns Wi-Fi OFF
         // while trying to turn it ON — the field would be shipped invisible,
         // which is the exact class of bug it was added to fix.
-        val perception = UsageGuide.guideFor("perception")
+        val perception = AuraInstructions.text
 
         assertTrue(perception.contains("checked"), "perception guide must document the `checked` field")
         assertTrue(
@@ -70,34 +69,6 @@ class ContextDeliveryTest {
         }
     }
 
-    // ── topic sections ──
-
-    @Test
-    fun `full playbook splits into the documented topic set`() {
-        assertEquals(
-            setOf(
-                "decision_tree", "perception", "loop", "loading", "trust",
-                "deeplinks", "action_plane", "safety", "stop", "efficiency",
-                "browser",
-            ),
-            AuraInstructions.sections.keys,
-        )
-        AuraInstructions.sections.forEach { (topic, body) ->
-            assertTrue(body.isNotBlank(), "section '$topic' must not be blank")
-        }
-    }
-
-    @Test
-    fun `guide routing serves full, topic, and a helpful unknown-topic error`() {
-        assertEquals(AuraInstructions.text, UsageGuide.guideFor(null))
-        assertEquals(AuraInstructions.text, UsageGuide.guideFor("full"))
-        assertEquals(AuraInstructions.sections.getValue("safety"), UsageGuide.guideFor("safety"))
-        assertEquals(AuraInstructions.sections.getValue("safety"), UsageGuide.guideFor("  SAFETY "))
-        val err = UsageGuide.guideFor("world_domination")
-        assertTrue(err.contains("Unknown topic"))
-        assertTrue(err.contains("efficiency")) // lists the real topics
-    }
-
     /**
      * "Registered is not the same as used." All 12 browser tools passed their tests and
      * shipped while the routing ladder said nothing about them, so the model had no reason
@@ -136,7 +107,7 @@ class ContextDeliveryTest {
 
     @Test
     fun `the browser topic carries the doctrine the handshake had no room for`() {
-        val browser = UsageGuide.guideFor("browser")
+        val browser = AuraInstructions.text
         assertTrue(browser.contains("el_id"), "must explain opaque element handles")
         assertTrue(browser.contains("stale_handles"), "must explain generation staleness")
         assertTrue(browser.contains("browser_extract"), "must cover the intention tools")

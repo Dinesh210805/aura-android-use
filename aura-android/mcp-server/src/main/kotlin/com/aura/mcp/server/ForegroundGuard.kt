@@ -18,7 +18,7 @@ package com.aura.mcp.server
  * rest of [SensitivePolicy].
  *
  * Deliberately ungated:
- *  - Escape hatches (`press_home`, `press_back`, `open_recent_apps`) — the
+ *  - Escape hatches (`press_key`) — the
  *    agent must always be able to LEAVE a blocked app.
  *  - Entry points (`launch_app`, `open_deeplink`) — already screened
  *    pre-dispatch + on the resolved package (GP2/E3).
@@ -31,9 +31,7 @@ internal object ForegroundGuard {
 
     /** WRITE tools that act INSIDE the foreground app — denied while blocked. */
     val GATED_GESTURES: Set<String> = setOf(
-        "tap", "double_tap", "long_press", "swipe",
-        "scroll_to", "scroll_up", "scroll_down", "scroll_left", "scroll_right",
-        "type_text", "press_enter",
+        "tap", "swipe", "scroll", "type_text", "press_enter",
     )
 
     /** READ tools that OBSERVE the foreground screen — denied while blocked. */
@@ -44,9 +42,9 @@ internal object ForegroundGuard {
 
     /** WRITE tools deliberately NOT gated — reasons in the class KDoc; coverage-tested. */
     val UNGATED_WRITE_TOOLS: Set<String> = setOf(
-        "press_home", "press_back", "open_recent_apps",
+        "press_key",
         "launch_app", "open_deeplink",
-        "volume_up", "volume_down", "mute", "media_control",
+        "volume", "media_control",
         "notification_action", "dismiss_notification", "system_intent", "open_file",
         // Browser — act on a browser surface, never inside the foreground app.
         // TRUE ONLY WHILE `session:"mine"` IS UNIMPLEMENTED. Slice 1 ships the
@@ -64,15 +62,13 @@ internal object ForegroundGuard {
 
     /** READ tools deliberately NOT gated — none can see the foreground screen; coverage-tested. */
     val UNGATED_READ_TOOLS: Set<String> = setOf(
-        "echo", "get_device_status", "request_screen_capture_permission",
-        "end_session", "lookup_app", "web_search", "validate_action",
-        "connect_device", "list_app_deeplinks", "resolve_deeplink",
+        "get_device_status", "request_screen_capture_permission",
+        "end_session", "lookup_app", "web_search",
+        "list_app_deeplinks", "resolve_deeplink",
         "read_notifications", "get_media_sessions", "resolve_contact", "find_files",
         // Reads a web page in a browser session, not the device screen. Same
         // `mine`-mode caveat as the browser WRITE tools above.
         "browser_read", "browser_screenshot", "browser_extract",
-        // Static documentation — reads nothing from the screen at all.
-        "get_usage_guide",
     )
 
     fun gatedKind(toolName: String): Kind? = when (toolName) {
@@ -99,13 +95,13 @@ internal object ForegroundGuard {
             Kind.GESTURE ->
                 "Blocked for your security: a banking, payment, or authenticator " +
                     "app is in the foreground — I can't act inside it. Ask the user " +
-                    "to finish this step themselves. You may use press_back or " +
-                    "press_home to leave the app."
+                    "to finish this step themselves. You may use press_key back or " +
+                    "home to leave the app."
             Kind.PERCEPTION ->
                 "Blocked for your security: a banking, payment, or authenticator " +
                     "app is in the foreground — I can't read its screen. Ask the " +
-                    "user to finish this step themselves. You may use press_back " +
-                    "or press_home to leave the app."
+                    "user to finish this step themselves. You may use press_key back " +
+                    "or home to leave the app."
         }
         return Verdict.Block(decision.category, kind, message)
     }

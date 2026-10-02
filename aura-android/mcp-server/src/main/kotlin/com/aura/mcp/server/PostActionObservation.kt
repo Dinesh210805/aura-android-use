@@ -61,9 +61,8 @@ internal object PostActionObservation {
      * Volume/mute change no pixels; end_session/perceive/verify are not writes.
      */
     val OBSERVED_TOOLS: Set<String> = setOf(
-        "tap", "double_tap", "long_press", "swipe",
-        "scroll_to", "scroll_up", "scroll_down", "scroll_left", "scroll_right",
-        "type_text", "press_home", "press_back", "press_enter", "open_recent_apps",
+        "tap", "swipe", "scroll",
+        "type_text", "press_key", "press_enter",
         "launch_app", "open_deeplink",
         // system_intent launches real activities (dialer/composer/share sheet/
         // maps) — the observation confirms the confirmation UI actually opened.
@@ -91,11 +90,11 @@ internal object PostActionObservation {
      */
     val SLOW_TO_START: Set<String> = setOf(
         "launch_app", "open_deeplink", "open_file", "system_intent",
-        "press_home", "press_back", "open_recent_apps",
+        "press_key",
     )
 
     val UNOBSERVED_WRITE_TOOLS: Set<String> = setOf(
-        "volume_up", "volume_down", "mute",
+        "volume",
         "media_control", "notification_action", "dismiss_notification",
         // Browser — these already return the page they produced, which IS the
         // post-action observation and a far better one. A device-screen settle
@@ -154,7 +153,7 @@ internal object PostActionObservation {
                             "hint",
                             "The foreground app is a banking/payment/authenticator app — " +
                                 "its screen content is withheld and further taps or reads " +
-                                "inside it will be blocked. Use press_back or press_home to " +
+                                "inside it will be blocked. Use press_key back or home to " +
                                 "leave, and ask the user to complete this step themselves.",
                         )
                     }
@@ -192,8 +191,7 @@ internal object PostActionObservation {
 
     /** Scroll tools, whose whole purpose is to bring NEW content into view. */
     private val SCROLL_TOOLS: Set<String> = setOf(
-        "scroll_up", "scroll_down", "scroll_left", "scroll_right",
-        "scroll_to", "swipe",
+        "scroll", "swipe",
     )
 
     /**
@@ -219,7 +217,7 @@ internal object PostActionObservation {
                     "read_screen only if you need more than the labels above."
             !changed ->
                 "Nothing changed on screen — do not repeat this action. If the target has flag d " +
-                    "it is disabled; otherwise pick another element, scroll to it, or try long_press. " +
+                    "it is disabled; otherwise pick another element, scroll to it, or try tap with style long. " +
                     "Earlier som_ids are still valid; no need to read_screen again."
             toolName in SCROLL_TOOLS ->
                 "Only the top labels are listed here — call read_screen before deciding the item is " +
@@ -237,7 +235,7 @@ internal object PostActionObservation {
     /**
      * Said only when an action lands on an EARLIER screen — the one signal that separates
      * "navigating" from "going in circles", which the agent cannot see from one step back.
-     * A hint, not a block: coming back on purpose (press_back to a list) is normal.
+     * A hint, not a block: coming back on purpose (press_key back to a list) is normal.
      */
     internal fun seenBeforeNote(actionsAgo: Long): String {
         val ago = if (actionsAgo == 1L) "1 action ago" else "$actionsAgo actions ago"

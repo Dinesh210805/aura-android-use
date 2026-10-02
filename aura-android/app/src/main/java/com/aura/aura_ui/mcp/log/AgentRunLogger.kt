@@ -485,17 +485,17 @@ class AgentRunLogger(
 
     /** Pull gesture coords out of [argsJson] so the renderer can burn a marker on the shot. */
     private fun annotateGesture(inv: ToolInvocation, toolName: String, argsJson: String?) {
-        val gesture = when (toolName) {
-            "tap" -> "tap"
-            "double_tap" -> "double_tap"
-            "long_press" -> "long_press"
-            "swipe" -> "swipe"
-            "scroll_up", "scroll_down", "scroll_left", "scroll_right", "scroll_to" -> "scroll"
-            else -> null
-        } ?: return
-        inv.gestureType = gesture
-        if (argsJson.isNullOrBlank()) return
-        val obj = runCatching { JSONObject(argsJson) }.getOrNull() ?: return
+        if (toolName !in setOf("tap", "swipe", "scroll")) return
+        val obj = argsJson?.takeIf { it.isNotBlank() }?.let { runCatching { JSONObject(it) }.getOrNull() }
+        inv.gestureType = when (toolName) {
+            "tap" -> when (obj?.optString("style")) {
+                "double" -> "double_tap"
+                "long" -> "long_press"
+                else -> "tap"
+            }
+            else -> toolName
+        }
+        if (obj == null) return
         inv.tapX = obj.optIntOrNull("x") ?: obj.optIntOrNull("x1") ?: obj.optIntOrNull("startX")
         inv.tapY = obj.optIntOrNull("y") ?: obj.optIntOrNull("y1") ?: obj.optIntOrNull("startY")
         inv.tapX2 = obj.optIntOrNull("x2") ?: obj.optIntOrNull("endX")

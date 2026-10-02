@@ -23,7 +23,7 @@ import kotlinx.serialization.json.jsonPrimitive
  *  - `type_text(text)` — block entering card numbers, CVVs, SSNs, or
  *    "password is…" / "pin is…" secrets into any field.
  *
- * Raw `tap` / `swipe` / `long_press` are coordinate-only and semantically
+ * Raw `tap` / `swipe` are coordinate-only and semantically
  * opaque — they cannot be classified, so they are intentionally **not** gated
  * here (a tap inside an already-open app is out of scope). Advisory free-text
  * args (e.g. `perceive_screen.description`) are agent-authored and never gated.
@@ -195,10 +195,9 @@ object SensitivePolicy {
         decisions.firstOrNull { it is Decision.Block } ?: Decision.Allow
 
     /**
-     * Freeform pre-check for the `validate_action` tool. Treats [value] as a
-     * possible package id, deep-link host, or text-to-type and blocks if any
-     * rule matches — so an agent can ask "is this target sensitive?" before it
-     * commits to a tool call.
+     * Freeform screen of a value that may be a package id, deep-link host or text, blocking if
+     * any rule matches. Used where the kind of value is not known in advance (notification
+     * sources).
      */
     fun screen(value: String?): Decision {
         if (value.isNullOrBlank()) return Decision.Allow
@@ -405,7 +404,7 @@ object SensitivePolicy {
           if a banking/payment/authenticator app is on screen (however it got
           there), taps, scrolls, typing, screenshots, UI-tree reads, and
           perceive_screen are refused (`error: "foreground_blocked"`). Use
-          press_back / press_home to leave the app.
+          press_key back / home to leave the app.
 
         If the user truly needs one of these, they must do it themselves on the
         device. Do not attempt workarounds.

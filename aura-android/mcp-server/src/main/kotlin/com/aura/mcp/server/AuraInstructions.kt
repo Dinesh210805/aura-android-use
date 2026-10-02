@@ -1,23 +1,14 @@
 package com.aura.mcp.server
 
 /**
- * Phase 10 — server-side behavioral contract delivered once at MCP
- * handshake. Replaces the Phase 9 "cheap → expensive escalation"
- * framing with the dual-track perception model the user actually wants.
+ * What a connecting agent is told about driving this device: the handshake [survivalKit] and the
+ * full playbook [text].
  *
- * Five sections, in this exact order — order matters because section 1
- * frames the disciplines that follow:
- *
- *   1. **Stakes** — tone-setter, never skipped.
- *   2. **Dual-track perception** — UI tree and annotated screenshot are
- *      used together, not as alternatives. Higher cost, lower error rate.
- *   3. **Execution loop** — perceive → act → verify.
- *   4. **Loading states** — `wait_for` is mandatory after navigation.
- *   5. **Trust rules** — pixels > labels, never estimate coords.
- *
- * The instructions field is delivered by the MCP SDK in the `initialize`
- * response and surfaced as system-level context by every compliant
- * client (Claude Code, VS Code Copilot MCP, Cursor, …).
+ * - Contract: [survivalKit] is the MCP `instructions` field every client receives at `initialize`;
+ *   [text] is served as the `aura://guide` resource (see `McpResources`).
+ * - Why the playbook is not the primary channel: agents rarely pull optional guidance. The rules
+ *   that matter are enforced at `scopedTool` or spoken in tool replies; [text] is reference.
+ * - Change together: `aura-mcp-connect/skills/aura-phone/SKILL.md` carries a condensed copy.
  */
 internal object AuraInstructions {
 
@@ -197,7 +188,7 @@ internal object AuraInstructions {
             SAME turn. Only call verify_action when the observation is genuinely
             ambiguous; only perceive_screen when you need fresh som_ids to tap.
 
-        After scroll / swipe / launch / press_back / press_home, every
+        After scroll / swipe / launch / press_key, every
         coordinate you saw earlier is stale. Perceive again before som-targeted
         taps — but NOT merely to confirm the previous action; the observation
         block already told you what happened.
@@ -304,7 +295,6 @@ internal object AuraInstructions {
           • Opening authenticator / password managers (Authy, Google
             Authenticator, Microsoft Authenticator, 1Password, Bitwarden, LastPass).
           • Typing card numbers, CVVs, SSNs, PINs, or passwords via type_text.
-        Unsure if a target is allowed? Check first with validate_action(target="...").
 
         ── 7. When to stop ─────────────────────────────────────────────────────
         Stop and ask the user when:
@@ -410,37 +400,4 @@ internal object AuraInstructions {
 
     /** Byte budget for [survivalKit]; see its KDoc for the split with the desktop bridge. */
     const val SURVIVAL_KIT_MAX_BYTES = 1_600
-
-    /**
-     * The full playbook split by its `── ` headers into stable topic keys —
-     * served one topic at a time by `get_usage_guide` so agents pull only the
-     * doctrine they need.
-     */
-    val sections: Map<String, String> by lazy {
-        val keyByHeader = listOf(
-            "START HERE" to "decision_tree",
-            "1. Dual-track perception" to "perception",
-            "2. Execution loop" to "loop",
-            "3. Loading states" to "loading",
-            "4. Trust rules" to "trust",
-            "5. Deep links" to "deeplinks",
-            "5b. Non-screen action plane" to "action_plane",
-            "6. Safety boundary" to "safety",
-            "7. When to stop" to "stop",
-            "8. Efficiency" to "efficiency",
-            "9. Browser" to "browser",
-        )
-        val out = LinkedHashMap<String, StringBuilder>()
-        var current: StringBuilder? = null
-        text.lineSequence().forEach { line ->
-            if (line.startsWith("── ")) {
-                val key = keyByHeader.firstOrNull { (marker, _) -> line.contains(marker) }?.second
-                current = if (key != null) StringBuilder().also { out[key] = it } else null
-                current?.append(line)
-            } else {
-                current?.append('\n')?.append(line)
-            }
-        }
-        out.mapValues { it.value.toString().trim() }
-    }
 }

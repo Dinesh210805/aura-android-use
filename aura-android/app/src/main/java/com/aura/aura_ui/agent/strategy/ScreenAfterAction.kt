@@ -27,9 +27,8 @@ internal object ScreenAfterAction {
      * are absent on purpose: they change no pixels, or already return the page they produced.
      */
     val TRIGGERS: Set<String> = setOf(
-        "tap", "double_tap", "long_press", "swipe",
-        "scroll_to", "scroll_up", "scroll_down", "scroll_left", "scroll_right",
-        "type_text", "press_home", "press_back", "press_enter", "open_recent_apps",
+        "tap", "swipe", "scroll",
+        "type_text", "press_key", "press_enter",
         "launch_app", "open_deeplink", "system_intent", "open_file",
     )
 

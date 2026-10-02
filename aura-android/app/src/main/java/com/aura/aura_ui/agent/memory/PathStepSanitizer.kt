@@ -29,10 +29,9 @@ object PathStepSanitizer {
         // MCP-lane grounding/verification tools (spec 2026-07-17): the external
         // dispatch stream carries the FULL tool surface, not just agent tools —
         // none of these move the UI, so none may enter a learned path.
-        "get_device_status", "verify_action", "validate_action", "wait_for",
-        "lookup_app", "list_app_deeplinks", "resolve_deeplink", "echo",
+        "get_device_status", "verify_action", "wait_for",
+        "lookup_app", "list_app_deeplinks", "resolve_deeplink",
         "web_search", "watch_device_events", "request_screen_capture_permission",
-        "get_usage_guide",
     )
     private val TYPED = setOf("type_text", "input_text", "set_text", "enter_text")
 

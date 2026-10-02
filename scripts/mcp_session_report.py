@@ -14,7 +14,6 @@ Signatures (matched on each invocation's `outputSummary`, which holds the reply 
     stale_som          a som_id that died because the screen changed ("is STALE:")
     policy_blocked     a hard-blocked sensitive action
     already_foreground launch_app into the app that was already open
-    usage_guide        calls to get_usage_guide (expected ~0 — pull-only guidance)
 
 Usage:
     python scripts/mcp_session_report.py --pull --after <device-millis> --save _gtmp/mcp_base.json
@@ -37,7 +36,6 @@ SIGNATURES: dict[str, callable] = {
     "stale_som": lambda inv: "is STALE:" in inv["out"],
     "policy_blocked": lambda inv: "policy_blocked" in inv["out"],
     "already_foreground": lambda inv: '"already_foreground":true' in inv["out"].replace(" ", ""),
-    "usage_guide": lambda inv: inv["tool"] == "get_usage_guide",
 }
 
 

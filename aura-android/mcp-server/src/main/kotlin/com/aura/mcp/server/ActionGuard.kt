@@ -255,17 +255,14 @@ class ActionGuard {
          * Why `type_text` is absent: it types into the field the prior (gated) tap focused, and
          * gating it forced a re-read between "tap search box" and "type query" on every search.
          */
-        val GESTURE_REQUIRES_GROUNDING = setOf("tap", "double_tap", "long_press", "swipe")
+        val GESTURE_REQUIRES_GROUNDING = setOf("tap", "swipe")
 
         /** Tools that change what is on screen, making the last read stale. */
         val SCREEN_CHANGING_TOOLS = setOf(
-            "tap", "double_tap", "long_press", "swipe", "type_text",
-            "scroll_up", "scroll_down", "scroll_left", "scroll_right",
-            "scroll_to",
-            "launch_app", "open_deeplink", "open_file", "open_recent_apps",
-            "press_back", "press_enter", "press_home",
+            "tap", "swipe", "type_text", "scroll",
+            "launch_app", "open_deeplink", "open_file",
+            "press_key", "press_enter",
             "wait_for", "request_screen_capture_permission",
-            "connect_device",
             "system_intent", "notification_action",
         )
 
@@ -274,7 +271,7 @@ class ActionGuard {
          * the browser (an offscreen WebView). Checked before [SCREEN_CHANGING_TOOLS].
          */
         val NON_VISUAL_TOOLS = setOf(
-            "mute", "volume_up", "volume_down", "media_control", "dismiss_notification",
+            "volume", "media_control", "dismiss_notification",
             "browser_open", "browser_read", "browser_act", "browser_close",
             "browser_find", "browser_wait", "browser_screenshot", "browser_extract",
             "browser_upload", "browser_tabs", "browser_handoff",

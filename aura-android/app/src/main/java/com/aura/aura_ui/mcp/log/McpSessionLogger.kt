@@ -62,7 +62,7 @@ class McpSessionLogger(
      * Keeping this list small — the user wants forensic detail and
      * disk is cheap.
      */
-    private val skipScreenshotFor = setOf("echo", "connect_device", "end_session")
+    private val skipScreenshotFor = setOf("end_session")
 
     // ── SessionLogSink ─────────────────────────────────────────────
 

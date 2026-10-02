@@ -140,13 +140,13 @@ class LearningsWriteHookTest {
         val store = FakeStore()
         val hook = LearningsWriteHook("add iphone to cart on amazon", store)
         val err = CallToolResult(content = listOf(TextContent("not found after 3 scrolls")), isError = true)
-        fail(hook, "scroll_to", buildJsonObject { put("direction", "down"); put("description", "Add to Cart") }, err)
+        fail(hook, "scroll", buildJsonObject { put("direction", "down"); put("description", "Add to Cart") }, err)
         post(hook, "tap", buildJsonObject { put("som_id", "9"); put("label", "Add to cart") })
         post(hook, "end_session", buildJsonObject {})
         hook.onRunEnd("completed")
         val recoveries = store.recordedRecoveries.single()
         assertEquals(1, recoveries.size)
-        assertTrue("recovery must name the dead end", recoveries.single().contains("scroll_to"))
+        assertTrue("recovery must name the dead end", recoveries.single().contains("scroll"))
         assertTrue("recovery must name what worked", recoveries.single().contains("Add to cart"))
     }
 

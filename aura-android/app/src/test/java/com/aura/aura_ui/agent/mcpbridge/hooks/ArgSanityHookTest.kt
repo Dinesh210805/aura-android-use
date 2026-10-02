@@ -59,8 +59,8 @@ class ArgSanityHookTest {
         assertTrue(d is PreToolDecision.Proceed)
     }
 
-    @Test fun `long_press with an absurd duration denies`() = runTest {
-        val d = decide("long_press", buildJsonObject { put("x", 1); put("y", 2); put("duration_ms", 120_000) })
+    @Test fun `long tap with an absurd duration denies`() = runTest {
+        val d = decide("tap", buildJsonObject { put("som_id", "3"); put("style", "long"); put("duration_ms", 120_000) })
         assertTrue(d is PreToolDecision.Deny)
     }
 
@@ -75,7 +75,7 @@ class ArgSanityHookTest {
 
     @Test fun `unrelated tools always proceed`() = runTest {
         assertTrue(decide("web_search", buildJsonObject {}) is PreToolDecision.Proceed)
-        assertTrue(decide("press_home", buildJsonObject {}) is PreToolDecision.Proceed)
+        assertTrue(decide("press_key", buildJsonObject {}) is PreToolDecision.Proceed)
     }
 
     @Test fun `unparseable coordinate values count as missing`() = runTest {

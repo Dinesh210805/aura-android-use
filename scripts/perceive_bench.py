@@ -126,7 +126,7 @@ async def main():
                     print(f"connected via {url}")
                     # warm up + repeat perceive a few times on the current screen for a stable median
                     summary.append(await screen(s, "home_a", timings))
-                    await call(s, "press_home", {}, timings)
+                    await call(s, "press_key", {"key": "home"}, timings)
                     await call(s, "wait_for", {"condition": "home", "timeout_ms": 2000}, timings)
                     summary.append(await screen(s, "home_b", timings))
                     await call(s, "launch_app", {"package_name": "com.brave.browser"}, timings)

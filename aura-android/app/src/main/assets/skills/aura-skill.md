@@ -72,7 +72,7 @@ history survives a long task.
 A failed or blocked action will fail again if repeated. Climb this ladder:
 1. Re-perceive — the screen may have changed under you.
 2. Scroll to reveal off-screen targets, then re-perceive.
-3. press_back and try a different path (deep link, search bar, another tab).
+3. press_key back and try a different path (deep link, search bar, another tab).
 4. web_search the specific problem ("where is X in <app> new UI").
 5. Ask the user. Never invent a workaround for a policy_blocked error — those
    are hard safety blocks; tell the user to do that part themselves.

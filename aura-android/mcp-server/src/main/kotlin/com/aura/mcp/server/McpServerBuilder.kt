@@ -22,9 +22,7 @@ import com.aura.mcp.cache.PerceptionCache
 import com.aura.mcp.tools.registerAppTools
 import com.aura.mcp.tools.registerDeepLinkTools
 import com.aura.mcp.tools.registerDeviceTools
-import com.aura.mcp.tools.registerEchoTool
 import com.aura.mcp.tools.registerEndSessionTool
-import com.aura.mcp.tools.registerGetUsageGuideTool
 import com.aura.mcp.tools.registerGestureTools
 import com.aura.mcp.tools.registerKeyTools
 import com.aura.mcp.tools.registerMediaTools
@@ -34,7 +32,6 @@ import com.aura.mcp.tools.registerFileTools
 import com.aura.mcp.tools.registerPerceiveScreenTool
 import com.aura.mcp.tools.registerPerceptionTools
 import com.aura.mcp.tools.registerReadScreenTool
-import com.aura.mcp.tools.registerPolicyTools
 import com.aura.mcp.tools.registerSystemIntentTool
 import com.aura.mcp.tools.registerVerifyActionTool
 import com.aura.mcp.tools.registerWaitForTool
@@ -128,7 +125,7 @@ internal object McpServerBuilder {
         onToolDispatched: (() -> Unit)? = null,
     ): Server {
         // Perception cache: stores som_id → (center_x, center_y) mappings from
-        // the latest perceive_screen call. Allows tap/double_tap/long_press tools
+        // the latest perceive_screen call. Allows tap
         // to resolve som_id to full-resolution coordinates server-side, avoiding
         // coordinate-mismatch errors when the model eyeballs a downscaled image.
         // The rescue probe: when a counter claims the screen is dirty, ask the screen
@@ -167,11 +164,8 @@ internal object McpServerBuilder {
         // gated tools (see ForegroundGuard), on every server (external + in-process).
         val foregroundGate = ForegroundGate.fromUiTree(uiTreeBridge)
 
-        // Phase 9 → spec 2026-07-17: deliver the SURVIVAL KIT at `initialize`,
-        // not the full playbook — clients truncate instructions (~2 KB in
-        // Claude Code; only 15% of the 13.7 KB playbook survived, measured
-        // 2026-07-17). The kit is self-sufficient and points to get_usage_guide
-        // + the aura://guide resource for the full contract.
+        // The handshake carries only the survival kit: clients truncate `instructions`
+        // (~2 KB in Claude Code). The full playbook is the aura://guide resource.
         val server = Server(
             serverInfo = Implementation(name = serverName, version = version),
             options = ServerOptions(
@@ -209,20 +203,13 @@ internal object McpServerBuilder {
             ),
         )
 
-        // Phase 1 — proof of life
-        server.registerEchoTool()
-
-        // Phase 2 — first five real device-control tools
+        // Device control: tap, volume, device status
         server.registerDeviceTools(deviceBridge, perceptionCache)
 
-        // Phase 3 — gestures, apps, keys, and policy stubs
+        // Gestures, apps and keys
         server.registerGestureTools(deviceBridge, perceptionCache)
         server.registerAppTools(deviceBridge, perceptionCache, deepLinkBridge)
         server.registerKeyTools(deviceBridge)
-        // Pass lookup so validate_action resolves app NAMES to packages and screens
-        // the resolved package (raw names match no package pattern) — advisory verdict
-        // then matches the enforcing launch_app gate.
-        server.registerPolicyTools(deviceBridge::lookupApp)
 
         // Phase 4 — screenshot, events
         server.registerPerceptionTools(screenshotBridge, uiTreeBridge)
@@ -267,9 +254,6 @@ internal object McpServerBuilder {
         // soft keyboard immediately.
         server.registerEndSessionTool(deviceBridge)
 
-        // Spec 2026-07-17 — the full playbook on demand (handshake carries only
-        // the survival kit; clients truncate the instructions field).
-        server.registerGetUsageGuideTool()
 
         // Phase 6 — web_search via Tavily for task-grounding documentation
         server.registerWebSearchTool(webSearchBridge)

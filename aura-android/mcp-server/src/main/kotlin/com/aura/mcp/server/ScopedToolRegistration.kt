@@ -527,7 +527,7 @@ private fun foregroundBlockedResult(
                 put(
                     "hint",
                     "This is a hard safety block enforced on-device. Do not retry " +
-                        "or attempt a workaround — press_back or press_home to leave " +
+                        "or attempt a workaround — press_key back or home to leave " +
                         "the app, then tell the user to complete this step themselves.",
                 )
             }.toString(),

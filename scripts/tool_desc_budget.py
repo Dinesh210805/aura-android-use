@@ -65,9 +65,9 @@ PLANES: dict[str, tuple[str, ...]] = {
         "system_intent", "read_notifications", "media_", "resolve_contact",
         "send_", "read_files", "list_files", "notification_",
     ),
-    "session": ("end_session", "set_plan", "mark_step", "ask_user", "use_skill", "get_usage_guide"),
+    "session": ("end_session", "set_plan", "mark_step", "ask_user", "use_skill"),
     "gestures": (
-        "tap", "double_tap", "long_press", "swipe", "scroll", "type_text",
+        "tap", "swipe", "scroll", "type_text",
         "press_", "key_", "drag", "pinch", "select_", "clear_text", "back", "home",
     ),
 }

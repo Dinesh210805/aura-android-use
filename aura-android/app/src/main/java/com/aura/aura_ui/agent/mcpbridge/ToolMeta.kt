@@ -30,7 +30,7 @@ object ToolMetaTable {
     /** Perception/info tools: no state change, safe to read in parallel. */
     private val readOnlyTools = setOf(
         "perceive_screen", "read_screen", "get_screenshot", "get_annotated_screenshot",
-        "get_device_status", "lookup_app", "omniparser_detect", "web_search", "validate_action",
+        "get_device_status", "lookup_app", "omniparser_detect", "web_search",
     )
 
     /**
