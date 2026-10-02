@@ -1,5 +1,6 @@
 package com.aura.mcp.bridge
 
+import com.aura.mcp.server.Toolset
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +24,16 @@ data class TrustedClient(
     /** 0 = approved before metadata existed (migrated legacy token). */
     val firstApprovedAt: Long = 0L,
     val lastConnectedAt: Long = 0L,
+    /**
+     * [Toolset] names this computer is given; null = [Toolset.DEFAULT_REMOTE]. Names, not the
+     * enum, so a stored group this build doesn't know is skipped instead of failing the decode
+     * of the whole ledger (which would un-trust every computer).
+     */
+    val toolsets: List<String>? = null,
 ) {
+    /** The groups to register for this computer's next session. */
+    val enabledToolsets: Set<Toolset> get() = Toolset.parse(toolsets)
+
     /** Short display id — matches the audit log's tokenId, never the secret. */
     val tokenId: String get() = token.take(8)
 }
@@ -86,6 +96,18 @@ class TrustedClientsStore(
                         platform = platform ?: client.platform,
                         lastConnectedAt = nowMillis,
                     )
+                },
+            )
+        }
+    }
+
+    /** Which tool groups this computer gets. Applies from its next connect. */
+    fun setToolsets(token: String, toolsets: Set<Toolset>) {
+        synchronized(lock) {
+            persist(
+                _clients.value.map { client ->
+                    if (client.token != token) client
+                    else client.copy(toolsets = (toolsets + Toolset.CORE).map { it.name }.sorted())
                 },
             )
         }

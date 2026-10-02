@@ -28,6 +28,7 @@ import com.aura.mcp.bridge.WebRtcTransport
 import com.aura.mcp.bridge.BrowserBridge
 import com.aura.mcp.bridge.WebSearchBridge
 import com.aura.mcp.server.McpServerBuilder
+import com.aura.mcp.server.Toolset
 import com.aura.mcp.server.WebRtcMcpTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -239,6 +240,8 @@ class McpServerController(
             pausedByHuman = pausedByHuman,
             readScreenImage = readScreenImage,
             onToolDispatched = onToolDispatched,
+            toolsets = trustedClients.clients.value.firstOrNull { it.tokenId == client.tokenId }
+                ?.enabledToolsets ?: Toolset.DEFAULT_REMOTE,
         )
 
         scope.launch { mcpServer.createSession(mcpTransport) }
