@@ -398,6 +398,17 @@ internal object AuraInstructions {
         - After a gesture, decide from its post_action_observation. One consequential action per turn.
     """.trimIndent()
 
+    /**
+     * [survivalKit] for a server that registers only [toolsets]: each line naming a tool from a
+     * group left out is dropped, so the handshake never routes an agent to a tool it cannot see.
+     */
+    fun survivalKit(toolsets: Set<Toolset>): String =
+        survivalKit.lines()
+            .filterNot { line -> TOOL_NAME.findAll(line).any { Toolset.of(it.value) !in toolsets } }
+            .joinToString("\n")
+
+    private val TOOL_NAME = Regex("[a-z]+(?:_[a-z]+)+")
+
     /** Byte budget for [survivalKit]; see its KDoc for the split with the desktop bridge. */
     const val SURVIVAL_KIT_MAX_BYTES = 1_600
 }

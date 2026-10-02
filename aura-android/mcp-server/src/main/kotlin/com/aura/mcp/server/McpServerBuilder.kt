@@ -123,6 +123,8 @@ internal object McpServerBuilder {
          * Null = nothing to arm (unit tests, non-device hosts). See [DriverActivitySink].
          */
         onToolDispatched: (() -> Unit)? = null,
+        /** Tool groups to register; a group left out is absent from `tools/list`. See [Toolset]. */
+        toolsets: Set<Toolset> = Toolset.ALL,
     ): Server {
         // Perception cache: stores som_id → (center_x, center_y) mappings from
         // the latest perceive_screen call. Allows tap
@@ -177,7 +179,7 @@ internal object McpServerBuilder {
                     prompts = ServerCapabilities.Prompts(listChanged = false),
                 ),
             ),
-            instructions = AuraInstructions.survivalKit,
+            instructions = AuraInstructions.survivalKit(toolsets),
         )
 
         // GP1 — bind this server's sinks BEFORE any tool registration, so
@@ -261,7 +263,7 @@ internal object McpServerBuilder {
         // Browser plane — reading and driving web pages at DOM level instead of
         // screenshotting Chrome and tapping coordinates. Same open→read→act
         // vocabulary across every engine (see BrowserBridge).
-        browserBridge?.let { server.registerBrowserTools(it) }
+        if (Toolset.BROWSER in toolsets) browserBridge?.let { server.registerBrowserTools(it) }
 
         // Deep links — discover (list/resolve, READ) and fire (open, WRITE) the
         // express-lane Intent path that skips gesture navigation entirely.
@@ -273,8 +275,10 @@ internal object McpServerBuilder {
         // SMS compose, calendar, share, navigate). All deterministic, none
         // touch pixels; the routing ladder in AuraInstructions prefers them
         // over gesture navigation.
-        server.registerNotificationTools(notificationBridge)
-        server.registerMediaTools(mediaBridge)
+        if (Toolset.ASSISTANT in toolsets) {
+            server.registerNotificationTools(notificationBridge)
+            server.registerMediaTools(mediaBridge)
+        }
         server.registerSystemIntentTool(systemIntentBridge)
 
         // Contacts — on-device name→number resolution feeding system_intent
