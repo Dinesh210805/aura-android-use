@@ -13,6 +13,7 @@
  *   aura-mcp daemon             run the daemon in the foreground
  *   aura-mcp pair <pin>         pair this computer with the phone, then exit
  *   aura-mcp --pin=123456       pair, then run the stdio shim
+ *   aura-mcp skill install      install the optional aura-phone agent skill
  *
  * The phone must be on the same local network (same Wi-Fi, its hotspot, or a
  * private VPN such as Tailscale). --host=<address> skips discovery.
@@ -81,6 +82,9 @@ Usage:
   aura-mcp daemon              Run the shared daemon in the foreground
   aura-mcp pair <6-digit-pin>  Pair this computer with your phone, then exit
   aura-mcp --pin=<pin>         Pair, then run as MCP stdio server
+  aura-mcp skill install       Install the optional 'aura-phone' skill for Claude Code
+                               (--dir=<path> to install elsewhere)
+  aura-mcp skill path          Print where the skill file is, for other clients
 
 The phone and this computer must share a network: the same Wi-Fi, the
 phone's hotspot, or a private VPN such as Tailscale. Nothing is reachable
@@ -145,6 +149,26 @@ async function main() {
   }
   if (args.help) {
     process.stdout.write(HELP);
+    return;
+  }
+
+  // ── Skill: `aura-mcp skill install|path` ──────────────────────────
+  if (args._[0] === "skill") {
+    const { installSkill, SKILL_SOURCE } = await import("./skill.js");
+    if (args._[1] === "path") {
+      process.stdout.write(`${SKILL_SOURCE}
+`);
+      return;
+    }
+    if (args._[1] !== "install") fatal("Usage: aura-mcp skill install [--dir=<path>] | aura-mcp skill path");
+    const target = installSkill(args.dir ? { dir: args.dir } : undefined);
+    process.stdout.write(
+      `Installed the aura-phone skill at ${target}
+` +
+        `Claude Code picks it up in new sessions. For Cursor, Codex or others, add the same file as a ` +
+        `project rule or paste it into AGENTS.md: ${SKILL_SOURCE}
+`,
+    );
     return;
   }
 
