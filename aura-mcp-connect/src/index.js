@@ -112,7 +112,7 @@ phone connection:
 
   http://127.0.0.1:4816/mcp        (transport: streamable HTTP)
 
-See https://github.com/Dinesh210805/aura-releases
+See https://github.com/Dinesh210805/aura-android-use
 `;
 
 /** Logger for daemon mode: stderr + ~/.aura/daemon.log (the daemon is often

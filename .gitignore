@@ -55,6 +55,7 @@ Thumbs.db
 .claude/
 .agents/
 .superpowers/
+.serena/
 .playwright-mcp/
 graphify-out/
 .graphify_*

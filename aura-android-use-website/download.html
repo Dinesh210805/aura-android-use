@@ -70,7 +70,7 @@ summary::-webkit-details-marker{display:none}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:26px">
         <a href="{{ apk }}" rel="noopener" style="height:56px;padding:0 24px;border-radius:999px;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;gap:12px;font-size:17px;font-weight:500" style-hover="color:var(--paper);opacity:.86"><img src="logos/android.svg" alt="" width="22" height="22" style="display:block">Download the APK <span style="font-family:'Geist Mono',monospace;font-size:12.5px;opacity:.7">{{ sizeLabel }}</span></a>
-        <a href="https://github.com/Dinesh210805/aura-releases/releases" rel="noopener" style="height:56px;padding:0 22px;border-radius:999px;border:1px solid var(--ink);display:inline-flex;align-items:center;font-size:16px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)">All releases</a>
+        <a href="https://github.com/Dinesh210805/aura-android-use/releases" rel="noopener" style="height:56px;padding:0 22px;border-radius:999px;border:1px solid var(--ink);display:inline-flex;align-items:center;font-size:16px;font-weight:500" style-hover="background:var(--chip);color:var(--ink)">All releases</a>
       </div>
       <p style="margin:16px 0 0;font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink2)">Free · No account · No subscription</p>
     </div>
@@ -155,7 +155,7 @@ shasum -a 256 aura-{{ version }}.apk</pre></div>
 class Component extends DCLogic {
   state = { rel: null, copied: false };
   componentDidMount() {
-    fetch('https://api.github.com/repos/Dinesh210805/aura-releases/releases/latest').then(r => r.ok ? r.json() : null).then(j => {
+    fetch('https://api.github.com/repos/Dinesh210805/aura-android-use/releases/latest').then(r => r.ok ? r.json() : null).then(j => {
       if (!j) return;
       const a = (j.assets || []).find(x => /\.apk$/i.test(x.name));
       this.setState({ rel: { version: (j.tag_name || '').replace(/^v/, '') || null, size: a ? (a.size / 1048576).toFixed(1) : null, apk: a ? a.browser_download_url : null, date: j.published_at || null } });
@@ -169,7 +169,7 @@ class Component extends DCLogic {
     const url = location.host + '/download';
     return {
       version, sizeLabel: (rel.size || '159.8') + ' MB', dateLabel,
-      apk: rel.apk || 'https://github.com/Dinesh210805/aura-releases/releases/download/v1.0.479/aura-1.0.479.apk',
+      apk: rel.apk || 'https://github.com/Dinesh210805/aura-android-use/releases/latest',
       pageUrl: url, cUrl: this.state.copied ? 'Copied' : 'Copy',
       copyUrl: () => { const d = () => { this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 1600); }; navigator.clipboard ? navigator.clipboard.writeText('https://' + url).then(d, d) : d(); },
       toggleTheme: () => { const el = document.documentElement, t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; el.setAttribute('data-theme', t); try { localStorage.setItem('aura-theme', t); } catch (e) {} this.forceUpdate(); }
