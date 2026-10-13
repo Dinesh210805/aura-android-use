@@ -209,7 +209,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         private const val ACTION_SHOW_AND_LISTEN = "com.aura.SHOW_AND_LISTEN" // For wake word trigger
         private const val ACTION_MINIMIZE = "com.aura.MINIMIZE_OVERLAY"
         private const val ACTION_RESTORE = "com.aura.RESTORE_OVERLAY"
-        private const val ACTION_CANCEL_TASK = "com.aura.CANCEL_TASK"
+        const val ACTION_CANCEL_TASK = "com.aura.CANCEL_TASK"
 
         /**
          * Run a task exactly as if it had been typed into the overlay — pill, THINKING phase,

@@ -36,6 +36,7 @@ see `aura-mcp-connect/README.md`.
 ## Documentation rules
 - **Folder READMEs are the map.** Before editing a folder, read its `README.md` if it has one.
   Current ones, under `aura-android/app/src/main/java/com/aura/aura_ui/`: `presentation/`, `remote/`.
+  Also `scripts/bench/` (the AndroidWorld benchmark).
 - **Update the README in the same commit** when you add, remove, rename or repurpose anything it
   describes, then bump its **Last reviewed** date.
 - "Last reviewed" means *someone checked this doc against the code on that date*. Don't bump it

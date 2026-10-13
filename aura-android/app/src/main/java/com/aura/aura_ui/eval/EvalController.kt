@@ -94,7 +94,7 @@ object EvalController {
     // ── suite lifecycle ──────────────────────────────────────────────────────
 
     /**
-     * @param androidWorld seed this sitting with Google's 116-task AndroidWorld suite instead of
+     * @param androidWorld seed this sitting with the AndroidWorld tasks in `eval/androidworld.json` instead of
      *   AURA's own 30. The two are never mixed in one run: they are graded by different referees
      *   (a human vs. `is_successful(env)`), so one success rate over both would be two numbers
      *   averaged into a third that means nothing.

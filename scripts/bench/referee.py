@@ -52,7 +52,8 @@ sys.path.insert(
 
 # Reuses the recorder, adb wrapper and results root the web UI already debugged
 # rather than growing a second copy of each.
-from bench_server import RESULTS, SEED, Recorder, adb, _write  # noqa: E402
+from bench_server import ADB, RESULTS, SEED, SERIAL, Recorder, adb, _write  # noqa: E402
+import aura_androidworld  # noqa: E402
 
 PORT = 8778
 
@@ -64,9 +65,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 # AndroidWorld pins the device clock to 2023-10-15 for reproducibility, and TLS
 # on a device that believes it is 2023 rejects today's certificates - AURA's
-# model calls die before they are made. See aura_androidworld._shift_device_year
-# for the two costs of shifting it.
+# model calls die before they are made. See aura_androidworld.shift_device_year
+# for the costs of shifting it.
 DEVICE_YEAR = 2026
+AURA_PACKAGE = 'com.aura.aura_ui.feature.debug'
 
 _env = None
 _lock = threading.Lock()
@@ -80,26 +82,26 @@ def _boot():
   """Brings the emulator connection up once, and moves the clock into the present."""
   global _env
   from android_world.env import env_launcher
-  import aura_androidworld
 
   print('connecting to the emulator...')
+  aura_androidworld.shift_device_year(DEVICE_YEAR)
   _env = env_launcher.load_and_setup_env(
-      console_port=5554,
+      console_port=int(SERIAL.rsplit('-', 1)[1]),
       emulator_setup=False,
-      adb_path=os.path.expandvars(
-          r'%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe'),
+      adb_path=ADB,
   )
-  aura_androidworld._shift_device_year(DEVICE_YEAR)  # noqa: SLF001 - our module
+  aura_androidworld.restore_aura_a11y(ADB, SERIAL, AURA_PACKAGE)
   print('ready. Start a run from the phone: Settings -> Eval -> AndroidWorld.')
 
 
 def _make_task(name):
   """Instantiates one task with this run's seed, exactly as suite_utils would."""
-  from android_world import registry
   from android_world import suite_utils
-  reg = registry.TaskRegistry()
+  tasks = aura_androidworld.scored_tasks()
+  if name not in tasks:
+    raise KeyError('%s is not in the scored AndroidWorld suite' % name)
   suite = suite_utils.create_suite(
-      reg.get_registry(family=registry.TaskRegistry.ANDROID_WORLD_FAMILY),
+      tasks,
       n_task_combinations=1,
       seed=SEED,
       tasks=[name],
@@ -107,7 +109,7 @@ def _make_task(name):
   )
   instances = suite.get(name) or []
   if not instances:
-    raise KeyError('%s is not in the AndroidWorld suite' % name)
+    raise KeyError('%s produced no task instance' % name)
   return instances[0]
 
 
@@ -132,6 +134,9 @@ def prepare(name):
   # emulator has no IPv6 route, and every model call dies with ECONNREFUSED
   # having never tried IPv4.
   adb('shell', 'sysctl -w net.ipv6.conf.all.disable_ipv6=1')
+  # Re-asserted per task: bench_server's adapter builds its own env, and every
+  # env build switches AURA's accessibility service off again.
+  aura_androidworld.restore_aura_a11y(ADB, SERIAL, AURA_PACKAGE)
   task.initialize_task(_env)
   adb('logcat', '-c')
 
@@ -278,10 +283,13 @@ def _selfcheck():
   and a validator that throws must still produce a meta.json rather than
   swallowing the run.
   """
+  import subprocess
   import tempfile
 
-  global _current, _env
+  global _current, _env, adb
   _env = object()
+  # `adb logcat` blocks on "waiting for device" when no emulator is up.
+  adb = lambda *args: subprocess.CompletedProcess(args, 0, '', '')  # noqa: E731
 
   class FakeRec:
     def __init__(self, out):
@@ -357,7 +365,9 @@ def main():
     return _selfcheck()
   os.makedirs(RESULTS, exist_ok=True)
   _boot()
-  with Server(('0.0.0.0', PORT), Handler) as httpd:
+  # Loopback only: these routes wipe app data and drive adb, with no auth. The
+  # emulator's 10.0.2.2 is the host loopback, so the phone still reaches it.
+  with Server(('127.0.0.1', PORT), Handler) as httpd:
     print('referee on http://localhost:%d  (the phone reaches it at 10.0.2.2:%d)'
           % (PORT, PORT))
     try:

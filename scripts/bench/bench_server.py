@@ -41,16 +41,18 @@ sys.path.insert(
                     'android_world')
 )
 
+import aura_androidworld  # noqa: E402
 import report  # noqa: E402
 import theme  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 RESULTS = os.path.join(ROOT, 'bench-results')
-ADB = os.path.expandvars(r'%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe')
+ADB = aura_androidworld.find_adb()
 PORT = 8777
 SERIAL = 'emulator-5554'
 GOAL_TIMEOUT = 300
-SEED = 42
+# Upstream run.py's default, so task parameters match other published runs.
+SEED = 30
 
 # screenrecord refuses anything above 180s, so a long task is recorded as
 # consecutive chunks and stitched afterwards. Capping the task at 180s instead
@@ -69,9 +71,7 @@ def adb(*args):
 
 
 def all_tasks():
-  from android_world import registry
-  reg = registry.TaskRegistry()
-  return sorted(reg.get_registry(family=reg.ANDROID_WORLD_FAMILY))
+  return sorted(aura_androidworld.scored_tasks())
 
 
 def load_meta(task):
@@ -301,7 +301,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     if path.startswith('/results/'):
       rel = urllib.parse.unquote(path[len('/results/'):])
       full = os.path.normpath(os.path.join(RESULTS, rel))
-      if not full.startswith(RESULTS) or not os.path.isfile(full):
+      if not full.startswith(RESULTS + os.sep) or not os.path.isfile(full):
         return self._send(404, b'not found', 'text/plain')
       ctype = ('video/mp4' if full.endswith('.mp4')
                else 'text/plain; charset=utf-8')
