@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Change together: desktop.PAGE_TITLE finds this window by its title to film it. -->
+<title>AURA Bench</title>
+<link rel="stylesheet" href="/theme.css">
+<style>
+body { background: var(--canvas); }
+.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px;
+       padding: 14px 24px; background: var(--ink); color: var(--on-ink); }
+.top b { font-size: 17px; letter-spacing: -0.02em; font-weight: 640; }
+.top .chip { border: 1px solid var(--outline-ink); border-radius: 999px; padding: 3px 12px;
+             font-size: 13px; color: var(--on-ink-dim); background: none; cursor: pointer; }
+.top .chip:hover:not(:disabled) { color: var(--on-ink); border-color: var(--on-ink-dim); }
+.top .tally { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--on-ink-dim); }
+.top .tally .p { color: #7fd1a5; } .top .tally .f { color: #ff8b93; }
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+main { padding: 24px; min-width: 0; }
+.phone { position: sticky; top: 61px; height: calc(100vh - 61px); padding: 16px 20px 16px 4px;
+         display: flex; flex-direction: column; gap: 8px; }
+.phone .cap { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-dim);
+              text-transform: uppercase; letter-spacing: .08em; }
+.phone .cap i { width: 7px; height: 7px; border-radius: 50%; background: var(--pass); }
+.phone .frame { flex: 1; min-height: 0; aspect-ratio: 432 / 960; background: #000; border-radius: 28px;
+                padding: 8px; box-shadow: 0 1px 0 var(--outline), 0 18px 40px rgba(0,0,0,.18); }
+.phone img { width: 100%; height: 100%; object-fit: contain; border-radius: 21px; display: block; background: #111; }
+@media (max-width: 900px) { .shell { grid-template-columns: 1fr; } .phone { position: static; height: 70vh; } }
+.note { border: 1px solid var(--blood); background: var(--blood-soft); color: var(--blood);
+        border-radius: var(--r-small); padding: 12px 16px; margin-bottom: 16px; white-space: pre-wrap;
+        font-size: 14px; }
+h2 { font-size: 28px; letter-spacing: -0.03em; margin: 8px 0 4px; font-weight: 640; }
+.dim { color: var(--text-dim); }
+button { font: inherit; font-size: 14px; border-radius: 999px; padding: 7px 16px; cursor: pointer;
+         border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink);
+         transition: transform .08s ease, background .15s ease; }
+button:active:not(:disabled) { transform: scale(.97); }
+button.ghost { background: transparent; color: var(--text); border-color: var(--outline); }
+button.ghost:hover:not(:disabled) { border-color: var(--ink); }
+button.danger { background: var(--blood); border-color: var(--blood); }
+button:disabled { opacity: .4; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* pick */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 24px; }
+.card { text-align: left; background: var(--canvas-high); color: var(--text); border: 1px solid var(--outline);
+        border-radius: var(--r-card); padding: 28px; display: block; width: 100%; }
+.card:hover { border-color: var(--ink); }
+.card .k { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.card .t { font-size: 24px; font-weight: 640; letter-spacing: -0.02em; margin: 6px 0; }
+
+/* setup */
+.steps { margin-top: 20px; background: var(--canvas-high); border: 1px solid var(--outline);
+         border-radius: var(--r-card); overflow: hidden; }
+.step { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 14px 20px;
+        border-top: 1px solid var(--outline); }
+.step:first-child { border-top: 0; }
+.step .d { font-size: 13px; color: var(--text-dim); white-space: pre-wrap; }
+.step.failed .d { color: var(--blood); }
+.ic { font-family: var(--mono); }
+.ic.ok { color: var(--pass); } .ic.failed { color: var(--blood); }
+.spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--outline);
+        border-top-color: var(--ink); border-radius: 50%; animation: r .8s linear infinite; }
+@keyframes r { to { transform: rotate(360deg); } }
+
+/* tasks */
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 16px 0; }
+.bar .grow { flex: 1; }
+input, select { font: inherit; font-size: 14px; border: 1px solid var(--outline); background: var(--canvas-high);
+                border-radius: 999px; padding: 7px 14px; color: var(--text); }
+input.filter { min-width: 220px; }
+label.opt { font-size: 13px; color: var(--text-dim); display: inline-flex; gap: 6px; align-items: center; }
+table { width: 100%; border-collapse: collapse; background: var(--canvas-high);
+        border: 1px solid var(--outline); border-radius: var(--r-small); overflow: hidden; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+     color: var(--text-dim); padding: 10px 12px; border-bottom: 1px solid var(--outline); font-weight: 560; }
+td { padding: 9px 12px; border-top: 1px solid var(--outline); vertical-align: top; font-size: 14px; }
+tr:hover td { background: var(--canvas); }
+td.n, td.num { font-family: var(--mono); font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+td .name { font-weight: 560; }
+td .goal { display: block; font-size: 12.5px; color: var(--text-dim); max-width: 520px; }
+td.act { white-space: nowrap; text-align: right; }
+td.act button { padding: 4px 11px; font-size: 12.5px; }
+.pill { display: inline-block; border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 560; }
+.pill.pass { background: var(--pass-soft); color: var(--pass); }
+.pill.fail { background: var(--blood-soft); color: var(--blood); }
+.pill.none { background: var(--canvas); color: var(--text-dim); border: 1px solid var(--outline); }
+.pill.warn { background: #FFF4E0; color: #8A5300; }
+
+/* run */
+.run { display: grid; grid-template-columns: minmax(200px, 270px) 1fr; gap: 16px; align-items: start; }
+.queue { background: var(--canvas-high); border: 1px solid var(--outline); border-radius: var(--r-small);
+         max-height: calc(100vh - 120px); overflow: auto; position: sticky; top: 72px; }
+.q { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 7px 12px; font-size: 13px;
+     border-top: 1px solid var(--outline); }
+.q:first-child { border-top: 0; }
+.q.now { background: var(--ink); color: var(--on-ink); }
+.q .s { font-family: var(--mono); }
+.q .s.pass { color: var(--pass); } .q .s.fail { color: var(--blood); }
+.q.now .s { color: #7fd1a5; }
+.q .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live { background: var(--ink); color: var(--on-ink); border-radius: var(--r-card); padding: 22px 24px;
+        min-height: calc(100vh - 120px); display: flex; flex-direction: column; }
+.live .h { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.live .h .tn { font-size: 22px; font-weight: 640; letter-spacing: -0.02em; }
+.live .h .tm { margin-left: auto; font-family: var(--mono); color: var(--on-ink-dim); }
+.live .goalx { color: var(--on-ink-dim); margin: 6px 0 12px; font-size: 14px; }
+.track { height: 3px; background: var(--outline-ink); border-radius: 3px; overflow: hidden; }
+.track i { display: block; height: 100%; background: var(--on-ink); transition: width 1s linear; }
+.track.late i { background: #ff8b93; }
+.ev { flex: 1; overflow: auto; margin-top: 14px; font-family: var(--mono); font-size: 13px;
+      max-height: calc(100vh - 300px); }
+.e { display: grid; grid-template-columns: 52px 18px 1fr; gap: 6px; padding: 3px 0; }
+.e .t { color: var(--on-ink-dim); }
+.e.tool .x { color: var(--on-ink); font-weight: 600; }
+.e.ok .x, .e.out .x, .e.log .x { color: var(--on-ink-dim); }
+.e.err .x { color: #ff8b93; }
+.e.say .x { color: #f3e3b1; font-family: var(--sans); font-size: 14px; }
+.e.done .x { color: #7fd1a5; }
+.live .ctl { display: flex; gap: 10px; margin-top: 14px; }
+.live .ctl button { background: transparent; border-color: var(--outline-ink); color: var(--on-ink); }
+.live .ctl button.danger { background: var(--blood); border-color: var(--blood); }
+
+dialog { border: 0; border-radius: var(--r-card); padding: 0; width: min(1100px, 94vw); background: var(--ink); color: var(--on-ink); }
+dialog::backdrop { background: rgba(0,0,0,.6); }
+dialog .dh { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; }
+dialog video { width: 100%; max-height: 78vh; display: block; background: #000; }
+dialog pre { margin: 0; padding: 18px; max-height: 76vh; overflow: auto; font-size: 12.5px; white-space: pre-wrap; }
+@media (max-width: 760px) { .run { grid-template-columns: 1fr; } .queue { position: static; max-height: 30vh; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <b>AURA Bench</b>
+  <button class="chip" id="target" title="Change what you are benchmarking">choose a target</button>
+  <span class="tally" id="tally"></span>
+</div>
+<div class="shell">
+  <main id="app"><p class="dim">Loading…</p></main>
+  <aside class="phone" aria-label="Phone screen, live">
+    <div class="cap"><i></i>Phone · live</div>
+    <div class="frame"><img src="/screen.mjpg" alt="The emulator's screen, live"></div>
+  </aside>
+</div>
+<dialog id="viewer"><div class="dh"><span id="vt"></span><button class="ghost" onclick="viewer.close()" style="color:var(--on-ink)">Close</button></div><div id="vb"></div></dialog>
+<script>
+'use strict';
+let S = null, lastKey = '', filter = '', picking = false;
+const selected = new Set();
+const $ = id => document.getElementById(id);
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k.nodeType ? k : String(k));
+  return n;
+}
+async function post(path, body) {
+  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify(body || {})});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) alert(d.error || 'Request failed');
+  lastKey = ''; tick();
+  return d;
+}
+const fmtS = s => s == null ? '–' : s >= 60 ? Math.floor(s / 60) + 'm ' + String(Math.round(s % 60)).padStart(2, '0') + 's' : Math.round(s) + 's';
+const fmt$ = c => c == null ? '–' : '$' + c.toFixed(c < 1 ? 3 : 2);
+
+function verdict(t) {
+  if (t.stopped) return el('span', {class: 'pill warn'}, 'stopped');
+  if (t.success === true) return el('span', {class: 'pill pass'}, 'pass');
+  if (t.success === false) return el('span', {class: 'pill fail', title: t.timed_out ? 'ran out of time' : (t.validator ? 'validator passed, but the agent did not finish' : '')}, t.timed_out ? 'timeout' : 'fail');
+  return el('span', {class: 'pill none'}, 'not run');
+}
+
+/* ---- views ---------------------------------------------------------- */
+function viewPick() {
+  return [el('h2', {}, 'What are we benchmarking?'),
+    el('p', {class: 'dim'}, 'The suite starts the emulator and sets everything up for the one you pick.'),
+    el('div', {class: 'cards'}, Object.entries(S.targets).map(([k, t], i) =>
+      el('button', {class: 'card', onclick: () => { picking = false; post('/api/target', {target: k}); }},
+        el('div', {class: 'k'}, String(i + 1).padStart(2, '0')),
+        el('div', {class: 't'}, t.label), el('div', {class: 'dim'}, t.sub))))];
+}
+
+function viewSetup() {
+  const failed = S.setup.some(s => s.state === 'failed');
+  return [el('h2', {}, 'Getting ready'),
+    el('p', {class: 'dim'}, failed ? 'One step needs you. Fix it, then retry.' : 'Fixing what it can by itself. Pairing happens on its own too.'),
+    el('div', {class: 'steps'}, S.setup.map(s => el('div', {class: 'step ' + s.state},
+      s.state === 'running' ? el('span', {class: 'spin'}) : el('span', {class: 'ic ' + s.state}, s.state === 'ok' ? '✔' : '✖'),
+      el('div', {}, el('div', {}, s.step), s.detail ? el('div', {class: 'd'}, s.detail) : null)))),
+    failed && !S.setup_busy ? el('div', {class: 'bar'}, el('button', {onclick: () => post('/api/setup')}, 'Retry setup')) : null];
+}
+
+function pickTasks(kind) {
+  const all = S.tasks;
+  if (kind === 'selected') return all.filter(t => selected.has(t.task)).map(t => t.task);
+  if (kind === 'failed') return all.filter(t => t.success === false).map(t => t.task);
+  if (kind === 'resume') return all.filter(t => t.success == null).map(t => t.task);
+  return all.map(t => t.task);
+}
+function start(kind) {
+  const tasks = pickTasks(kind);
+  if (!tasks.length) return alert('Nothing to run for that choice.');
+  if (tasks.length > 3) {
+    const ran = S.tasks.filter(t => t.run_time);
+    const costs = ran.filter(t => t.cost != null);
+    const avgT = ran.reduce((a, t) => a + t.run_time, 0) / (ran.length || 1);
+    const avgC = costs.reduce((a, t) => a + t.cost, 0) / (costs.length || 1);
+    const est = ran.length ? '\n\nEstimate from past runs: about ' + fmtS(avgT * tasks.length) +
+      (costs.length ? ' and ' + fmt$(avgC * tasks.length) : '') + '.' : '\n\nNo past runs to estimate time or cost from yet.';
+    if (!confirm('Run ' + tasks.length + ' tasks?' + est)) return;
+  }
+  post('/api/run', {tasks});
+}
+
+function options() {
+  const o = S.opts, kids = [];
+  if (S.target === 'mcp') kids.push(el('label', {class: 'opt'}, 'Model',
+    el('select', {onchange: e => post('/api/options', {model: e.target.value})},
+      S.models.map(m => el('option', {value: m, selected: m === o.model}, m)))));
+  kids.push(el('label', {class: 'opt'}, 'Recording',
+    el('select', {onchange: e => post('/api/options', {record: e.target.value})},
+      [['page', 'This page (with phone)'], ['phone', 'Phone only'], ['off', 'Off']]
+        .filter(([v]) => v !== 'page' || S.desktop_ok)
+        .map(([v, l]) => el('option', {value: v, selected: v === o.record}, l)))));
+  kids.push(el('label', {class: 'opt'}, 'Time limit',
+    el('input', {type: 'number', min: 30, max: 3600, step: 30, style: 'width:90px', value: S.timeout,
+                 onchange: e => post('/api/options', {timeout: e.target.value})}), 's'));
+  return kids;
+}
+
+function viewTasks() {
+  const done = S.tasks.filter(t => t.success === true || t.success === false);
+  const pass = done.filter(t => t.success).length;
+  const q = filter.toLowerCase();
+  const rows = S.tasks.filter(t => !q || t.task.toLowerCase().includes(q) || t.goal.toLowerCase().includes(q));
+  const allShown = rows.length && rows.every(t => selected.has(t.task));
+  return [
+    el('h2', {}, S.tasks.length + ' tasks'),
+    el('p', {class: 'dim'}, done.length + ' run · ' + pass + ' passed' + (done.length ? ' (' + Math.round(100 * pass / done.length) + '%)' : '') +
+      ' · seed 30 · each verdict is AndroidWorld\'s own check of the phone'),
+    el('div', {class: 'bar'},
+      el('input', {class: 'filter', id: 'filter', placeholder: 'Filter tasks or goals', value: filter,
+                   oninput: e => { filter = e.target.value; lastKey = ''; render(true); }}),
+      el('span', {class: 'grow'}), options()),
+    el('div', {class: 'bar'},
+      el('button', {onclick: () => start('selected'), disabled: !selected.size}, 'Run selected (' + selected.size + ')'),
+      el('button', {class: 'ghost', onclick: () => start('all')}, 'Run all'),
+      el('button', {class: 'ghost', onclick: () => start('failed')}, 'Run failed again'),
+      el('button', {class: 'ghost', onclick: () => start('resume')}, 'Resume (not run yet)'),
+      el('span', {class: 'grow'}),
+      el('button', {class: 'ghost', onclick: async () => { const d = await post('/api/report'); if (d.path) alert('Report written to\n' + d.path); }}, 'Build report')),
+    el('table', {},
+      el('thead', {}, el('tr', {},
+        el('th', {}, el('input', {type: 'checkbox', checked: allShown, 'aria-label': 'Select all shown',
+          onchange: e => { rows.forEach(t => e.target.checked ? selected.add(t.task) : selected.delete(t.task)); render(true); }})),
+        el('th', {}, '#'), el('th', {}, 'Task'), el('th', {}, 'Result'), el('th', {}, 'Time'),
+        el('th', {}, S.target === 'mcp' ? 'Cost' : ''), el('th', {}))),
+      el('tbody', {}, rows.map(t => el('tr', {},
+        el('td', {}, el('input', {type: 'checkbox', checked: selected.has(t.task), 'aria-label': 'Select ' + t.task,
+          onchange: e => { e.target.checked ? selected.add(t.task) : selected.delete(t.task); render(true); }})),
+        el('td', {class: 'n'}, String(t.n).padStart(2, '0')),
+        el('td', {}, el('span', {class: 'name'}, t.task), t.goal ? el('span', {class: 'goal'}, t.goal) : null),
+        el('td', {}, verdict(t), t.blind ? el('span', {class: 'pill warn', title: 'no screenshots: the agent worked from the accessibility tree alone'}, ' blind') : null),
+        el('td', {class: 'num'}, fmtS(t.run_time)),
+        el('td', {class: 'num'}, S.target === 'mcp' ? fmt$(t.cost) : ''),
+        el('td', {class: 'act'},
+          t.videos.length ? el('button', {class: 'ghost', onclick: () => showVideo(t)}, 'Video') : null, ' ',
+          t.run_time != null ? el('button', {class: 'ghost', onclick: () => showLog(t)}, 'Log') : null, ' ',
+          el('button', {onclick: () => post('/api/run', {tasks: [t.task]})}, t.success == null ? 'Run' : 'Re-run'))))))];
+}
+
+function viewRun() {
+  const c = S.current, byName = Object.fromEntries(S.tasks.map(t => [t.task, t]));
+  const runList = S.run_tasks.length ? S.run_tasks : S.queue;
+  const doneCount = runList.length - S.queue.length;
+  const queue = el('div', {class: 'queue'}, runList.map(name => {
+    const t = byName[name] || {}, now = c && c.task === name, waiting = S.queue.includes(name) && !now;
+    const mark = now ? '▶' : waiting ? '·' : t.stopped ? '■' : t.success ? '✔' : t.success === false ? '✖' : '·';
+    return el('div', {class: 'q' + (now ? ' now' : '')},
+      el('span', {class: 's ' + (now || waiting ? '' : t.success ? 'pass' : t.success === false ? 'fail' : '')}, mark),
+      el('span', {class: 'nm', title: name}, name));
+  }));
+  if (!c) return el('div', {class: 'run'}, queue, el('div', {class: 'live'}, el('div', {class: 'goalx'}, 'Preparing the next task…')));
+  const pct = Math.min(100, 100 * c.elapsed / c.timeout);
+  const ev = el('div', {class: 'ev', id: 'ev'}, c.events.map(e => el('div', {class: 'e ' + e.kind},
+    el('span', {class: 't'}, fmtS(e.t)),
+    el('span', {}, {tool: '→', ok: '✔', err: '✖', say: '💭', done: '■', log: '·', out: '·', info: 'ℹ'}[e.kind] || '·'),
+    el('span', {class: 'x'}, e.text))));
+  return el('div', {class: 'run'}, queue, el('div', {class: 'live'},
+    el('div', {class: 'h'}, el('span', {class: 'tn'}, c.task),
+      el('span', {class: 'dim', style: 'color:var(--on-ink-dim)'}, 'task ' + (doneCount + 1) + ' of ' + runList.length),
+      el('span', {class: 'tm'}, fmtS(c.elapsed) + ' / ' + fmtS(c.timeout))),
+    el('div', {class: 'goalx'}, c.goal || ''),
+    el('div', {class: 'track' + (pct > 85 ? ' late' : '')}, el('i', {style: 'width:' + pct + '%'})),
+    ev,
+    el('div', {class: 'ctl'},
+      el('button', {onclick: () => post('/api/stop', {now: false})}, 'Stop after this task'),
+      el('button', {class: 'danger', onclick: () => confirm('Stop this task now? It is recorded as stopped, not failed.') && post('/api/stop', {now: true})}, 'Stop now'))));
+}
+
+/* ---- viewer --------------------------------------------------------- */
+function showVideo(t) {
+  $('vt').textContent = t.task;
+  $('vb').replaceChildren(el('video', {src: '/results/' + encodeURIComponent(t.task) + '/' + t.videos[0], controls: true, autoplay: true}));
+  viewer.showModal();
+}
+async function showLog(t) {
+  $('vt').textContent = t.task + ' · log';
+  const r = await fetch('/results/' + encodeURIComponent(t.task) + '/live.log');
+  const text = r.ok ? await r.text() : 'No log for this run.';
+  $('vb').replaceChildren(el('pre', {}, (t.error ? 'ERROR\n' + t.error + '\n\n' : '') + text));
+  viewer.showModal();
+}
+viewer.addEventListener('close', () => $('vb').replaceChildren());
+
+/* ---- loop ----------------------------------------------------------- */
+function render(force) {
+  const key = JSON.stringify(S);
+  if (!force && key === lastKey) return;
+  lastKey = key;
+  const ev = $('ev'), stick = !ev || ev.scrollTop + ev.clientHeight >= ev.scrollHeight - 30;
+  const focusFilter = document.activeElement && document.activeElement.id === 'filter';
+  const caret = focusFilter ? document.activeElement.selectionStart : 0;
+
+  const t = $('target');
+  t.textContent = S.target ? S.targets[S.target].label + ' ▾' : 'choose a target';
+  t.disabled = !!(S.current || S.queue.length || S.setup_busy);
+  t.onclick = () => { picking = true; render(true); };
+  const s = S.session, ran = s.passed + s.failed;
+  $('tally').replaceChildren(...(ran || s.stopped ? [el('span', {class: 'p'}, '✔' + s.passed), ' ',
+    el('span', {class: 'f'}, '✖' + s.failed), ' · this session', S.target === 'mcp' ? ' · ' + fmt$(s.cost) : ''] : []));
+
+  const view = (!S.target || picking) ? viewPick() : !S.ready ? viewSetup()
+    : (S.current || S.queue.length) ? viewRun() : viewTasks();
+  $('app').replaceChildren(...[S.message ? el('div', {class: 'note'}, S.message) : null, view]
+    .flat().filter(n => n != null));
+  const ev2 = $('ev');
+  if (ev2 && stick) ev2.scrollTop = ev2.scrollHeight;
+  if (focusFilter) { const f = $('filter'); f.focus(); f.setSelectionRange(caret, caret); }
+}
+async function tick() {
+  try {
+    const next = await (await fetch('/api/state')).json();
+    S = next;
+    render(false);
+  } catch (e) { /* the server is restarting; the next tick retries */ }
+}
+tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>
