@@ -1,5 +1,6 @@
 package com.aura.mcp.bridge
 
+import com.aura.mcp.server.Toolset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -112,5 +113,18 @@ class TrustedClientsStoreTest {
         val s = store()
         s.approve("abcdefgh-full-secret-token", "Bridge", null, null, nowMillis = 1L)
         assertEquals("abcdefgh", s.clients.value.single().tokenId)
+    }
+
+    @Test
+    fun `tool groups default for old entries, persist when set, and survive an unknown name`() {
+        persisted = """[{"token":"t1","label":"PC"}]"""
+        val s = store()
+        assertEquals(Toolset.DEFAULT_REMOTE, s.clients.value.single().enabledToolsets)
+
+        s.setToolsets("t1", setOf(Toolset.BROWSER))
+        assertEquals(setOf(Toolset.CORE, Toolset.BROWSER), store().clients.value.single().enabledToolsets)
+
+        persisted = """[{"token":"t1","toolsets":["CORE","FUTURE_GROUP"]}]"""
+        assertEquals(setOf(Toolset.CORE), store().clients.value.single().enabledToolsets)
     }
 }

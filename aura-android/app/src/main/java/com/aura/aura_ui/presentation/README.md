@@ -65,7 +65,7 @@ presentation/
 | `settings` | `screens/settings/MonoSettingsScreen.kt` |
 | `settings/permissions` | `screens/settings/PermissionsHealthScreen.kt` |
 | `settings/mcp_center` | `McpCenterScreen.kt`: the phone-as-MCP-server controls |
-| `settings/trusted_devices` | `TrustedDevicesScreen.kt`: computers allowed to drive the phone |
+| `settings/trusted_devices` | `TrustedDevicesScreen.kt`: computers allowed to drive the phone, and the optional tool groups (`Toolset`) each one gets |
 | `settings/restricted_apps` | `RestrictedAppsScreen.kt`: apps AURA must stay out of |
 | `settings/tavily` | `TavilyKeyScreen.kt`: key for the `web_search` tool |
 | `settings/privacy`, `/terms`, `/licenses` | `screens/legal/LegalScreens.kt`; text in `LegalCopy.kt` |

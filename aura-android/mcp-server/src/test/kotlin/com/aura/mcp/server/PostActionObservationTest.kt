@@ -83,8 +83,7 @@ class PostActionObservationTest {
     fun `observer returns null for tools that do not change the screen`() = runBlocking<Unit> {
         val clock = FakeClock()
         val observer = PostActionObservation.observer(ScriptedBridge(clock), config, clock::now)
-        assertNull(observer.observe("volume_up"))
-        assertNull(observer.observe("mute"))
+        assertNull(observer.observe("volume"))
         assertNull(observer.observe("perceive_screen"))
         assertNull(observer.observe("end_session"))
     }

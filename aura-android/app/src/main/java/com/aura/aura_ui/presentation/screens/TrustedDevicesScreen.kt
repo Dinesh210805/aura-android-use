@@ -20,6 +20,7 @@ import com.aura.aura_ui.mcp.AppTrustedClients
 import com.aura.aura_ui.presentation.components.AuraScreenScaffold
 import com.aura.aura_ui.ui.theme.Capsule
 import com.aura.mcp.bridge.TrustedClient
+import com.aura.mcp.server.Toolset
 import java.text.DateFormat
 import java.util.Date
 
@@ -28,6 +29,9 @@ import java.util.Date
  * over MCP/WebRTC. Each row shows self-declared name/host/OS plus first- and
  * last-connected times; the user can revoke one (its next connect re-prompts)
  * or revoke all. Trust keys off the token; the metadata here is display-only.
+ *
+ * Each row also picks the optional [Toolset]s that computer is given; core is always on.
+ * - Contract: a change applies from the computer's next connect; the live session keeps its tools.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,6 +92,7 @@ fun TrustedDevicesScreen(
                             TrustedDeviceRow(
                                 client = client,
                                 onRevoke = { store.revoke(client.token) },
+                                onToolsets = { store.setToolsets(client.token, it) },
                                 cs = cs,
                             )
                             if (i < clients.lastIndex) {
@@ -139,6 +144,7 @@ fun TrustedDevicesScreen(
 private fun TrustedDeviceRow(
     client: TrustedClient,
     onRevoke: () -> Unit,
+    onToolsets: (Set<Toolset>) -> Unit,
     cs: com.aura.aura_ui.ui.theme.CapsuleScheme,
 ) {
     var confirm by remember(client.token) { mutableStateOf(false) }
@@ -184,6 +190,14 @@ private fun TrustedDeviceRow(
                 fontFamily = FontFamily.Monospace,
                 color = cs.sub,
             )
+            val enabled = client.enabledToolsets
+            ToolsetSwitch("Notifications & media", Toolset.ASSISTANT, enabled, onToolsets)
+            ToolsetSwitch("Browser", Toolset.BROWSER, enabled, onToolsets)
+            Text(
+                "Tool changes apply the next time it connects.",
+                style = MaterialTheme.typography.labelSmall,
+                color = cs.sub,
+            )
         }
         TextButton(
             onClick = { confirm = true },
@@ -211,6 +225,26 @@ private fun TrustedDeviceRow(
             dismissButton = {
                 TextButton(onClick = { confirm = false }) { Text("Cancel") }
             },
+        )
+    }
+}
+
+/** One optional tool group for a computer, as a labelled switch. */
+@Composable
+private fun ToolsetSwitch(
+    label: String,
+    toolset: Toolset,
+    enabled: Set<Toolset>,
+    onToolsets: (Set<Toolset>) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+        Switch(
+            checked = toolset in enabled,
+            onCheckedChange = { on -> onToolsets(if (on) enabled + toolset else enabled - toolset) },
         )
     }
 }

@@ -131,6 +131,30 @@ stop advertising that route.
 | `--enable-adb` / `AURA_MCP_ENABLE_ADB=1` | Arm the host-side `aura-adb` tool (off by default). See below. |
 | `AURA_ADB_SERIAL=<serial>` | Which device `aura-adb` targets when several are attached. |
 | `AURA_DEBUG=1` | Print full stack traces instead of short error messages. |
+| `aura-mcp skill install` | Install the optional `aura-phone` skill for Claude Code. `--dir=<path>` installs elsewhere. |
+| `aura-mcp skill path` | Print where the skill file is, to use it with other clients. |
+
+## The optional `aura-phone` skill
+
+The phone's MCP server works on its own: it enforces its rules on the phone (a blind tap, a
+repeated no-op or an unverified "done" is refused with the reason) and every tool reply says what
+to do next. The skill is a bonus: a short guide an agent can read before its first call, with the
+routing table (system intents, deep links, notifications, browser), how to look and act by
+`som_id`, and when to stop and ask.
+
+```bash
+aura-mcp skill install    # copies it to ~/.claude/skills/aura-phone/SKILL.md
+```
+
+Claude Code loads it in new sessions when a task involves the phone. For Cursor, Codex or other
+clients, `aura-mcp skill path` prints the file; add it as a project rule or paste it into
+`AGENTS.md`. Re-run the install after upgrading this package to get the current tool names.
+
+The phone decides which tools a computer sees: core tools always, plus **Notifications & media**
+and **Browser** per computer in AURA → Settings → Trusted Devices (applies on the next connect).
+Browser is off by default, because some clients cap their tool list (Cursor keeps about 40 across
+every server) and drop the rest silently. Every agent on one computer shares one phone session, so
+they all get the same tools.
 
 ## Pairing your phone to this machine (adb)
 
@@ -249,16 +273,21 @@ curl http://127.0.0.1:4816/health     # → {"ok":true, …, "adbToolEnabled":fa
 
 ### What connecting agents are told
 
-When armed, the daemon appends a guidance section to the handshake
-`instructions` every MCP client receives (the phone's own instructions stay
-first and unedited — it owns the safety doctrine). That section tells agents to
-treat adb as a **second, independent channel to the device**, not just an
-install/logcat utility: fall back to it when accessibility gestures mis-target
-or a Flutter/RN/WebView surface exposes no usable tree, use `dumpsys`/`logcat`
-to diagnose a failure instead of retrying blindly, and use `am force-stop` /
-`am start` to reach a known state cheaply.
+When armed, the daemon appends one short paragraph (at most 400 bytes) to the
+handshake `instructions` every MCP client receives. The phone's own instructions
+stay first and unedited, and are capped at 1,600 bytes, so the total stays under
+the ~2 KB that Claude Code keeps — a longer note would be cut off from the end,
+safety rule first. The paragraph says adb exists, that it bypasses the device's
+safety checks, and to read the tool's description before using it.
 
-It also states one hard rule. `adb shell input tap` reaches the same pixels
+The detail lives in the `aura-adb` tool description, which agents load right
+before calling it: treat adb as a **second, independent channel to the device**,
+fall back to it when accessibility gestures mis-target or a Flutter/RN/WebView
+surface exposes no usable tree, use `dumpsys`/`logcat` to diagnose a failure
+instead of retrying blindly, and use `am force-stop` / `am start` to reach a
+known state cheaply.
+
+Both places state one hard rule. `adb shell input tap` reaches the same pixels
 **without passing through the on-device MCP server**, so none of the device-side
 safety checks fire. Anything the phone refused with `policy_blocked` (banking,
 payments, authenticator apps, card numbers, PINs, passwords) must stay refused —

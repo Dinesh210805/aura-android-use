@@ -104,24 +104,31 @@ class StatusNarrationHook(
                 },
             )
 
-            "tap", "double_tap" -> {
+            "tap" -> {
                 val what = resultField(result, "label")?.take(MAX_LABEL)
-                Beat(Kind.ACT, (what?.let { "Tapped $it" } ?: "Tapped") + landed)
+                val beat = if (stringArg(args, "style") == "long") {
+                    what?.let { "Held $it" } ?: "Pressed and held"
+                } else {
+                    what?.let { "Tapped $it" } ?: "Tapped"
+                }
+                Beat(Kind.ACT, beat + landed)
             }
-            "long_press" -> Beat(
-                Kind.ACT,
-                (resultField(result, "label")?.let { "Held ${it.take(MAX_LABEL)}" } ?: "Pressed and held") + landed,
-            )
             "tap_text" -> Beat(Kind.ACT, (stringArg(args, "text")?.let { "Tapped ${quoted(it, MAX_LABEL)}" } ?: "Tapped") + landed)
             "type_text" -> Beat(Kind.TYPE, stringArg(args, "text")?.let { "Typed ${quoted(it, MAX_TYPED)}" } ?: "Typed it in")
             "press_enter" -> Beat(Kind.ACT, "Pressed enter$landed")
-            "press_back" -> Beat(Kind.NAV, app?.let { "Back to $it" } ?: "Went back")
-            "press_home" -> Beat(Kind.NAV, "Home screen")
-            "scroll_down", "scroll_left", "scroll_right", "swipe" -> Beat(
-                Kind.ACT,
-                if (changed == false) "Scrolled — that's the end of it" else top?.let { "Scrolled · $it" } ?: "Scrolled",
-            )
-            "scroll_up" -> Beat(Kind.ACT, if (changed == false) "Already at the top" else "Scrolled back up")
+            "press_key" -> when (stringArg(args, "key")) {
+                "back" -> Beat(Kind.NAV, app?.let { "Back to $it" } ?: "Went back")
+                "home" -> Beat(Kind.NAV, "Home screen")
+                else -> Beat(Kind.NAV, "Recent apps")
+            }
+            "scroll", "swipe" -> when {
+                toolName == "scroll" && stringArg(args, "direction") == "up" ->
+                    Beat(Kind.ACT, if (changed == false) "Already at the top" else "Scrolled back up")
+                else -> Beat(
+                    Kind.ACT,
+                    if (changed == false) "Scrolled — that's the end of it" else top?.let { "Scrolled · $it" } ?: "Scrolled",
+                )
+            }
 
             "launch_app" -> Beat(Kind.NAV, (stringArg(args, "app_name") ?: app)?.let { "Opened $it" } ?: "Opened the app")
             "open_deeplink" -> Beat(Kind.NAV, app?.let { "Jumped straight into $it" } ?: "Followed a shortcut link")

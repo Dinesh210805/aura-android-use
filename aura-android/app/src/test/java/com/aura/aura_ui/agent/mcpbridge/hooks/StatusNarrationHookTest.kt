@@ -64,7 +64,7 @@ class StatusNarrationHookTest {
     }
 
     @Test fun `a scroll that moved nothing says it reached the end`() {
-        assertEquals("Scrolled — that's the end of it", hook.narrate("scroll_down", args(), observed(changed = false)).text)
+        assertEquals("Scrolled — that's the end of it", hook.narrate("scroll", args("direction" to "down"), observed(changed = false)).text)
     }
 
     // ── what kind of moment it is ──────────────────────────────────────
@@ -98,7 +98,7 @@ class StatusNarrationHookTest {
     @Test fun `the published line carries the headline and lands in the log`() {
         var published: Beat? = null
         val withPlan = StatusNarrationHook(headline = { "Step 1 of 2 · Find the chat" }, publish = { published = it })
-        kotlinx.coroutines.runBlocking { withPlan.onPostTool("press_home", args(), empty, HookContext { true }) }
+        kotlinx.coroutines.runBlocking { withPlan.onPostTool("press_key", args("key" to "home"), empty, HookContext { true }) }
         assertEquals(Beat(Kind.NAV, "Home screen", "Step 1 of 2 · Find the chat"), published)
     }
 

@@ -52,13 +52,13 @@ class LearningsDispatchTest {
     @Test
     fun `stream forwards call details to the gateway`() {
         val gateway = RecordingGateway()
-        LearningsDispatch.stream(gateway, "echo", null, ok(), failed = false, clientLabel = "Claude Code")
-        assertEquals(Triple("echo", false, "Claude Code"), gateway.executed.single())
+        LearningsDispatch.stream(gateway, "read_screen", null, ok(), failed = false, clientLabel = "Claude Code")
+        assertEquals(Triple("read_screen", false, "Claude Code"), gateway.executed.single())
     }
 
     @Test
     fun `a throwing gateway never breaks streaming`() {
-        LearningsDispatch.stream(ThrowingGateway(), "echo", null, ok(), failed = false, clientLabel = null)
+        LearningsDispatch.stream(ThrowingGateway(), "read_screen", null, ok(), failed = false, clientLabel = null)
         // no exception = pass
     }
 

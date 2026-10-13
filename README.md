@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Dinesh210805/aura-releases/releases/latest"><img src="https://img.shields.io/github/v/release/Dinesh210805/aura-releases?label=APK&style=flat-square&color=0A0A0A&logo=android&logoColor=white" alt="Latest APK"/></a>
-  <a href="https://github.com/Dinesh210805/aura-releases/releases"><img src="https://img.shields.io/github/downloads/Dinesh210805/aura-releases/total?label=downloads&style=flat-square&color=0A0A0A" alt="Downloads"/></a>
+  <a href="https://github.com/Dinesh210805/aura-android-use/releases/latest"><img src="https://img.shields.io/github/v/release/Dinesh210805/aura-android-use?label=APK&style=flat-square&color=0A0A0A&logo=android&logoColor=white" alt="Latest APK"/></a>
+  <a href="https://github.com/Dinesh210805/aura-android-use/releases"><img src="https://img.shields.io/github/downloads/Dinesh210805/aura-android-use/total?label=downloads&style=flat-square&color=0A0A0A" alt="Downloads"/></a>
   <a href="https://www.npmjs.com/package/aura-mcp-connect"><img src="https://img.shields.io/npm/v/aura-mcp-connect?label=aura-mcp-connect&style=flat-square&color=0A0A0A&logo=npm&logoColor=white" alt="npm"/></a>
   <a href="https://aura-android-use.vercel.app"><img src="https://img.shields.io/github/deployments/Dinesh210805/aura-android-use/Production?label=website&style=flat-square&logo=vercel&logoColor=white" alt="Website"/></a>
   <a href="https://discord.com/invite/H66ws9zMPF"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"/></a>
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Dinesh210805/aura-releases/releases/latest"><b>Download the APK</b></a>
+  <a href="https://github.com/Dinesh210805/aura-android-use/releases/latest"><b>Download the APK</b></a>
   &nbsp;·&nbsp;
   <a href="https://aura-android-use.vercel.app"><b>Website</b></a>
   &nbsp;·&nbsp;
@@ -137,7 +137,7 @@ OpenAI-compatible endpoint, with your own API key. Switch whenever you like.
 
 ### 1. Get the app on your phone
 
-[Download the latest APK](https://github.com/Dinesh210805/aura-releases/releases/latest) and install
+[Download the latest APK](https://github.com/Dinesh210805/aura-android-use/releases/latest) and install
 it, or [build it from source](#build-from-source). You need Android 8.0 or newer.
 
 The first-run setup walks you through signing in, the permissions AURA needs (accessibility,
@@ -187,14 +187,14 @@ Away from home? Put both devices on [Tailscale](https://tailscale.com) and pair 
 | Group | Tools |
 |---|---|
 | **See** | `perceive_screen` · `read_screen` · `get_screenshot` · `watch_device_events` · `get_device_status` |
-| **Touch** | `tap` · `double_tap` · `long_press` · `swipe` · `scroll_to` · `type_text` · `press_enter` |
-| **Move around** | `press_home` · `press_back` · `open_recent_apps` · `launch_app` · `lookup_app` |
+| **Touch** | `tap` (single, double, long) · `swipe` · `scroll` · `type_text` · `press_enter` |
+| **Move around** | `press_key` (back, home, recents) · `launch_app` · `lookup_app` |
 | **Shortcuts** | `list_app_deeplinks` · `resolve_deeplink` · `open_deeplink` · `system_intent` (call, SMS, alarm, timer, calendar, share, navigate) |
 | **Browser** | `browser_open` · `browser_read` · `browser_act` · `browser_extract` · `browser_find` · `browser_wait` · `browser_tabs` · `browser_upload` · `browser_handoff` · `browser_screenshot` · `browser_close` |
-| **Notifications & media** | `read_notifications` · `notification_action` · `dismiss_notification` · `get_media_sessions` · `media_control` · volume keys |
+| **Notifications & media** | `read_notifications` · `notification_action` · `dismiss_notification` · `get_media_sessions` · `media_control` · `volume` |
 | **Contacts & files** | `resolve_contact` · `find_files` · `open_file` |
-| **Check & finish** | `verify_action` · `wait_for` · `validate_action` · `end_session` |
-| **Help** | `get_usage_guide` · `web_search` · `echo` |
+| **Check & finish** | `verify_action` · `wait_for` · `end_session` |
+| **Help** | `web_search` |
 
 </details>
 
@@ -235,12 +235,12 @@ Being honest about what doesn't work yet:
 
 | What | Where | Latest |
 |---|---|---|
-| **Android app** (signed APK) | [GitHub Releases on `aura-releases`](https://github.com/Dinesh210805/aura-releases/releases) | <a href="https://github.com/Dinesh210805/aura-releases/releases/latest"><img src="https://img.shields.io/github/v/release/Dinesh210805/aura-releases?label=&style=flat-square&color=0A0A0A" alt="Latest APK"/></a> |
+| **Android app** (signed APK) | [GitHub Releases](https://github.com/Dinesh210805/aura-android-use/releases) | <a href="https://github.com/Dinesh210805/aura-android-use/releases/latest"><img src="https://img.shields.io/github/v/release/Dinesh210805/aura-android-use?label=&style=flat-square&color=0A0A0A" alt="Latest APK"/></a> |
 | **Desktop bridge** (`aura-mcp-connect`) | [npm](https://www.npmjs.com/package/aura-mcp-connect) | <a href="https://www.npmjs.com/package/aura-mcp-connect"><img src="https://img.shields.io/npm/v/aura-mcp-connect?label=&style=flat-square&color=0A0A0A" alt="npm version"/></a> |
 | **Website** | [aura-android-use.vercel.app](https://aura-android-use.vercel.app), deployed by Vercel from [`aura-android-use-website/`](aura-android-use-website/) on every push to `main` | <a href="https://aura-android-use.vercel.app"><img src="https://img.shields.io/github/deployments/Dinesh210805/aura-android-use/Production?label=&style=flat-square" alt="Deployment status"/></a> |
 
-APKs live in a separate `aura-releases` repository because installed copies of the app check it
-for updates.
+APKs are published as GitHub Releases of this repository. Versions up to 1.0.534 are in the
+older [`aura-releases`](https://github.com/Dinesh210805/aura-releases/releases) repository.
 
 ## Build from source
 

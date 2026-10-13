@@ -13,18 +13,14 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * Phase 2 — first five real device-control tools, backed by [DeviceBridge].
+ * Device-level tools backed by [DeviceBridge]: element taps, media volume and device status.
  *
- * Each tool follows the same shape:
- *   1. Parse args from `request.arguments` (already a [JsonObject]).
- *   2. Call the bridge.
- *   3. Wrap the result in a [CallToolResult].
+ * - Contract: a result's `action` names the specific gesture (`double_tap`, `volume_up`, …),
+ *   not the tool; the status strip and run logs read it.
  */
 internal fun Server.registerDeviceTools(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
     registerTap(bridge, perceptionCache)
-    registerPressHome(bridge)
-    registerPressBack(bridge)
-    registerVolumeTools(bridge)
+    registerVolume(bridge)
     registerGetDeviceStatus(bridge)
 }
 
@@ -33,83 +29,76 @@ internal fun Server.registerDeviceTools(bridge: DeviceBridge, perceptionCache: P
 private fun Server.registerTap(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
     scopedTool(
         name = "tap",
-        description = "Tap an element by its som_id from the latest screen you were shown. The server turns it " +
-            "into exact coordinates.",
+        description = "Tap an element by its som_id from the latest screen you were shown; the server turns " +
+            "it into exact coordinates. style: single (default), double, or long (press and hold for " +
+            "duration_ms, default 1000).",
         inputSchema = ToolSchema(
             properties = JsonObject(
                 mapOf(
                     "som_id" to numberSchema("Element som_id from your latest look"),
+                    "style" to stringSchema("single | double | long (default single)"),
+                    "duration_ms" to numberSchema("long only: hold time in ms (default 1000)"),
                 )
             ),
             required = listOf("som_id"),
         ),
     ) { request ->
-        val somId = request.arguments?.intArg("som_id")
-        if (somId == null) {
-            return@scopedTool errorResult("tap requires a numeric 'som_id' from the latest screen")
+        val args = request.arguments
+        val somId = args?.intArg("som_id")
+            ?: return@scopedTool errorResult("tap requires a numeric 'som_id' from the latest screen")
+        val style = args?.stringArg("style")?.trim()?.lowercase() ?: "single"
+        if (style !in TAP_STYLES) {
+            return@scopedTool errorResult("tap style must be single, double or long, not '$style'")
         }
         val (x, y) = when (val res = perceptionCache.resolveForGesture(somId)) {
             is SomResolveOutcome.Error -> return@scopedTool res.result
             is SomResolveOutcome.Coords -> res.x to res.y
         }
-        // The element's label rides the result so the caller can NAME what was touched —
-        // the on-screen status strip says "Tapping Playlists" rather than "tap som_id 12",
-        // and the model gets the same confirmation of what it actually hit. Omitted rather
-        // than guessed when the element carried no label.
+        val holdMs = args?.intArg("duration_ms") ?: 1000
+        val ok = when (style) {
+            "double" -> bridge.performDoubleTap(x, y)
+            "long" -> bridge.performLongPress(x, y, holdMs.toLong())
+            else -> bridge.performTap(x, y)
+        }
+        // The element's label rides the result so the caller can NAME what was touched — the
+        // status strip says "Tapping Playlists" rather than "tap som_id 12". Omitted rather than
+        // guessed when the element carried no label.
         val label = perceptionCache.labelFor(somId)
         jsonOk(
-            bridge.performTap(x, y),
+            ok,
             buildMap {
-                put("action", "tap")
+                put("action", TAP_ACTIONS.getValue(style))
                 put("som_id", somId.toString())
                 put("x", x.toString())
                 put("y", y.toString())
+                if (style == "long") put("duration_ms", holdMs.toString())
                 if (label != null) put("label", label)
             },
         )
     }
 }
 
-// ── press_home / press_back ─────────────────────────────────────────────────
+private val TAP_STYLES = setOf("single", "double", "long")
+private val TAP_ACTIONS = mapOf("single" to "tap", "double" to "double_tap", "long" to "long_press")
 
-private fun Server.registerPressHome(bridge: DeviceBridge) {
-    scopedTool(
-        name = "press_home",
-        description = "Go to the home screen.",
-    ) { _ ->
-        jsonOk(bridge.performHome(), mapOf("action" to "home"))
-    }
-}
+// ── volume ──────────────────────────────────────────────────────────────────
 
-private fun Server.registerPressBack(bridge: DeviceBridge) {
+private fun Server.registerVolume(bridge: DeviceBridge) {
     scopedTool(
-        name = "press_back",
-        description = "Go back one screen.",
-    ) { _ ->
-        jsonOk(bridge.performBack(), mapOf("action" to "back"))
-    }
-}
-
-// ── volume_up / volume_down / mute ──────────────────────────────────────────
-
-private fun Server.registerVolumeTools(bridge: DeviceBridge) {
-    scopedTool(
-        name = "volume_up",
-        description = "Raise the media stream volume one notch.",
-    ) { _ ->
-        jsonOk(bridge.adjustVolume(VolumeDirection.UP), mapOf("action" to "volume_up"))
-    }
-    scopedTool(
-        name = "volume_down",
-        description = "Lower the media stream volume one notch.",
-    ) { _ ->
-        jsonOk(bridge.adjustVolume(VolumeDirection.DOWN), mapOf("action" to "volume_down"))
-    }
-    scopedTool(
-        name = "mute",
-        description = "Toggle mute on the media stream.",
-    ) { _ ->
-        jsonOk(bridge.adjustVolume(VolumeDirection.MUTE), mapOf("action" to "mute"))
+        name = "volume",
+        description = "Change the media volume one notch: up, down, or mute (toggles).",
+        inputSchema = ToolSchema(
+            properties = JsonObject(mapOf("action" to stringSchema("up | down | mute"))),
+            required = listOf("action"),
+        ),
+    ) { request ->
+        val (direction, action) = when (request.arguments?.stringArg("action")?.trim()?.lowercase()) {
+            "up" -> VolumeDirection.UP to "volume_up"
+            "down" -> VolumeDirection.DOWN to "volume_down"
+            "mute" -> VolumeDirection.MUTE to "mute"
+            else -> return@scopedTool errorResult("volume action must be up, down or mute")
+        }
+        jsonOk(bridge.adjustVolume(direction), mapOf("action" to action))
     }
 }
 

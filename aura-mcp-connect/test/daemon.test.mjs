@@ -188,9 +188,9 @@ try {
   );
   assert.equal(armedHealth.adbToolEnabled, true, "/health must advertise the armed state");
 
-  // The phone can't describe a tool it never sees, so the daemon appends the
-  // tool's own guidance — otherwise agents only ever learn adb exists from a
-  // one-line tool description and never use it strategically.
+  // The phone can't describe a tool it never sees, so the daemon appends a short
+  // line about it — otherwise agents never learn there is a second channel. The
+  // detail lives in the tool description; the handshake is size-capped.
   const armedInstructions = c.client.getInstructions();
   assert.ok(
     armedInstructions.startsWith(FAKE_INSTRUCTIONS),
@@ -201,6 +201,12 @@ try {
     armedInstructions,
     /policy_blocked/,
     "agents must be told adb does not override a device-side refusal",
+  );
+  const appendedBytes =
+    Buffer.byteLength(armedInstructions, "utf8") - Buffer.byteLength(FAKE_INSTRUCTIONS, "utf8");
+  assert.ok(
+    appendedBytes <= 402, // 400-byte adb line + the "\n\n" separator
+    `the daemon appended ${appendedBytes} bytes; the phone's 1,600 + this must stay under 2,000`,
   );
 
   await c.client.close();

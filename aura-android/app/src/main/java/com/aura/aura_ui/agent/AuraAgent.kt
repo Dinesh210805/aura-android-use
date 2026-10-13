@@ -146,6 +146,8 @@ class AuraAgent(private val context: Context) {
         // Hoisted (was inline) so the same bridge answers the turn-0 "where am I"
         // preamble below — one accessibility read, no extra tool call.
         val deviceBridge = AppDeviceBridge(context)
+        // Owned by the server (it enforces at scopedTool); held here only for the run's log line.
+        val actionGuard = com.aura.mcp.server.ActionGuard()
         val handle = InProcessMcpServer.connect(
             deviceBridge = deviceBridge,
             screenshotBridge = AppScreenshotBridge(context),
@@ -169,6 +171,7 @@ class AuraAgent(private val context: Context) {
                 AgentTraceTap.reportStep(tool, stage, name, verdict, detail, ms)
             },
             readScreenImage = { com.aura.aura_ui.data.preferences.ReadScreenImageStore.enabled.value },
+            actionGuard = actionGuard,
         )
 
         val mcpClient = Client(clientInfo = Implementation(name = CLIENT_NAME, version = CLIENT_VERSION))
@@ -737,7 +740,7 @@ class AuraAgent(private val context: Context) {
                 TAG,
                 "✅ Agent result: $verified (verdict=${outcome?.verdict ?: "none"}, " +
                     "proof ${ledgerController.snapshot().findings.size}/${ledgerController.snapshot().targetCount ?: 0}, " +
-                    "guard blocked ${gated.guard.blindBlocks} blind, ${gated.guard.loopBlocks} looping gesture(s))",
+                    "guard blocked ${actionGuard.blindBlocks} blind, ${actionGuard.loopBlocks} looping gesture(s))",
             )
             onEvent(AgentStreamEvent.Finished(verified))
             finalReply = verified

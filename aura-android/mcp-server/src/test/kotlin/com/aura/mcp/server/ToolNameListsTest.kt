@@ -162,7 +162,7 @@ class ToolNameListsTest {
  * each building their own server would register everything twice and double every measurement
  * `ToolDescriptionBudgetTest` takes. One builder, guarded on emptiness by each caller.
  */
-internal fun buildTestServer() {
+internal fun buildTestServer(toolsets: Set<Toolset> = Toolset.ALL): io.modelcontextprotocol.kotlin.sdk.server.Server =
     McpServerBuilder.build(
         serverName = "t4-test",
         version = "0.0.0",
@@ -179,5 +179,5 @@ internal fun buildTestServer() {
         filesBridge = ToolNameListsTest.FakeFilesBridge,
         browserBridge = InertBrowserBridge,
         auditLogger = com.aura.mcp.bridge.NoOpAuditLogger,
+        toolsets = toolsets,
     )
-}

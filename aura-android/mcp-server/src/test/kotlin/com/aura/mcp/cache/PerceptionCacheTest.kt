@@ -363,7 +363,7 @@ class PerceptionCacheTest {
 
     @Test
     fun `a WRITE tool that changed no pixels does not invalidate the cache`() = runBlocking {
-        // volume_up / mute / media_control are WRITE-scoped and bump the generation,
+        // volume / media_control are WRITE-scoped and bump the generation,
         // but they change nothing on screen. Re-perceiving after one is pure waste.
         var gen = 0L
         val cache = PerceptionCache(

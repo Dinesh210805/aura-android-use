@@ -61,8 +61,8 @@ class DeferredTools(registered: Collection<String>) {
          * perception extras, files, memory — is a menu line. A name the run lacks is ignored.
          */
         val CORE = listOf(
-            "read_screen", "tap", "type_text", "press_enter", "press_back", "press_home",
-            "scroll_up", "scroll_down", "swipe", "launch_app", "end_session",
+            "read_screen", "tap", "type_text", "press_enter", "press_key",
+            "scroll", "swipe", "launch_app", "end_session",
             "system_intent", "media_control", "read_notifications", "resolve_contact", "web_search",
             // record_finding is core rather than a menu line on purpose: proof is recorded the
             // moment each item is read, and a tool load standing between reading and recording is

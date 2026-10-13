@@ -21,15 +21,15 @@ the value only registers when you TAP the matching suggestion:
 - No matching suggestion? Check your spelling first; then scroll the suggestion list.
 
 ## 3. Clearing a field that already has text
-type_text usually APPENDS. To replace existing content: long_press the field → tap
+type_text usually APPENDS. To replace existing content: tap the field with style long → tap
 "Select all" from the popup → type_text the new value (typing over a selection replaces
 it). Verify the old value is gone before moving on.
 
 ## 4. Submitting
 - Search bars: press_enter submits. Don't hunt for a search button that may not exist.
 - Multi-field forms: fill top to bottom, perceiving when the observation doesn't confirm
-  where focus went; scroll_down to reach fields below the keyboard.
-- The keyboard may COVER the submit button — press_back once closes the keyboard
+  where focus went; scroll down to reach fields below the keyboard.
+- The keyboard may COVER the submit button — press_key back once closes the keyboard
   without leaving the screen, then tap the button.
 
 ## 5. Verify what the field actually contains

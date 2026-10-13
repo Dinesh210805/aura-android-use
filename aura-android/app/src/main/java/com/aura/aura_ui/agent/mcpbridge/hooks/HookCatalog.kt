@@ -5,10 +5,10 @@ package com.aura.aura_ui.agent.mcpbridge.hooks
  * transparency screen** renders, co-located with the chain it documents.
  *
  * The real pipeline spans two modules: app-side [PreToolHook]/[PostToolHook]s
- * assembled in `buildMcpToolRegistry` (ArgSanity → ActionGuard → ConfirmDestructive
- * / ActionGuard-observe → LearningsWrite → LedgerUpdate) and server-side guards in
- * the `mcp-server` module (scope check, `SensitivePolicy`, foreground gate, screen
- * settle) that run inside `scopedTool`. Because those live across a module boundary
+ * assembled in `buildMcpToolRegistry` (ArgSanity → CompletionGate → ConfirmDestructive
+ * / LearningsWrite → LedgerUpdate) and server-side guards in the `mcp-server` module
+ * (scope check, `SensitivePolicy`, foreground gate, `ActionGuard`, screen settle) that
+ * run inside `scopedTool` for every agent, PC clients included. Because those live across a module boundary
  * and aren't all hook *objects*, this catalog is the one maintained list — add a
  * guard to the chain, add its entry here, and it shows in the app with no UI edit.
  */
@@ -34,13 +34,6 @@ object HookCatalog {
         ),
         HookInfo(
             phase = HookPhase.BEFORE,
-            key = "action_guard",
-            name = "Action Guard",
-            description = "The agent must have seen the current screen before acting on it; " +
-                "detects loops; requires verification before finishing.",
-        ),
-        HookInfo(
-            phase = HookPhase.BEFORE,
             key = "scope_guard",
             name = "Scope Guard",
             description = "Every tool is classified READ or WRITE; calls outside the " +
@@ -59,6 +52,14 @@ object HookCatalog {
             name = "Foreground Guard",
             description = "Blocks in-app gestures and screen perception while a banking, " +
                 "payment or authenticator app is in the foreground.",
+        ),
+        HookInfo(
+            phase = HookPhase.BEFORE,
+            key = "action_guard",
+            name = "Action Guard",
+            description = "The agent must have seen the current screen before acting on it; " +
+                "detects loops; requires verification before finishing. Applies to computer " +
+                "agents too.",
         ),
         HookInfo(
             phase = HookPhase.BEFORE,

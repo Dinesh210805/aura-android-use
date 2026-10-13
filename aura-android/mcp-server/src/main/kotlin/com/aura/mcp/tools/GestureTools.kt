@@ -13,16 +13,14 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.roundToInt
 
 /**
- * Phase 3 — gesture-family tools: swipe, double_tap, long_press, scroll_*, scroll_to.
+ * Movement gestures: `swipe` and `scroll`, thin parameter-parsing shims over [DeviceBridge].
  *
- * All of these are thin parameter-parsing shims over [DeviceBridge] methods.
+ * - Contract: `scroll`'s result `action` names the direction (`scroll_down`, …); the status
+ *   strip and run logs read it.
  */
 internal fun Server.registerGestureTools(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
     registerSwipe(bridge, perceptionCache)
-    registerScrollTo(bridge)
-    registerDoubleTap(bridge, perceptionCache)
-    registerLongPress(bridge, perceptionCache)
-    registerScrollDirectionalTools(bridge, perceptionCache)
+    registerScroll(bridge, perceptionCache)
 }
 
 private fun Server.registerSwipe(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
@@ -83,137 +81,38 @@ private fun Server.registerSwipe(bridge: DeviceBridge, perceptionCache: Percepti
     }
 }
 
-private fun Server.registerScrollTo(bridge: DeviceBridge) {
-    // scroll_to is functionally identical to swipe on the Python side — it lets
-    // callers scroll inside a specific region rather than the whole screen.
+private fun Server.registerScroll(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
     scopedTool(
-        name = "scroll_to",
-        description = "Scroll inside a specific region — same as swipe but expresses intent. " +
-            "Pass start (x1, y1) and end (x2, y2) of the scroll gesture.",
+        name = "scroll",
+        description = "Scroll by half a screen: direction up, down, left or right. Pass som_id to scroll " +
+            "inside that element — a list, carousel or picker; omit it to scroll the main screen. If " +
+            "nothing moved, try the other direction or another element.",
         inputSchema = ToolSchema(
             properties = JsonObject(
                 mapOf(
-                    "x1" to numberSchema("Start X"),
-                    "y1" to numberSchema("Start Y"),
-                    "x2" to numberSchema("End X"),
-                    "y2" to numberSchema("End Y"),
-                    "duration_ms" to numberSchema("Gesture length (default 300)"),
-                )
-            ),
-            required = listOf("x1", "y1", "x2", "y2"),
-        ),
-    ) { request ->
-        val args = request.arguments
-        val x1 = args?.intArg("x1")
-        val y1 = args?.intArg("y1")
-        val x2 = args?.intArg("x2")
-        val y2 = args?.intArg("y2")
-        val dur = args?.intArg("duration_ms") ?: 300
-        if (x1 == null || y1 == null || x2 == null || y2 == null) {
-            errorResult("scroll_to requires numeric x1, y1, x2, y2")
-        } else {
-            jsonOk(
-                bridge.performSwipe(x1, y1, x2, y2, dur.toLong()),
-                mapOf("action" to "scroll_to"),
-            )
-        }
-    }
-}
-
-private fun Server.registerDoubleTap(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
-    scopedTool(
-        name = "double_tap",
-        description = "Double-tap an element by its som_id from the latest screen you were shown. The server " +
-            "turns it into exact coordinates.",
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "som_id" to numberSchema("som_id from the latest screen"),
-                )
-            ),
-            required = listOf("som_id"),
-        ),
-    ) { request ->
-        val somId = request.arguments?.intArg("som_id")
-        if (somId == null) {
-            return@scopedTool errorResult("double_tap requires a numeric 'som_id' from the latest screen")
-        }
-        val (x, y) = when (val res = perceptionCache.resolveForGesture(somId)) {
-            is SomResolveOutcome.Error -> return@scopedTool res.result
-            is SomResolveOutcome.Coords -> res.x to res.y
-        }
-        jsonOk(
-            bridge.performDoubleTap(x, y),
-            mapOf("action" to "double_tap", "som_id" to somId.toString(), "x" to x.toString(), "y" to y.toString()),
-        )
-    }
-}
-
-private fun Server.registerLongPress(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
-    scopedTool(
-        name = "long_press",
-        description = "Press and hold an element by its som_id from the latest screen you were shown, for " +
-            "duration_ms (default 1000). The server turns it into exact coordinates.",
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "som_id" to numberSchema("som_id from the latest screen"),
-                    "duration_ms" to numberSchema("Hold duration in ms (default 1000)"),
-                )
-            ),
-            required = listOf("som_id"),
-        ),
-    ) { request ->
-        val args = request.arguments
-        val somId = args?.intArg("som_id")
-        val dur = args?.intArg("duration_ms") ?: 1000
-        if (somId == null) {
-            return@scopedTool errorResult("long_press requires a numeric 'som_id' from the latest screen")
-        }
-        val (x, y) = when (val res = perceptionCache.resolveForGesture(somId)) {
-            is SomResolveOutcome.Error -> return@scopedTool res.result
-            is SomResolveOutcome.Coords -> res.x to res.y
-        }
-        jsonOk(
-            bridge.performLongPress(x, y, dur.toLong()),
-            mapOf("action" to "long_press", "som_id" to somId.toString(), "x" to x.toString(), "y" to y.toString(), "duration_ms" to dur.toString()),
-        )
-    }
-}
-
-private fun Server.registerScrollDirectionalTools(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
-    for ((name, dir) in listOf(
-        "scroll_up" to ElementSpan.Direction.UP,
-        "scroll_down" to ElementSpan.Direction.DOWN,
-        "scroll_left" to ElementSpan.Direction.LEFT,
-        "scroll_right" to ElementSpan.Direction.RIGHT,
-    )) {
-        val word = dir.name.lowercase()
-        scopedTool(
-            name = name,
-            description = "Scroll $word by half a screen. Pass som_id to scroll inside that element — a " +
-                "list, carousel or picker; omit it to scroll the main screen. If nothing moved, try " +
-                "the other direction or another element.",
-            inputSchema = ToolSchema(
-                properties = JsonObject(
-                    mapOf("som_id" to numberSchema("Optional: the element to scroll inside, from the latest screen")),
+                    "direction" to stringSchema("up | down | left | right"),
+                    "som_id" to numberSchema("Optional: the element to scroll inside, from the latest screen"),
                 ),
             ),
-        ) { request ->
-            val somId = request.arguments?.intArg("som_id")
-                ?: return@scopedTool jsonOk(bridge.performScroll(ScrollDirection.valueOf(dir.name)), mapOf("action" to name))
-            when (val res = perceptionCache.resolveForGesture(somId)) {
-                is SomResolveOutcome.Error -> return@scopedTool res.result
-                is SomResolveOutcome.Coords -> Unit
-            }
-            val box = perceptionCache.boundsFor(somId)
-                ?: return@scopedTool errorResult("som_id $somId has no bounds. Call read_screen and pick again.")
-            val p = ElementSpan.forScroll(box, dir)
-            jsonOk(
-                bridge.performSwipe(p.x1, p.y1, p.x2, p.y2, SCROLL_IN_ELEMENT_MS),
-                mapOf("action" to name, "som_id" to somId.toString()),
-            )
+            required = listOf("direction"),
+        ),
+    ) { request ->
+        val dir = ElementSpan.parse(request.arguments?.stringArg("direction"))
+            ?: return@scopedTool errorResult("scroll needs direction: up, down, left or right")
+        val action = "scroll_${dir.name.lowercase()}"
+        val somId = request.arguments?.intArg("som_id")
+            ?: return@scopedTool jsonOk(bridge.performScroll(ScrollDirection.valueOf(dir.name)), mapOf("action" to action))
+        when (val res = perceptionCache.resolveForGesture(somId)) {
+            is SomResolveOutcome.Error -> return@scopedTool res.result
+            is SomResolveOutcome.Coords -> Unit
         }
+        val box = perceptionCache.boundsFor(somId)
+            ?: return@scopedTool errorResult("som_id $somId has no bounds. Call read_screen and pick again.")
+        val p = ElementSpan.forScroll(box, dir)
+        jsonOk(
+            bridge.performSwipe(p.x1, p.y1, p.x2, p.y2, SCROLL_IN_ELEMENT_MS),
+            mapOf("action" to action, "som_id" to somId.toString()),
+        )
     }
 }
 

@@ -41,8 +41,8 @@ class KeepAwakeToolPhaseSinkTest {
     }
 
     @Test fun `pure-info tools never light the screen - merely connected stays asleep`() {
-        started("echo", McpScope.READ)
-        completed("echo", McpScope.READ)
+        started("get_device_status", McpScope.READ)
+        completed("get_device_status", McpScope.READ)
         started("web_search", McpScope.READ)
         assertFalse(mechanism.engaged)
     }

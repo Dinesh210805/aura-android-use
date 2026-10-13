@@ -54,10 +54,7 @@ object CapabilityNarrative {
         Family(
             id = "screen_control",
             tools = setOf(
-                "tap", "double_tap", "long_press", "swipe", "type_text",
-                "press_enter", "scroll_up", "scroll_down", "scroll_left", "scroll_right",
-                "scroll_to", "press_home", "press_back",
-                "open_recent_apps",
+                "tap", "swipe", "type_text", "press_enter", "scroll", "press_key",
             ),
             sentence = "operate any app on the phone by looking at the screen and acting on " +
                 "it step by step, the same way a person would",
@@ -108,7 +105,7 @@ object CapabilityNarrative {
         ),
         Family(
             id = "media",
-            tools = setOf("media_control", "get_media_sessions", "volume_up", "volume_down", "mute"),
+            tools = setOf("media_control", "get_media_sessions", "volume"),
             sentence = "play, pause or skip music and video in any app, and change the volume",
         ),
         Family(
@@ -125,17 +122,8 @@ object CapabilityNarrative {
         ),
         Family(
             id = "safety",
-            tools = setOf("validate_action", "end_session"),
-            sentence = "check whether something is safe before doing it, and stop to ask when " +
-                "a task needs a decision only the user can make",
-        ),
-        Family(
-            // Plumbing. Present so the coverage test is a real constraint rather than one
-            // with an escape hatch, but contributing no spoken text — the user does not
-            // care that a transport handshake exists.
-            id = "plumbing",
-            tools = setOf("echo", "connect_device", "get_usage_guide"),
-            sentence = "",
+            tools = setOf("end_session"),
+            sentence = "stop to ask when a task needs a decision only the user can make",
         ),
     )
 

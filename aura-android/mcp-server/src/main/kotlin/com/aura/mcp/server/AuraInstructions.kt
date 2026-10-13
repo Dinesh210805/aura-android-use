@@ -1,23 +1,14 @@
 package com.aura.mcp.server
 
 /**
- * Phase 10 — server-side behavioral contract delivered once at MCP
- * handshake. Replaces the Phase 9 "cheap → expensive escalation"
- * framing with the dual-track perception model the user actually wants.
+ * What a connecting agent is told about driving this device: the handshake [survivalKit] and the
+ * full playbook [text].
  *
- * Five sections, in this exact order — order matters because section 1
- * frames the disciplines that follow:
- *
- *   1. **Stakes** — tone-setter, never skipped.
- *   2. **Dual-track perception** — UI tree and annotated screenshot are
- *      used together, not as alternatives. Higher cost, lower error rate.
- *   3. **Execution loop** — perceive → act → verify.
- *   4. **Loading states** — `wait_for` is mandatory after navigation.
- *   5. **Trust rules** — pixels > labels, never estimate coords.
- *
- * The instructions field is delivered by the MCP SDK in the `initialize`
- * response and surfaced as system-level context by every compliant
- * client (Claude Code, VS Code Copilot MCP, Cursor, …).
+ * - Contract: [survivalKit] is the MCP `instructions` field every client receives at `initialize`;
+ *   [text] is served as the `aura://guide` resource (see `McpResources`).
+ * - Why the playbook is not the primary channel: agents rarely pull optional guidance. The rules
+ *   that matter are enforced at `scopedTool` or spoken in tool replies; [text] is reference.
+ * - Change together: `aura-mcp-connect/skills/aura-phone/SKILL.md` carries a condensed copy.
  */
 internal object AuraInstructions {
 
@@ -197,7 +188,7 @@ internal object AuraInstructions {
             SAME turn. Only call verify_action when the observation is genuinely
             ambiguous; only perceive_screen when you need fresh som_ids to tap.
 
-        After scroll / swipe / launch / press_back / press_home, every
+        After scroll / swipe / launch / press_key, every
         coordinate you saw earlier is stale. Perceive again before som-targeted
         taps — but NOT merely to confirm the previous action; the observation
         block already told you what happened.
@@ -304,7 +295,6 @@ internal object AuraInstructions {
           • Opening authenticator / password managers (Authy, Google
             Authenticator, Microsoft Authenticator, 1Password, Bitwarden, LastPass).
           • Typing card numbers, CVVs, SSNs, PINs, or passwords via type_text.
-        Unsure if a target is allowed? Check first with validate_action(target="...").
 
         ── 7. When to stop ─────────────────────────────────────────────────────
         Stop and ask the user when:
@@ -380,65 +370,45 @@ internal object AuraInstructions {
     """.trimIndent()
 
     /**
-     * The ≤1,900-char handshake contract. Clients truncate the MCP
-     * `instructions` field (Claude Code cuts at ~2,048 chars — measured
-     * 2026-07-17: only 15% of the full playbook survived), so THIS string is
-     * the only guaranteed-delivered context. It must be self-sufficient:
-     * stakes, compressed decision tree, safety hard-blocks, stop rules, and
-     * pointers to the full playbook (get_usage_guide) + learned hints.
-     * Guarded by a unit test asserting length < 2000.
+     * The handshake text: the one piece of guidance an agent sees before its first call.
+     *
+     * - Contract: at most [SURVIVAL_KIT_MAX_BYTES] UTF-8 bytes, plain ASCII. Claude Code keeps
+     *   ~2 KB of a server's `instructions` and other clients may keep less or nothing, so this
+     *   holds only what must be known before acting: stakes, safety, stop rules, tool routing.
+     *   How each tool works lives in its description; what to do next lives in tool replies.
+     * - Order: SAFETY and STOP come first because truncation cuts from the end.
+     * - Change together: the desktop bridge appends up to 400 bytes when `aura-adb` is armed
+     *   (`aura-mcp-connect/src/adb-tool.js`); the two budgets must sum under 2,000.
+     *   `ContextDeliveryTest` pins this side.
      */
     val survivalKit: String = """
-        You are driving a REAL Android device. Every tool call moves real pixels and sends real keystrokes; there is no undo. Act deliberately, verify, stop when unsure.
+        You drive a REAL Android phone: real taps, real keystrokes, no undo. Verify each step; stop when unsure.
 
-        Full playbook: get_usage_guide (lists its topics; `browser` for web). Learned hints from past verified runs arrive in launch_app / open_deeplink results — the live screen always wins.
+        SAFETY: banking/payment apps, authenticator/password managers, and typing card numbers, CVVs, SSNs, PINs or passwords are refused with error=policy_blocked. Never retry or work around it; tell the user. Buy, pay, apply or send: ask first, every time.
+        STOP and ask the user when two checks in a row surprise you, scrolling finds nothing, or before anything irreversible.
 
-        TOOL SELECTION — pick the right tool FIRST:
-        • Unfamiliar multi-step flow → web_search("how to <task> in <app>") first.
-        • Standard verb (alarm, timer, call, SMS, calendar, share, navigate) → system_intent in ONE call — opens the app PRE-FILLED; the USER taps final send/confirm unless they explicitly asked you to.
-        • Call/message a PERSON by name → resolve_contact FIRST; on 'disambiguate' ask by NAME — never read numbers aloud, and never navigate Contacts by gesture.
-        • Music/media → media_control / get_media_sessions — never open the app to tap buttons.
-        • Read/reply to a message → read_notifications, then notification_action (direct reply).
-        • Open a file → find_files → open_file. A screen inside an app → list_app_deeplinks → open_deeplink; else launch_app(app_name).
-        • WEB page → browser_read/find/extract, NEVER perceive_screen+taps (the DOM is truth, far cheaper). Login → browser_handoff. Buy/pay/apply/send → ask first.
-        • To tap anything → read_screen (or perceive_screen for visual targets) first, then tap its numbered som_id. NEVER guess or reuse coordinates.
-        • After EVERY gesture read its post_action_observation and decide from that — don't re-perceive just to check. som_ids die when the screen changes. ONE consequential action per turn.
-
-        SAFETY — hard-blocked on-device (error=policy_blocked): banking/payment apps, authenticator/password managers, typing card numbers/CVVs/SSNs/PINs/passwords. Never retry or work around — tell the user. Unsure? validate_action first.
-
-        STOP and ask when two checks in a row surprise you, when scrolling exhausts, or before anything irreversible the user did not explicitly request.
+        PICK THE TOOL FIRST:
+        - Alarm, timer, call, SMS, calendar, share, navigate -> system_intent (opens pre-filled; the user taps send).
+        - Person by name -> resolve_contact; if ambiguous ask by name, never read numbers aloud.
+        - Music -> media_control. Messages -> read_notifications, then notification_action to reply.
+        - File -> find_files, open_file. Screen inside an app -> list_app_deeplinks, open_deeplink; else launch_app(app_name). Its learned hints are past routes; the live screen wins.
+        - Unfamiliar flow -> web_search("how to <task> in <app>") first.
+        - Web page -> browser_read/find/act, NEVER perceive_screen+taps. Login -> browser_handoff.
+        - To tap -> read_screen (perceive_screen if visual), then tap its som_id. Never guess coordinates; som_ids die when the screen changes.
+        - After a gesture, decide from its post_action_observation. One consequential action per turn.
     """.trimIndent()
 
     /**
-     * The full playbook split by its `── ` headers into stable topic keys —
-     * served one topic at a time by `get_usage_guide` so agents pull only the
-     * doctrine they need.
+     * [survivalKit] for a server that registers only [toolsets]: each line naming a tool from a
+     * group left out is dropped, so the handshake never routes an agent to a tool it cannot see.
      */
-    val sections: Map<String, String> by lazy {
-        val keyByHeader = listOf(
-            "START HERE" to "decision_tree",
-            "1. Dual-track perception" to "perception",
-            "2. Execution loop" to "loop",
-            "3. Loading states" to "loading",
-            "4. Trust rules" to "trust",
-            "5. Deep links" to "deeplinks",
-            "5b. Non-screen action plane" to "action_plane",
-            "6. Safety boundary" to "safety",
-            "7. When to stop" to "stop",
-            "8. Efficiency" to "efficiency",
-            "9. Browser" to "browser",
-        )
-        val out = LinkedHashMap<String, StringBuilder>()
-        var current: StringBuilder? = null
-        text.lineSequence().forEach { line ->
-            if (line.startsWith("── ")) {
-                val key = keyByHeader.firstOrNull { (marker, _) -> line.contains(marker) }?.second
-                current = if (key != null) StringBuilder().also { out[key] = it } else null
-                current?.append(line)
-            } else {
-                current?.append('\n')?.append(line)
-            }
-        }
-        out.mapValues { it.value.toString().trim() }
-    }
+    fun survivalKit(toolsets: Set<Toolset>): String =
+        survivalKit.lines()
+            .filterNot { line -> TOOL_NAME.findAll(line).any { Toolset.of(it.value) !in toolsets } }
+            .joinToString("\n")
+
+    private val TOOL_NAME = Regex("[a-z]+(?:_[a-z]+)+")
+
+    /** Byte budget for [survivalKit]; see its KDoc for the split with the desktop bridge. */
+    const val SURVIVAL_KIT_MAX_BYTES = 1_600
 }

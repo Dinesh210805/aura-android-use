@@ -1,7 +1,6 @@
-package com.aura.aura_ui.agent.mcpbridge
+package com.aura.mcp.server
 
 import com.aura.mcp.bridge.McpScope
-import com.aura.mcp.server.McpToolScopes
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

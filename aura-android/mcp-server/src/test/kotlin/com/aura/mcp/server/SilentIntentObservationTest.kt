@@ -49,7 +49,7 @@ class SilentIntentObservationTest {
     @Test fun `every other tool keeps its name-only classification`() {
         assertTrue(PostActionObservation.observes("tap", args("set_alarm")))
         assertTrue(PostActionObservation.observes("launch_app", null))
-        assertFalse(PostActionObservation.observes("volume_up", null))
+        assertFalse(PostActionObservation.observes("volume", null))
         assertFalse(PostActionObservation.observes("read_screen", null))
     }
 

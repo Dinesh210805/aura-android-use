@@ -159,6 +159,8 @@ object InProcessMcpServer {
         readScreenImage: () -> Boolean = { false },
         /** Forwarded to [McpServerBuilder.build]. */
         trailSink: ToolTrailSink = ToolTrailSink.NOOP,
+        /** Forwarded to [McpServerBuilder.build]; the caller keeps it to log its counters. */
+        actionGuard: ActionGuard = ActionGuard(),
     ): InProcessMcpHandle {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -182,6 +184,7 @@ object InProcessMcpServer {
             pausedByHuman = pausedByHuman,
             readScreenImage = readScreenImage,
             trailSink = trailSink,
+            actionGuard = actionGuard,
         )
 
         // Client end runs in a plain context; server end carries the principal
