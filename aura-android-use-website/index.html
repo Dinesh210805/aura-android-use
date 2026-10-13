@@ -624,7 +624,7 @@ summary::-webkit-details-marker{display:none}
         <p style="margin:14px 0 0;font-size:14px;line-height:1.5;color:var(--ink2);max-width:26ch">Open-source android-use. Hands for AI agents on your phone.</p>
       </div>
       <nav aria-label="Product"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Product</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="/download">Download</a></li><li><a href="#tools">Tools</a></li><li><a href="#testing">App testing</a></li><li><a href="#safety">Safety</a></li><li><a href="#film">Launch film</a></li></ul></nav>
-      <nav aria-label="Developers"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Developers</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener">GitHub</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/aura-mcp-connect/README.md" rel="noopener">Docs</a></li><li><a href="https://www.npmjs.com/package/aura-mcp-connect" rel="noopener">aura-mcp-connect</a></li><li><a href="https://github.com/Dinesh210805/aura-releases/releases" rel="noopener">Releases</a></li></ul></nav>
+      <nav aria-label="Developers"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Developers</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://github.com/Dinesh210805/aura-android-use" rel="noopener">GitHub</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/aura-mcp-connect/README.md" rel="noopener">Docs</a></li><li><a href="https://www.npmjs.com/package/aura-mcp-connect" rel="noopener">aura-mcp-connect</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/releases" rel="noopener">Releases</a></li></ul></nav>
       <nav aria-label="Community"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Community</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="https://discord.com/invite/H66ws9zMPF" rel="noopener">Discord</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/issues" rel="noopener">Issues</a></li><li><a href="mailto:dinesh210805@gmail.com">Contact</a></li></ul></nav>
       <nav aria-label="Legal"><h3 style="margin:0 0 14px;font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:500;color:var(--ink2)">Legal</h3><ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14px"><li><a href="/privacy" rel="noopener">Privacy</a></li><li><a href="/privacy#terms" rel="noopener">Terms</a></li><li><a href="https://github.com/Dinesh210805/aura-android-use/blob/main/LICENSE" rel="noopener">AGPL-3.0 License</a></li></ul></nav>
     </div>
@@ -653,7 +653,7 @@ class Component extends DCLogic {
     boot();
     const sb = () => { const S = window.AuraSound; if (!S) { this.sbT = setTimeout(sb, 100); return; } const up = () => this.setState({ snd: S.state() }); S.onChange(up); up(); };
     sb();
-    fetch('https://api.github.com/repos/Dinesh210805/aura-releases/releases/latest').then(r => r.ok ? r.json() : null).then(j => {
+    fetch('https://api.github.com/repos/Dinesh210805/aura-android-use/releases/latest').then(r => r.ok ? r.json() : null).then(j => {
       if (!j) return;
       const a = (j.assets || []).find(x => /\.apk$/i.test(x.name));
       this.setState({ rel: { version: (j.tag_name || '').replace(/^v/, '') || null, size: a ? (a.size / 1048576).toFixed(1) : null, apk: a ? a.browser_download_url : null, date: j.published_at || null } });
@@ -684,7 +684,7 @@ class Component extends DCLogic {
   renderVals() {
     const rel = this.state.rel || {};
     const version = rel.version || '1.0.479', size = rel.size || '159.8';
-    const apk = rel.apk || 'https://github.com/Dinesh210805/aura-releases/releases/download/v1.0.479/aura-1.0.479.apk';
+    const apk = rel.apk || 'https://github.com/Dinesh210805/aura-android-use/releases/latest';
     let dateLabel = 'latest release';
     if (rel.date) { try { dateLabel = 'released ' + new Date(rel.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) {} }
     const cp = this.state.copied, s = this.state.stars;
