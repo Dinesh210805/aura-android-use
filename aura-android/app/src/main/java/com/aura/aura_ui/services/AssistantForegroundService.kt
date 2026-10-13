@@ -254,6 +254,19 @@ class AssistantForegroundService : LifecycleService() {
                 )
                 return
             }
+            // `--es mode mcp_start` starts the MCP server exactly as the MCP tab's "Start server" does,
+            // so the benchmark can bring the phone side up without touching the UI. The service
+            // itself is not exported, so `am start-foreground-service` from a shell is refused.
+            // Change together: scripts/bench/device.py start_phone_mcp.
+            if (mode == "mcp_start") {
+                Log.i("AuraAgentSpike", "MCP start requested over adb")
+                if (RemoteGateManager.isBlocked()) {
+                    Log.e("AuraAgentSpike", "MCP start refused: remote gate is blocking")
+                } else {
+                    mcpServerController.startWebRtc(this@AssistantForegroundService)
+                }
+                return
+            }
             if (goal.isEmpty()) {
                 Log.e("AuraAgentSpike", "Missing --es goal; nothing to run")
                 return

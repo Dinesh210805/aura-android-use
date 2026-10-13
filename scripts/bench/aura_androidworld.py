@@ -19,8 +19,9 @@ this file. Usage (emulator running, AURA debug build installed and set up):
 Everything writes to ./runs/<timestamp>/ by default. Re-point --checkpoint_dir at
 an existing run to resume it.
 
-This module also holds the pieces `referee.py` and `bench_server.py` share:
-`find_adb`, `scored_tasks`, `restore_aura_a11y` and `shift_device_year`.
+This module also holds the pieces `referee.py`, `external_agent.py` and `suite.py`
+share: `RESULTS`, `SEED`, `write_text`, `find_adb`, `scored_tasks`,
+`restore_aura_a11y` and `shift_device_year`.
 """
 
 import functools
@@ -73,6 +74,17 @@ def _fix_apk_install_on_windows():
 
 
 _fix_apk_install_on_windows()
+
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+RESULTS = os.path.join(ROOT, 'bench-results')
+# Upstream run.py's default, so task parameters match other published runs.
+SEED = 30
+
+
+def write_text(path, text):
+  with open(path, 'w', encoding='utf-8') as f:
+    f.write(text)
 
 
 def find_adb():
@@ -160,7 +172,7 @@ def restore_aura_a11y(adb, serial, package):
   """
   def sh(*args):
     return subprocess.run([adb, '-s', serial, 'shell', *args], capture_output=True,
-                          text=True, errors='replace').stdout.strip()
+                          text=True, encoding='utf-8', errors='replace').stdout.strip()
 
   mine = '%s/%s' % (package, _AURA_A11Y_CLASS)
   current = [s for s in sh('settings get secure enabled_accessibility_services').split(':')
@@ -183,7 +195,7 @@ def require_aura_receiver(adb, serial):
   """
   def run(*args):
     return subprocess.run([adb, '-s', serial, *args], capture_output=True,
-                          text=True, errors='replace').stdout
+                          text=True, encoding='utf-8', errors='replace').stdout
 
   run('logcat', '-c')
   run('shell', 'am broadcast -a %s' % _BROADCAST_ACTION)  # no goal: answers, runs nothing
@@ -194,20 +206,35 @@ def require_aura_receiver(adb, serial):
 
 
 class AuraAgent(base_agent.EnvironmentInteractingAgent):
-  """Hands one goal to the on-device agent and waits for it to finish."""
+  """Hands one goal to the on-device agent and waits for it to finish.
+
+  Contract: always reports done=True, even after a timeout or a stop. AURA runs
+  its own loop, so AndroidWorld sees one step. `report` says what happened:
+  aura_line, timed_out, stopped, blind. `on_log(line)` receives AURA's log lines
+  as they appear; setting `cancel` stops the run like a timeout does.
+  """
 
   def __init__(self, env: interface.AsyncEnv, adb: str, serial: str, timeout: int,
-               package: str):
+               package: str, cancel=None, on_log=None):
     super().__init__(env, name='aura')
     self._adb = adb
     self._serial = serial
     self._timeout = timeout
     self._package = package
+    self._cancel = cancel
+    self._on_log = on_log or (lambda line: None)
+    self.report = {}
+
+  def reset(self, go_home: bool = False) -> None:
+    super().reset(go_home)
+    # As stock M3A/T3A/SeeAct do: the env shows touch coordinates on screen,
+    # which would otherwise be in every screenshot AURA reads.
+    self.env.hide_automation_ui()
 
   def _sh(self, *args: str) -> str:
     out = subprocess.run(
         [self._adb, '-s', self._serial, *args],
-        capture_output=True, text=True, errors='replace',
+        capture_output=True, text=True, encoding='utf-8', errors='replace',
     )
     return out.stdout or ''
 
@@ -227,22 +254,36 @@ class AuraAgent(base_agent.EnvironmentInteractingAgent):
              % (_BROADCAST_ACTION, shlex.quote(goal)))
 
     deadline = time.time() + self._timeout
-    last = ''
-    while time.time() < deadline:
-      time.sleep(5)
+    last, log, shown = '', '', 0
+    stopped = timed_out = False
+    while True:
+      time.sleep(2)
       log = self._sh('logcat', '-d', '-s', f'{_LOG_TAG}:I')
-      hits = [ln for ln in log.splitlines() if any(m in ln for m in _DONE_MARKERS)]
+      lines = log.splitlines()
+      for line in lines[shown:]:
+        self._on_log(line)
+      shown = len(lines)
+      hits = [ln for ln in lines if any(m in ln for m in _DONE_MARKERS)]
       if hits:
         last = hits[-1]
         break
-    else:
-      last = f'TIMEOUT after {self._timeout}s'
-      # A timed-out run is still tapping. Stop it before AndroidWorld scores and
-      # tears down, or it acts on the next task's freshly seeded screen.
-      self._sh('shell', 'am broadcast -a %s --es mode cancel' % _BROADCAST_ACTION)
-      time.sleep(3)
+      stopped = self._cancel is not None and self._cancel.is_set()
+      timed_out = time.time() > deadline
+      if stopped or timed_out:
+        last = 'STOPPED by user' if stopped else f'TIMEOUT after {self._timeout}s'
+        # A timed-out run is still tapping. Stop it before AndroidWorld scores and
+        # tears down, or it acts on the next task's freshly seeded screen.
+        self._sh('shell', 'am broadcast -a %s --es mode cancel' % _BROADCAST_ACTION)
+        time.sleep(3)
+        break
 
     print(f'    aura: {last.strip()}')
+    self.report = {
+        'aura_line': last.strip(), 'timed_out': timed_out, 'stopped': stopped,
+        # AURA logs this whenever perceive_screen came back without an image: the
+        # run happened on the accessibility tree alone, and the report says so.
+        'blind': 'no extractable image' in log, 'log': log,
+    }
     # Always done after one step: AURA runs its own loop internally, so there is
     # no second turn for AndroidWorld to drive.
     return base_agent.AgentInteractionResult(done=True, data={'aura_log': last})

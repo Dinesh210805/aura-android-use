@@ -1,0 +1,40 @@
+{
+  "name": "claude-code-aura-mcp",
+  "description": "Claude Code driving the phone only through AURA's MCP tools, via the bench bridge.",
+  "command": [
+    "claude",
+    "-p",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "{model}",
+    "--max-turns",
+    "{max_steps}",
+    "--no-session-persistence",
+    "--disable-slash-commands",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{profile_dir}/aura.mcp.json",
+    "--allowedTools",
+    "mcp__aura",
+    "--append-system-prompt",
+    "{framing}",
+    "--disallowedTools",
+    "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,NotebookEdit"
+  ],
+  "stdin": "goal",
+  "parser": "claude-stream",
+  "defaults": {
+    "model": "sonnet",
+    "framing": "You are operating an Android phone through the aura MCP tools. Every request is about that phone: carry it out there, not on this computer. When the request asks a question, end with the answer alone as your final message."
+  },
+  "models": [
+    "sonnet",
+    "opus",
+    "haiku"
+  ],
+  "timeout_s": 600
+}
