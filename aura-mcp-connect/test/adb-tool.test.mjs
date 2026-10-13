@@ -136,4 +136,19 @@ for (const args of [undefined, {}, { command: "" }, { command: "   " }, { comman
   assert.match(result.content[0].text, /…\(truncated, \d+ more chars\)$/);
 }
 
+// ── Handshake budget: the phone owns 1,600 bytes, this line at most 400 ──
+// Claude Code keeps ~2 KB of instructions and cuts the end, which is where this
+// text lands. Over budget, the safety rule below is what gets cut.
+{
+  const tool = createAdbTool({ env: {} });
+  const bytes = Buffer.byteLength(tool.instructions, "utf8");
+  assert.ok(bytes <= 400, `aura-adb handshake line is ${bytes} bytes; budget is 400`);
+  assert.match(tool.instructions, /policy_blocked/, "the handshake line must carry the bypass rule");
+  assert.match(
+    tool.definition.description,
+    /policy_blocked/,
+    "the description must repeat the bypass rule where the detail lives",
+  );
+}
+
 console.log("adb-tool.test.mjs: ALL PASS");

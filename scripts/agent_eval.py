@@ -82,9 +82,10 @@ AGENT_SOURCE = "agent"
 # navigation, not coordinate-targeted, so issuing them before a perceive is not
 # "blind" — matching how docs/agent-learnings.md Part IV counted the baseline.
 GROUNDING_REQUIRED_GESTURES = {
-    "tap", "double_tap", "long_press", "swipe",
-    "scroll_up", "scroll_down", "scroll_left", "scroll_right",
-    "scroll_to", "type_text",
+    "tap", "swipe", "scroll", "type_text",
+    # Pre-merge names, so logs recorded before tap/scroll took a style/direction still score.
+    "double_tap", "long_press", "scroll_up", "scroll_down", "scroll_left", "scroll_right",
+    "scroll_to",
 }
 
 # v1 grounding signal: only perceive_screen counts. get_ui_tree also returns

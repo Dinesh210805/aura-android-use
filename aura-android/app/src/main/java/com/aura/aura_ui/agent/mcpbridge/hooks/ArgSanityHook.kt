@@ -23,15 +23,15 @@ class ArgSanityHook : PreToolHook {
             names.firstOrNull { (num(it) ?: -1L) < 0L }
 
         return when (toolName) {
-            "tap", "double_tap", "long_press" -> {
+            "tap" -> {
                 val hasSom = !args["som_id"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()
                 val badCoord = missingOrNegative("x", "y")
                 when {
                     !hasSom && badCoord != null -> PreToolDecision.Deny(
                         "$toolName needs a som_id from the latest screen.",
                     )
-                    toolName == "long_press" && (num("duration_ms") ?: 0L) > MAX_DURATION_MS ->
-                        PreToolDecision.Deny("long_press duration_ms too large (max $MAX_DURATION_MS).")
+                    (num("duration_ms") ?: 0L) > MAX_DURATION_MS ->
+                        PreToolDecision.Deny("tap duration_ms too large (max $MAX_DURATION_MS).")
                     else -> PreToolDecision.Proceed
                 }
             }

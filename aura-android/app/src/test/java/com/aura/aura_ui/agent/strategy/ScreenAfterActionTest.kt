@@ -20,7 +20,7 @@ class ScreenAfterActionTest {
     }
 
     @Test fun `tools that change no pixels do not`() {
-        assertFalse(ScreenAfterAction.shouldObserve(listOf("volume_up" to true, "recall_memory" to true)))
+        assertFalse(ScreenAfterAction.shouldObserve(listOf("volume" to true, "recall_memory" to true)))
     }
 
     @Test fun `a turn that already looked after its gesture is not read twice`() {

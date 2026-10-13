@@ -38,7 +38,7 @@ class PostActionObservationRedactionTest {
         assertNull(obs.jsonObject["top_labels"], "labels of a sensitive screen must not leak")
         assertNull(obs.jsonObject["element_count"])
         val hint = obs.jsonObject["hint"]?.jsonPrimitive?.content.orEmpty()
-        assertTrue(hint.contains("press_back") || hint.contains("press_home"))
+        assertTrue(hint.contains("press_key"))
     }
 
     @Test

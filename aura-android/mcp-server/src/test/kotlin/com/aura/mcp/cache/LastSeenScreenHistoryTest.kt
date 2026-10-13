@@ -107,7 +107,7 @@ class LastSeenScreenHistoryTest {
         assertNull(observer.observe("tap")!!["seen_before"])
 
         gen = 2; bridge.treeJson = screen(top = 20)
-        val back = observer.observe("press_back")!!
+        val back = observer.observe("press_key")!!
         assertTrue(back["seen_before"]!!.jsonPrimitive.content.startsWith("Same screen as 2 actions ago"))
     }
 }

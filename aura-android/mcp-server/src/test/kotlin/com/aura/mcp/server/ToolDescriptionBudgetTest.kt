@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  *
  * ### Why the ceiling is per plane and not per tool
  *
- * Tools genuinely differ: `press_back` needs seven tokens and `read_screen` has a grid format,
+ * Tools genuinely differ: `press_enter` needs a few tokens and `read_screen` has a grid format,
  * a flag legend and an escalation rule to convey. A per-tool cap would either be too loose to
  * bind or would force real content out of the tools that need it.
  *
@@ -45,12 +45,14 @@ class ToolDescriptionBudgetTest {
 
     /**
      * Registration is the only place a description's FINAL text exists, so the budget is measured
-     * against a real server built with the same inert fakes `ToolNameListsTest` uses. Guarded on
-     * emptiness because both tests share the process-global recorder and either may run first.
+     * against a real server built with the same inert fakes `ToolNameListsTest` uses. Rebuilt every
+     * time, not only when empty: the recorder is process-global, and a test that registers a stub
+     * under a real name (`tap` with "test tap") overwrites that tool's description until the real
+     * server registers again.
      */
     @BeforeTest
-    fun buildServerOnce() {
-        if (RegisteredToolNames.descriptions.isEmpty()) buildTestServer()
+    fun buildRealServer() {
+        buildTestServer()
     }
 
 
@@ -127,17 +129,6 @@ class ToolDescriptionBudgetTest {
         )
     }
 
-    /**
-     * Every exclusion must name a tool that actually exists, or the list is silently protecting
-     * nothing — the same drift `RegisteredToolNames` exists to catch for the scope map.
-     */
-    @Test
-    fun `every agent-lane exclusion names a real tool`() {
-        val names = registeredTools().map { it.name }.toSet()
-        val ghosts = AgentLaneTools.EXCLUDED_FROM_AGENT - names
-        assertTrue(ghosts.isEmpty(), "excluded tools that are not registered: $ghosts")
-    }
-
     private companion object {
         const val CHARS_PER_TOKEN = 4
 
@@ -168,10 +159,10 @@ internal fun planeOf(name: String): String = when {
         "system_intent", "read_notifications", "notification_action", "media_control",
         "resolve_contact",
     ) -> "assistant"
-    name in setOf("end_session", "get_usage_guide") -> "session"
+    name == "end_session" -> "session"
     name in setOf(
-        "tap", "double_tap", "long_press", "swipe", "scroll_to",
-        "type_text", "press_enter", "press_back", "press_home",
+        "tap", "swipe", "scroll",
+        "type_text", "press_enter", "press_key",
     ) -> "gestures"
     else -> "other"
 }

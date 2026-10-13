@@ -43,9 +43,7 @@ class ForegroundGuardTest {
 
     @Test
     fun `escape hatches are never gated`() {
-        assertIs<ForegroundGuard.Verdict.Allow>(ForegroundGuard.evaluate("press_home", bankingFg))
-        assertIs<ForegroundGuard.Verdict.Allow>(ForegroundGuard.evaluate("press_back", bankingFg))
-        assertIs<ForegroundGuard.Verdict.Allow>(ForegroundGuard.evaluate("open_recent_apps", bankingFg))
+        assertIs<ForegroundGuard.Verdict.Allow>(ForegroundGuard.evaluate("press_key", bankingFg))
     }
 
     @Test
@@ -76,7 +74,7 @@ class ForegroundGuardTest {
     fun `block messages tell the model not to work around and how to leave`() {
         val v = ForegroundGuard.evaluate("tap", bankingFg) as ForegroundGuard.Verdict.Block
         val p = ForegroundGuard.evaluate("perceive_screen", bankingFg) as ForegroundGuard.Verdict.Block
-        assertTrue(v.message.contains("press_home"))
-        assertTrue(p.message.contains("press_home"))
+        assertTrue(v.message.contains("press_key"))
+        assertTrue(p.message.contains("press_key"))
     }
 }

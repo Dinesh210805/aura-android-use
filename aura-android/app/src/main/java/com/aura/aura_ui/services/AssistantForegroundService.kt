@@ -229,6 +229,9 @@ class AssistantForegroundService : LifecycleService() {
      * is how the UI→store→agent wiring is validated until the Phase 3 voice/overlay
      * entry points land. The `vision`/`models` probe modes still require `--es key`.
      *
+     * `--es mode cancel` stops the overlay run in flight. A broadcast with no goal logs
+     * "Missing --es goal", which `scripts/bench/aura_androidworld.py` uses as a liveness probe.
+     *
      * Observe the run with `adb logcat -s AuraAgentSpike`. This is a throwaway
      * harness to prove the Koog-on-device + MCP round-trip on a real device; it
      * is replaced by the real voice/overlay entry points in Phase 3 and never
@@ -239,11 +242,22 @@ class AssistantForegroundService : LifecycleService() {
             if (intent.action != ACTION_AGENT_SPIKE) return
             val apiKey = intent.getStringExtra(EXTRA_AGENT_KEY)?.trim().orEmpty()
             val goal = intent.getStringExtra(EXTRA_AGENT_GOAL)?.trim().orEmpty()
+            val mode = intent.getStringExtra(EXTRA_AGENT_MODE)?.trim().orEmpty()
+            // `--es mode cancel` stops the overlay run in flight. The AndroidWorld adapter sends it
+            // when a task times out, so the agent cannot keep tapping through the next task's setup.
+            if (mode == "cancel") {
+                Log.i("AuraAgentSpike", "Cancel requested over adb")
+                ForegroundServiceCompat.startSafely(
+                    this@AssistantForegroundService,
+                    Intent(this@AssistantForegroundService, AuraOverlayService::class.java)
+                        .setAction(AuraOverlayService.ACTION_CANCEL_TASK),
+                )
+                return
+            }
             if (goal.isEmpty()) {
                 Log.e("AuraAgentSpike", "Missing --es goal; nothing to run")
                 return
             }
-            val mode = intent.getStringExtra(EXTRA_AGENT_MODE)?.trim().orEmpty()
             val providerName = intent.getStringExtra(EXTRA_AGENT_PROVIDER)?.trim().orEmpty()
             val endpoint = LlmEndpointCatalog.builtinById(providerName.lowercase())
                 ?: LlmEndpointCatalog.BUILTINS.first()

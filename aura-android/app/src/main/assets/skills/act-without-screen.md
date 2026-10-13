@@ -30,7 +30,7 @@ Use resolve_contact first when the user gave a name instead of a number.
 ## Media — control playback directly
 - get_media_sessions shows what's playing and where.
 - media_control (play/pause/next/previous/stop) acts on it in one call — never open the
-  music app to tap the pause button. volume_up/volume_down/mute are also one-call tools.
+  music app to tap the pause button. volume (up/down/mute) is also a one-call tool.
 
 ## Deep links — jump to the exact screen
 - list_app_deeplinks / resolve_deeplink discover an app's registered entry points;

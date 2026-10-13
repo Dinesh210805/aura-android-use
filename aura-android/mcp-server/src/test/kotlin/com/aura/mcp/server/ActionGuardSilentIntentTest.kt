@@ -1,6 +1,6 @@
-package com.aura.aura_ui.agent.mcpbridge
+package com.aura.mcp.server
 
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -19,44 +19,44 @@ class ActionGuardSilentIntentTest {
     private val dial = """{"action":"dial","phone_number":"+91 98765 43210"}"""
 
     @Test
-    fun `a silent alarm does not stale grounding, so the run can finish`() = runTest {
+    fun `a silent alarm does not stale grounding, so the run can finish`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.recordAfter("system_intent", alarm, success = true, screenText = """{"success":true}""")
         assertNull(
             "setting an alarm shows nothing — demanding a look before finishing is a deadlock",
-            guard.blockReasonFor("end_session", "{}"),
+            guard.refusalFor("end_session", "{}"),
         )
     }
 
     @Test
-    fun `four alarms in a row still finish cleanly`() = runTest {
+    fun `four alarms in a row still finish cleanly`() = runBlocking<Unit> {
         val guard = ActionGuard()
         listOf(0, 5, 10, 15).forEach { minute ->
             val args = """{"action":"set_alarm","hour":7,"minute":$minute}"""
-            assertNull("alarm at 7:$minute must not be refused", guard.blockReasonFor("system_intent", args))
+            assertNull("alarm at 7:$minute must not be refused", guard.refusalFor("system_intent", args))
             guard.recordAfter("system_intent", args, success = true, screenText = """{"success":true}""")
         }
-        assertNull(guard.blockReasonFor("end_session", "{}"))
+        assertNull(guard.refusalFor("end_session", "{}"))
     }
 
     @Test
-    fun `an action that opens a UI is still held to the verify-before-finish rule`() = runTest {
+    fun `an action that opens a UI is still held to the verify-before-finish rule`() = runBlocking<Unit> {
         val guard = ActionGuard()
         // No post_action_observation in the result text — the dialer opened and was never looked at.
         guard.recordAfter("system_intent", dial, success = true, screenText = """{"success":true}""")
         assertNotNull(
             "dial opens the dialer; finishing without confirming it is the old over-claim",
-            guard.blockReasonFor("end_session", "{}"),
+            guard.refusalFor("end_session", "{}"),
         )
     }
 
     @Test
-    fun `malformed args fall back to the strict classification`() = runTest {
+    fun `malformed args fall back to the strict classification`() = runBlocking<Unit> {
         val guard = ActionGuard()
         guard.recordAfter("system_intent", "not json at all", success = true, screenText = "{}")
         assertNotNull(
             "an unreadable action is treated as screen-changing, the safe direction",
-            guard.blockReasonFor("end_session", "{}"),
+            guard.refusalFor("end_session", "{}"),
         )
     }
 }

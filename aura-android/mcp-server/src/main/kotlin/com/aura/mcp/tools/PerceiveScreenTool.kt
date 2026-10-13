@@ -267,7 +267,7 @@ internal fun Server.registerPerceiveScreenTool(
 
             val renumbered = renumberAndFlagWrappers(merged, screenHeightPx)
 
-            // Update the perception cache so tap/double_tap/long_press can resolve som_id
+            // Update the perception cache so tap can resolve som_id
             // → (center_x, center_y) server-side without trusting model eyeballing.
             perceptionCache.update(renumbered.map { it.element }, signature, activityAtRead)
 

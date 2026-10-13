@@ -40,7 +40,7 @@ class ForegroundGateTest {
     fun `ungated tool never reads the tree`() = runBlocking {
         val bridge = FakeTreeBridge("""{"package_name":"in.org.npci.upiapp"}""")
         val gate = ForegroundGate.fromUiTree(bridge)
-        assertNull(gate.check("press_home"))
+        assertNull(gate.check("press_key"))
         assertNull(gate.check("web_search"))
         assertEquals(0, bridge.snapshots, "ungated tools must not pay a snapshot")
     }

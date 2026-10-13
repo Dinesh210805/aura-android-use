@@ -1,6 +1,6 @@
 {
   "name": "aura-mcp-connect",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Connect any MCP client to AURA's on-device MCP server over your local network. One shared local daemon owns the WebRTC link to the phone and serves MCP over Streamable HTTP on localhost, so every client (Claude Code, Claude Desktop, VS Code, Cursor, Cline, Windsurf, Zed) shares the single phone connection. End-to-end encrypted over WebRTC DTLS; no cloud relay.",
   "type": "module",
   "main": "src/index.js",
@@ -10,6 +10,7 @@
   },
   "files": [
     "src",
+    "skills",
     "README.md",
     "LICENSE"
   ],
@@ -31,9 +32,9 @@
   ],
   "license": "MIT",
   "author": "Dinesh Kumar C",
-  "homepage": "https://github.com/Dinesh210805/aura-releases",
+  "homepage": "https://github.com/Dinesh210805/aura-android-use/tree/main/aura-mcp-connect#readme",
   "scripts": {
     "postinstall": "node src/postinstall.js",
-    "test": "node --check src/index.js && node --check src/config.js && node --check src/lan.js && node --check src/pair.js && node --check src/phone-transport.js && node --check src/proxy-core.js && node --check src/daemon.js && node --check src/stdio-shim.js && node --check src/adb-tool.js && node --check src/pairing-crypto.js && node --check src/version.js && node test/adb-tool.test.mjs && node test/daemon.test.mjs && node test/shim.test.mjs && node test/stale-link.test.mjs && node test/pairing-crypto.test.mjs && node test/lan.test.mjs && node test/lan-e2e.test.mjs"
+    "test": "node --check src/index.js && node --check src/config.js && node --check src/lan.js && node --check src/pair.js && node --check src/phone-transport.js && node --check src/proxy-core.js && node --check src/daemon.js && node --check src/stdio-shim.js && node --check src/adb-tool.js && node --check src/pairing-crypto.js && node --check src/version.js && node --check src/skill.js && node test/adb-tool.test.mjs && node test/daemon.test.mjs && node test/shim.test.mjs && node test/stale-link.test.mjs && node test/pairing-crypto.test.mjs && node test/lan.test.mjs && node test/lan-e2e.test.mjs && node test/skill.test.mjs"
   }
 }

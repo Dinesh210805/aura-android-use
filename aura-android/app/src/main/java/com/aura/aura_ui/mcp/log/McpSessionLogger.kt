@@ -62,7 +62,7 @@ class McpSessionLogger(
      * Keeping this list small — the user wants forensic detail and
      * disk is cheap.
      */
-    private val skipScreenshotFor = setOf("echo", "connect_device", "end_session")
+    private val skipScreenshotFor = setOf("end_session")
 
     // ── SessionLogSink ─────────────────────────────────────────────
 
@@ -112,6 +112,28 @@ class McpSessionLogger(
                     lastActivityMillis = System.currentTimeMillis()
                     persist(session)
                 }
+            }
+        }
+    }
+
+    override fun onToolRefused(toolName: String, reason: String, tokenId: String?, agentLabel: String?) {
+        scope.launch {
+            mutex.withLock {
+                val now = System.currentTimeMillis()
+                rotateIfNeeded(now, tokenId, agentLabel)
+                val session = currentSession ?: return@launch
+                session.invocations.add(
+                    ToolInvocation(
+                        index = session.invocations.size,
+                        timestampMillis = now,
+                        toolName = toolName,
+                        argsJson = null,
+                        success = false,
+                        outputSummary = "refused: $reason",
+                    ),
+                )
+                lastActivityMillis = now
+                persist(session)
             }
         }
     }

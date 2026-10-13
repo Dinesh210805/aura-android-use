@@ -23,6 +23,10 @@ import theme  # noqa: E402
 # lines; the end is where the verdict is, and the raw file is linked in full.
 LOG_TAIL_LINES = 400
 
+TASK_LIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
+                         'aura-android', 'app', 'src', 'main', 'assets', 'eval',
+                         'androidworld.json')
+
 
 def _read_results(results_dir):
   out = []
@@ -196,7 +200,13 @@ def _index(metas, total_tasks):
       '<footer>Scored by AndroidWorld\'s own task validators, which inspect '
       'device state after the run &mdash; not by watching what the agent did. '
       'Every verdict here is the benchmark\'s, unedited. Videos and raw logs '
-      'are linked from each task page.</footer>'
+      'are linked from each task page.<br><br>'
+      'Not a like-for-like leaderboard number: the information-retrieval '
+      'tasks are excluded (AURA has no channel for the typed answer they '
+      'grade), the device clock is moved from 2023 to 2026 so TLS to the '
+      'model provider works, and AURA gets a wall-clock limit instead of '
+      'AndroidWorld\'s step budget. Method: scripts/bench/README.md in the '
+      'AURA repository.</footer>'
       % (rate, len(done), total_tasks, len(passed),
          len(done) - len(passed), len(blind), banner,
          '' if done else '<p class="vid-note">No tasks scored yet.</p>',
@@ -207,9 +217,24 @@ def _index(metas, total_tasks):
   return _shell('AURA on AndroidWorld', body, 0)
 
 
-def build(results_dir, site_dir, total_tasks=116):
-  """Regenerates the whole site. Safe to call after every single task."""
-  metas = _read_results(results_dir)
+def _scored_tasks():
+  """Task names in the generated `androidworld.json`: the same list the cockpit runs.
+
+  Change together: gen_androidworld_tasks.py writes this file.
+  """
+  with open(TASK_LIST, encoding='utf-8') as f:
+    return {t['aw_task'] for t in json.load(f)['tasks']}
+
+
+def build(results_dir, site_dir, tasks=None):
+  """Regenerates the whole site. Safe to call after every single task.
+
+  Contract: only results for `tasks` (default: the scored list) are published,
+  so a folder left by an excluded task cannot move the rate.
+  """
+  tasks = set(tasks) if tasks is not None else _scored_tasks()
+  total_tasks = len(tasks)
+  metas = [m for m in _read_results(results_dir) if m.get('task') in tasks]
   shutil.rmtree(os.path.join(site_dir, 't'), ignore_errors=True)
   os.makedirs(os.path.join(site_dir, 't'), exist_ok=True)
 
@@ -247,9 +272,16 @@ def _demo():
     with open(os.path.join(results, 'FakePass', 'agent.log'), 'w') as f:
       f.write('line one\nE Agent threw something\n')
 
-    site = build(results, os.path.join(tmp, 'site'), total_tasks=116)
+    os.makedirs(os.path.join(results, 'Excluded'))
+    with open(os.path.join(results, 'Excluded', 'meta.json'), 'w') as f:
+      json.dump({'task': 'Excluded', 'success': True, 'videos': []}, f)
+
+    site = build(results, os.path.join(tmp, 'site'),
+                 tasks=['FakePass', 'FakeBlindFail'])
     index = open(os.path.join(site, 'index.html'), encoding='utf-8').read()
-    assert '50.0' in index, 'one pass of two scored runs must read 50.0%'
+    assert '50.0' in index, \
+        'one pass of two scored runs must read 50.0%; an excluded task must not count'
+    assert 'Excluded' not in index, 'a task outside the scored list must not be published'
     assert '1 of 2 completed tasks ran without vision' in index, \
         'the blind-run banner must appear whenever any run had no vision'
     assert '&lt;b&gt;' in index, 'a goal containing markup must be escaped'

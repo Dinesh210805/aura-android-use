@@ -58,7 +58,7 @@ private val VISION_TOOLS = setOf("perceive_screen", "get_screenshot")
  */
 private const val VISION_REINJECT_NOTE =
     "Current screen, annotated. Each box's number is its som_id — the same numbers as the " +
-        "grid. Act by som_id (tap, double_tap, long_press, type_text); never read pixel " +
+        "grid. Act by som_id (tap, type_text); never read pixel " +
         "positions off this image. It is replaced next turn. Box colour: blue tap · green text " +
         "field · magenta scrolls · amber toggle · grey nothing declared · red on-device vision guess."
 

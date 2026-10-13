@@ -21,9 +21,8 @@ import com.aura.mcp.tools.ScreenSignature
  * ### Screen history
  *
  * Also remembers the last [capacity] distinct screens it was shown, so a gesture that
- * lands back on an earlier screen can say so ("same screen as 3 actions ago"). The agent
- * previously knew only the screen right before its action, so press_back → tap → back
- * loops looked like progress. Borrowed from Artemis's "unchanged since step N" /
+ * lands back on an earlier screen can say so ("same screen as 3 actions ago"). Knowing only
+ * the screen right before an action, a back → tap → back loop looks like progress. Borrowed from Artemis's "unchanged since step N" /
  * "resembles step N" hints, built on the tree signature instead of screenshot pixels.
  *
  * Matched on **layout**, not content: the same inbox with a new unread count, a ticking

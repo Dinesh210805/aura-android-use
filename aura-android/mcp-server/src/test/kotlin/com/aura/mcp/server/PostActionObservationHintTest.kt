@@ -16,7 +16,7 @@ class PostActionObservationHintTest {
 
     @Test
     fun `scroll is told to look again, because the summary cannot show what scrolled in`() {
-        for (tool in listOf("scroll_down", "scroll_up", "scroll_to", "swipe")) {
+        for (tool in listOf("scroll", "swipe")) {
             val hint = PostActionObservation.hintFor(tool)
             assertTrue(hint.contains("read_screen"), "$tool must be pointed at a fresh look")
             assertFalse(
@@ -49,7 +49,30 @@ class PostActionObservationHintTest {
     }
 
     @Test
-    fun `every hint warns that earlier som_ids are stale`() {
+    fun `a gesture that changed nothing is told not to repeat, and that its som_ids still work`() {
+        val hint = PostActionObservation.hintFor("tap", changed = false)
+        assertTrue(hint.contains("do not repeat"), hint)
+        assertTrue(hint.contains("flag d"), "must point at the disabled flag: $hint")
+        assertTrue(hint.contains("still valid"), hint)
+        assertFalse(hint.contains("stale"), "an unchanged screen's som_ids are not stale: $hint")
+    }
+
+    @Test
+    fun `a scroll that moved nothing says the list ends there`() {
+        val hint = PostActionObservation.hintFor("scroll", changed = false)
+        assertTrue(hint.contains("ends"), hint)
+        assertFalse(hint.contains("stale"), hint)
+    }
+
+    @Test
+    fun `a visible loading indicator makes wait_for the advice, never the discouragement`() {
+        val hint = PostActionObservation.hintFor("tap", loading = true)
+        assertTrue(hint.contains("wait_for the"), hint)
+        assertFalse(hint.contains("do not call wait_for"), "contradictory advice: $hint")
+    }
+
+    @Test
+    fun `every changed-screen hint warns that earlier som_ids are stale`() {
         for (tool in PostActionObservation.OBSERVED_TOOLS) {
             assertTrue(
                 PostActionObservation.hintFor(tool).contains("som_ids are stale"),
