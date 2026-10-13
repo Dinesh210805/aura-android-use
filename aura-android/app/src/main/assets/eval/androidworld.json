@@ -3,7 +3,8 @@
   "_comment": [
     "GENERATED - do not hand-edit. Rebuild with scripts/bench/gen_androidworld_tasks.py.",
     "",
-    "Google's AndroidWorld suite (116 tasks), exposed in the on-device eval cockpit.",
+    "Google's AndroidWorld suite, minus the information-retrieval family (see",
+    "scripts/bench/README.md), exposed in the on-device eval cockpit.",
     "",
     "What is different about these rows:",
     "  - 'goal' is a PLACEHOLDER, not the sentence the agent gets. AndroidWorld generates the",
@@ -316,38 +317,6 @@
       "aw_task": "MarkorTranscribeVideo"
     },
     {
-      "number": 1038,
-      "goal": "AndroidWorld: NotesIsTodo",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "NotesIsTodo"
-    },
-    {
-      "number": 1039,
-      "goal": "AndroidWorld: NotesMeetingAttendeeCount",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "NotesMeetingAttendeeCount"
-    },
-    {
-      "number": 1040,
-      "goal": "AndroidWorld: NotesRecipeIngredientCount",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "NotesRecipeIngredientCount"
-    },
-    {
-      "number": 1041,
-      "goal": "AndroidWorld: NotesTodoItemCount",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "NotesTodoItemCount"
-    },
-    {
       "number": 1042,
       "goal": "AndroidWorld: OpenAppTaskEval",
       "category": "androidworld",
@@ -564,14 +533,6 @@
       "aw_task": "SimpleCalendarAddRepeatingEvent"
     },
     {
-      "number": 1069,
-      "goal": "AndroidWorld: SimpleCalendarAnyEventsOnDate",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarAnyEventsOnDate"
-    },
-    {
       "number": 1070,
       "goal": "AndroidWorld: SimpleCalendarDeleteEvents",
       "category": "androidworld",
@@ -594,70 +555,6 @@
       "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
       "needs_human": false,
       "aw_task": "SimpleCalendarDeleteOneEvent"
-    },
-    {
-      "number": 1073,
-      "goal": "AndroidWorld: SimpleCalendarEventOnDateAtTime",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarEventOnDateAtTime"
-    },
-    {
-      "number": 1074,
-      "goal": "AndroidWorld: SimpleCalendarEventsInNextWeek",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarEventsInNextWeek"
-    },
-    {
-      "number": 1075,
-      "goal": "AndroidWorld: SimpleCalendarEventsInTimeRange",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarEventsInTimeRange"
-    },
-    {
-      "number": 1076,
-      "goal": "AndroidWorld: SimpleCalendarEventsOnDate",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarEventsOnDate"
-    },
-    {
-      "number": 1077,
-      "goal": "AndroidWorld: SimpleCalendarFirstEventAfterStartTime",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarFirstEventAfterStartTime"
-    },
-    {
-      "number": 1078,
-      "goal": "AndroidWorld: SimpleCalendarLocationOfEvent",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarLocationOfEvent"
-    },
-    {
-      "number": 1079,
-      "goal": "AndroidWorld: SimpleCalendarNextEvent",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarNextEvent"
-    },
-    {
-      "number": 1080,
-      "goal": "AndroidWorld: SimpleCalendarNextMeetingWithPerson",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SimpleCalendarNextMeetingWithPerson"
     },
     {
       "number": 1081,
@@ -714,54 +611,6 @@
       "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
       "needs_human": false,
       "aw_task": "SimpleSmsSendReceivedAddress"
-    },
-    {
-      "number": 1088,
-      "goal": "AndroidWorld: SportsTrackerActivitiesCountForWeek",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SportsTrackerActivitiesCountForWeek"
-    },
-    {
-      "number": 1089,
-      "goal": "AndroidWorld: SportsTrackerActivitiesOnDate",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SportsTrackerActivitiesOnDate"
-    },
-    {
-      "number": 1090,
-      "goal": "AndroidWorld: SportsTrackerActivityDuration",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SportsTrackerActivityDuration"
-    },
-    {
-      "number": 1091,
-      "goal": "AndroidWorld: SportsTrackerLongestDistanceActivity",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SportsTrackerLongestDistanceActivity"
-    },
-    {
-      "number": 1092,
-      "goal": "AndroidWorld: SportsTrackerTotalDistanceForCategoryOverInterval",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SportsTrackerTotalDistanceForCategoryOverInterval"
-    },
-    {
-      "number": 1093,
-      "goal": "AndroidWorld: SportsTrackerTotalDurationForCategoryThisWeek",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "SportsTrackerTotalDurationForCategoryThisWeek"
     },
     {
       "number": 1094,
@@ -866,54 +715,6 @@
       "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
       "needs_human": false,
       "aw_task": "SystemWifiTurnOnVerify"
-    },
-    {
-      "number": 1107,
-      "goal": "AndroidWorld: TasksCompletedTasksForDate",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "TasksCompletedTasksForDate"
-    },
-    {
-      "number": 1108,
-      "goal": "AndroidWorld: TasksDueNextWeek",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "TasksDueNextWeek"
-    },
-    {
-      "number": 1109,
-      "goal": "AndroidWorld: TasksDueOnDate",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "TasksDueOnDate"
-    },
-    {
-      "number": 1110,
-      "goal": "AndroidWorld: TasksHighPriorityTasks",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "TasksHighPriorityTasks"
-    },
-    {
-      "number": 1111,
-      "goal": "AndroidWorld: TasksHighPriorityTasksDueOnDate",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "TasksHighPriorityTasksDueOnDate"
-    },
-    {
-      "number": 1112,
-      "goal": "AndroidWorld: TasksIncompleteTasksOnDate",
-      "category": "androidworld",
-      "truth_check": "Scored automatically. AndroidWorld inspects device state after the run; no human verdict.",
-      "needs_human": false,
-      "aw_task": "TasksIncompleteTasksOnDate"
     },
     {
       "number": 1113,

@@ -2,14 +2,15 @@
 
     androidworld-venv/Scripts/python.exe scripts/bench/gen_androidworld_tasks.py
 
-The registry is the only honest source for "which 116 tasks are in the suite" -
+The registry is the only honest source for "which tasks are in the suite" -
 hand-maintaining that list means the cockpit and the host referee can disagree
 about what a benchmark run covered, and the disagreement would be invisible.
 
 Numbers are assigned by sorted task name starting at 1001. That is stable as
 long as the suite is, and a task that disappears upstream leaves its number
 retired rather than handing it to a different task - the number is a permanent
-join key and also the on-disk filename of a result.
+join key and also the on-disk filename of a result. Tasks AURA is not scored on
+(`aura_androidworld.scored_tasks`) keep their number and are simply left out.
 """
 
 import json
@@ -18,6 +19,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.insert(0, os.path.join(ROOT, 'android_world'))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 OUT = os.path.join(ROOT, 'aura-android', 'app', 'src', 'main', 'assets',
                    'eval', 'androidworld.json')
@@ -25,7 +27,8 @@ OUT = os.path.join(ROOT, 'aura-android', 'app', 'src', 'main', 'assets',
 HEADER = [
     'GENERATED - do not hand-edit. Rebuild with scripts/bench/gen_androidworld_tasks.py.',
     '',
-    "Google's AndroidWorld suite (116 tasks), exposed in the on-device eval cockpit.",
+    "Google's AndroidWorld suite, minus the information-retrieval family (see",
+    'scripts/bench/README.md), exposed in the on-device eval cockpit.',
     '',
     'What is different about these rows:',
     "  - 'goal' is a PLACEHOLDER, not the sentence the agent gets. AndroidWorld generates the",
@@ -47,8 +50,10 @@ TRUTH_CHECK = ('Scored automatically. AndroidWorld inspects device state after '
 
 def build():
   from android_world import registry
+  import aura_androidworld
   reg = registry.TaskRegistry()
   names = sorted(reg.get_registry(family=registry.TaskRegistry.ANDROID_WORLD_FAMILY))
+  scored = aura_androidworld.scored_tasks()
   return {
       'version': 1,
       '_comment': HEADER,
@@ -66,6 +71,7 @@ def build():
               'aw_task': name,
           }
           for i, name in enumerate(names, 1)
+          if name in scored
       ],
   }
 
