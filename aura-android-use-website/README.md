@@ -4,6 +4,12 @@ Static site, no build step. Hosted on Vercel.
 
 - `index.html` — home page
 - `download.html` — install guide
+- `mcp-tools.html` — every MCP tool with its real output, a before/after screenshot and a
+  clip of each action, and a walkthrough recording. The outputs live in
+  `mcp-tools-data.js` and `media/mcp-tools/`, generated from a paired phone on USB adb by
+  `scripts/capture_mcp_tools.mjs` (needs adb, ffmpeg and scrcpy); do not edit them by hand. The
+  tap, swipe and scroll markers come from coordinates in the tool's own reply; the
+  "what changed" outline is computed in the browser from the two screenshots.
 - `support.js` — page runtime (renders the `<x-dc>` markup; don't edit by hand)
 - `aura-film.js` — the scroll animation on the home page
 - `media/`, `logos/` — videos, posters, icons
