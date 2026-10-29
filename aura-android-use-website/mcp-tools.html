@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AURA MCP tools · real outputs</title>
+<meta name="description" content="Every tool the AURA MCP server gives an AI agent: what it takes, what it really returned, and a recording of it running on a real Android phone.">
+<link rel="canonical" href="https://aura-android-use.vercel.app/mcp-tools">
+<meta name="theme-color" content="#E7E9EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AURA">
+<meta property="og:url" content="https://aura-android-use.vercel.app/mcp-tools">
+<meta property="og:title" content="AURA MCP tools · real outputs">
+<meta property="og:description" content="Every tool the AURA MCP server gives an AI agent, recorded on a real phone with what it really returned.">
+<meta property="og:image" content="https://aura-android-use.vercel.app/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@500..900&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem('aura-theme');if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<script src="mcp-tools-data.js"></script>
+<style>
+:root{--paper:#E7E9EC;--paper2:#DCDFE3;--ink:#0B0C0F;--ink2:#4C5058;--line:rgba(11,12,15,.15);--chip:rgba(11,12,15,.055);--red:#FF2B1C;--ok:#12805C;--mark:#FF2B1C;--logo:none;--hdr:rgba(231,233,236,.8);--code:#F4F5F7;color-scheme:light}
+html[data-theme="dark"]{--paper:#000000;--paper2:#0D0D0F;--ink:#F3F4F6;--ink2:#9CA1AA;--line:rgba(255,255,255,.16);--chip:rgba(255,255,255,.07);--ok:#3DD39A;--logo:invert(1);--hdr:rgba(0,0,0,.74);--code:#0B0B0D;color-scheme:dark}
+html{background:var(--paper);overflow-x:hidden;scroll-padding-top:120px}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Geist",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
+a{color:var(--ink);text-decoration:none}
+a:hover{color:var(--ink2)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px}
+code{font-family:"Geist Mono",monospace;font-size:.88em;background:var(--chip);padding:1px 5px;border-radius:5px;color:var(--ink)}
+.wrap{max-width:1240px;margin:0 auto;padding:0 clamp(16px,5vw,64px)}
+header{position:sticky;top:0;z-index:50;background:var(--hdr);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.bar{height:60px;display:flex;align-items:center;gap:16px}
+.theme{width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
+
+/* hero: words left, the recording right */
+.hero{padding:clamp(40px,7vw,96px) 0 clamp(28px,4vw,48px);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:clamp(28px,5vw,72px);align-items:start}
+@media (max-width:900px){.hero{grid-template-columns:1fr}}
+h1{margin:0;font-family:Doto,monospace;font-weight:850;font-size:clamp(46px,7vw,104px);line-height:.9;letter-spacing:-.01em}
+.lede{margin:18px 0 0;font-size:18px;line-height:1.5;color:var(--ink2);max-width:48ch}
+.facts{margin-top:28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden;max-width:520px}
+.facts div{background:var(--paper);padding:14px 16px}
+.facts span{display:block;font-family:"Geist Mono",monospace;font-size:11.5px;color:var(--ink2)}
+.facts b{display:block;margin-top:6px;font-size:19px;font-weight:500;overflow-wrap:anywhere}
+.privacy{margin-top:18px;font-size:13.5px;line-height:1.5;color:var(--ink2);max-width:60ch;border-left:2px solid var(--line);padding-left:12px}
+.film{display:grid;grid-template-columns:auto minmax(0,260px);gap:18px;align-items:start}
+@media (max-width:640px){.film{grid-template-columns:1fr}}
+.phone{width:min(300px,80vw);aspect-ratio:1240/2772;border-radius:34px;padding:9px;background:#0B0C0F;box-shadow:0 30px 60px -30px rgba(0,0,0,.55),0 0 0 1px var(--line)}
+.phone video{width:100%;height:100%;object-fit:cover;border-radius:26px;display:block;background:#000}
+.chapters{max-height:min(640px,70vh);overflow-y:auto;overflow-x:hidden;border:1px solid var(--line);border-radius:14px;font-family:"Geist Mono",monospace;font-size:12.5px}
+.chapters .h{position:sticky;top:0;background:var(--paper);padding:10px 12px;border-bottom:1px solid var(--line);color:var(--ink2);font-size:11.5px}
+.chapters button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:44px 1fr;gap:6px;width:100%;padding:7px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.chapters button:hover,.chapters button.on{background:var(--chip)}
+.chapters button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chapters button span:first-child{color:var(--ink2)}
+
+/* primer */
+.primer{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:14px;margin:clamp(24px,4vw,40px) 0 clamp(36px,5vw,56px)}
+.card{border:1px solid var(--line);border-radius:16px;padding:18px 20px;background:var(--paper)}
+.card h3{margin:0 0 8px;font-size:16px;font-weight:600}
+.card p,.card li{font-size:14.5px;line-height:1.55;color:var(--ink2);margin:0}
+.card ul{margin:0;padding-left:18px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13.5px;color:var(--ink2);align-items:center}
+.legend i{display:inline-block;vertical-align:-3px;margin-right:6px}
+.dot{width:14px;height:14px;border-radius:50%;border:3px solid var(--mark)}
+.arr{width:20px;height:3px;background:var(--mark);position:relative;top:-3px}
+.box{width:16px;height:12px;border:2px dashed var(--mark);border-radius:3px}
+
+nav.cats{position:sticky;top:60px;z-index:40;background:var(--hdr);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+nav.cats .wrap{display:flex;gap:8px;overflow-x:auto;padding-top:10px;padding-bottom:10px;scrollbar-width:none}
+nav.cats a{flex:none;font-family:"Geist Mono",monospace;font-size:13px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);white-space:nowrap;transition:background .15s}
+nav.cats a:hover,nav.cats a.on{background:var(--chip);color:var(--ink)}
+
+section.cat{padding:clamp(40px,6vw,72px) 0 0}
+section.cat>h2{margin:0;font-family:Doto,monospace;font-weight:900;font-size:clamp(36px,5vw,64px);line-height:.9}
+section.cat>p{margin:10px 0 22px;font-size:17px;color:var(--ink2);max-width:60ch}
+
+/* one tool */
+.tool{border-top:1px solid var(--line);padding:26px 0 32px}
+.tool .top{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:clamp(18px,3vw,44px)}
+@media (max-width:860px){.tool .top{grid-template-columns:1fr}}
+.tool h3{margin:0;font-family:"Geist Mono",monospace;font-size:21px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tag{font-family:"Geist Mono",monospace;font-size:11px;font-weight:500;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink2)}
+.tag.new{border-color:var(--ink);color:var(--ink)}
+.tag.act{border-color:var(--mark);color:var(--mark)}
+.desc{margin:12px 0 0;font-size:15px;line-height:1.55;color:var(--ink2);white-space:pre-line}
+.args{border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:start}
+.args div{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:12px;padding:9px 12px;border-top:1px solid var(--line);font-size:13.5px;line-height:1.45}
+.args div:first-child{border-top:0}
+.args b{font-family:"Geist Mono",monospace;font-weight:500;overflow-wrap:anywhere}
+.args i{font-style:normal;color:var(--ink2)}
+.args .req::after{content:" required";font-family:"Geist Mono",monospace;font-size:10.5px;color:var(--red)}
+.noargs{font-size:14px;color:var(--ink2);border:1px dashed var(--line);border-radius:12px;padding:12px;align-self:start}
+
+.run{margin-top:18px;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--code)}
+.runhead{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);font-family:"Geist Mono",monospace;font-size:12.5px;background:var(--paper)}
+.runhead .call{color:var(--ink);overflow-wrap:anywhere;flex:1;min-width:0}
+.runhead .ms{color:var(--ink2)}
+.runhead .at{all:unset;cursor:pointer;color:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.runhead .at:hover{color:var(--ink);background:var(--chip)}
+.ok{color:var(--ok)}.err{color:var(--red)}
+.note{padding:12px 14px 0;font-size:14.5px;line-height:1.5;color:var(--ink)}
+.body{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;padding:14px}
+.body.noshots{grid-template-columns:minmax(0,1fr)}
+@media (max-width:860px){.body{grid-template-columns:1fr}}
+.shots{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+figure{margin:0;width:min(190px,42vw)}
+figure .frame{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#000;cursor:zoom-in;aspect-ratio:1240/2772}
+figure img,figure video{display:block;width:100%;height:100%;object-fit:cover}
+figure svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+figcaption{margin-top:6px;font-family:"Geist Mono",monospace;font-size:11px;color:var(--ink2);line-height:1.4}
+.out .lbl{font-family:"Geist Mono",monospace;font-size:11px;color:var(--ink2);margin:0 0 5px}
+.out .lbl:not(:first-child){margin-top:12px}
+pre{margin:0;font-family:"Geist Mono",monospace;font-size:12px;line-height:1.5;white-space:pre;overflow:auto;max-height:440px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+pre.wrapme{white-space:pre-wrap;overflow-wrap:anywhere}
+.out img.ret{display:block;width:min(100%,220px);border-radius:12px;border:1px solid var(--line);cursor:zoom-in}
+.skip{margin-top:18px;padding:14px;font-size:14px;line-height:1.5;color:var(--ink2);border:1px dashed var(--line);border-radius:14px}
+.empty{padding:28px;border:1px dashed var(--line);border-radius:16px;color:var(--ink2);font-size:16px;line-height:1.5}
+
+dialog{border:0;padding:0;background:transparent;max-width:96vw;max-height:94vh}
+dialog::backdrop{background:rgba(0,0,0,.82)}
+dialog .frame{position:relative;height:min(90vh,1100px);aspect-ratio:1240/2772;border-radius:20px;overflow:hidden;background:#000}
+dialog img{display:block;width:100%;height:100%;object-fit:contain}
+dialog svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+dialog button{position:fixed;top:14px;right:14px;width:40px;height:40px;border-radius:999px;border:0;background:#fff;color:#000;font-size:20px;cursor:pointer}
+
+footer{border-top:1px solid var(--line);margin-top:clamp(60px,8vw,110px);padding:28px 0;font-family:"Geist Mono",monospace;font-size:11.5px;color:var(--ink2)}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <a href="/" style="display:flex;align-items:center;gap:9px;font-weight:600;font-size:16px"><img src="media/aura_logo_mono.png" alt="" width="24" height="24" style="filter:var(--logo);display:block">AURA</a>
+    <div style="flex:1"></div>
+    <a href="/" style="font-size:14px">← Back to the site</a>
+    <button type="button" class="theme" id="theme" aria-label="Switch theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor"></path></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <h1><span id="count">44</span> tools. Real outputs.</h1>
+        <p class="lede">Everything the AURA MCP server gives an AI agent: what each tool takes, what it actually sent back, and a recording of the phone while it ran. One unedited session on a real Android phone. Nothing on this page is mocked.</p>
+        <div class="facts" id="facts"></div>
+        <p class="privacy">Recorded on AURA's development build. The tools tagged <b>next app release</b> (<code>set_value</code>, <code>run_steps</code>, <code>clipboard</code>) are not in the current download yet; they arrive with the next release.</p>
+        <p class="privacy">Nothing personal is shown. The run stayed in Settings, the Clock timer, two demo files made for this page and a public test website. The status bar is in Android's demo mode. <code>resolve_contact</code> can only answer with real people, so its names and numbers are swapped for placeholders.</p>
+      </div>
+      <div class="film">
+        <div class="phone"><video id="walk" controls playsinline muted preload="metadata"></video></div>
+        <div class="chapters" id="chapters"><div class="h">Every call in the recording. Click one to jump there.</div></div>
+      </div>
+    </section>
+
+    <div class="primer">
+      <div class="card">
+        <h3>How an agent works the phone</h3>
+        <p>It <b>looks</b> with <code>read_screen</code>, which numbers everything on screen. It <b>acts</b> on a number: <code>tap</code> som_id 12. Then it decides from what the action reports back. The numbers are only good for the screen they came from.</p>
+      </div>
+      <div class="card">
+        <h3>Reading a read_screen result</h3>
+        <ul>
+          <li><code>SEEN:</code> the app and the biggest labels.</li>
+          <li><code>SCREEN</code> size, app, <code>IDLE</code> or <code>BUSY</code>.</li>
+          <li>The grid: a text picture of the screen.</li>
+          <li>The table: <code>som</code>, <code>in</code> (its parent box), flags, label.</li>
+          <li><code>OFFSCREEN</code>: text scrolled out of view.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Flags in the table</h3>
+        <ul style="list-style:none;padding:0;font-family:'Geist Mono',monospace;font-size:13px">
+          <li><code>*</code> tap · <code>e</code> text field · <code>S</code> scrolls</li>
+          <li><code>c</code>/<code>o</code> switch on/off · <code>l</code> long-press</li>
+          <li><code>d</code> disabled · <code>-</code> nothing declared</li>
+          <li><code>x under 5</code> covered by 5: tap refused</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Reading the pictures</h3>
+        <p style="margin-bottom:10px">Each action shows the screen <b>before</b> and <b>after</b>, and the clip of that moment.</p>
+        <div class="legend"><span><i class="dot"></i>where the finger landed</span><span><i class="arr"></i>finger path</span><span><i class="box"></i>what changed</span></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="cats" aria-label="Tool groups"><div class="wrap" id="catnav"></div></nav>
+  <div class="wrap" id="list"></div>
+</main>
+
+<dialog id="zoom"><button type="button" aria-label="Close">×</button><div class="frame"></div></dialog>
+
+<footer><div class="wrap"><span>AURA · open source · <a href="https://github.com/Dinesh210805/aura-android-use">GitHub</a> · captured by <code>scripts/capture_mcp_tools.mjs</code></span><span id="stamp"></span></div></footer>
+
+<script>
+(function () {
+  document.getElementById('theme').onclick = function () {
+    var el = document.documentElement, t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    try { localStorage.setItem('aura-theme', t); } catch (e) {}
+  };
+
+  // Groups match the home page's tool board (aura-film.js CATS).
+  var CATS = [
+    ['seeing', 'Reads the screen and numbers everything you can touch.', ['read_screen', 'perceive_screen', 'get_screenshot', 'request_screen_capture_permission', 'watch_device_events', 'wait_for']],
+    ['touching', 'Taps, swipes and scrolls like a finger, flips switches to a set state, and runs several steps in one call.', ['tap', 'swipe', 'scroll', 'set_value', 'run_steps']],
+    ['typing', 'Types into any field, then reads back what landed.', ['type_text', 'press_enter', 'clipboard']],
+    ['apps', 'Opens apps and moves between them.', ['launch_app', 'lookup_app', 'press_key']],
+    ['browser', 'Drives its own browser, tab by tab.', ['browser_open', 'browser_read', 'browser_act', 'browser_find', 'browser_extract', 'browser_tabs', 'browser_wait', 'browser_screenshot', 'browser_upload', 'browser_handoff', 'browser_close', 'web_search']],
+    ['notifications', 'Reads, replies to and clears notifications.', ['read_notifications', 'notification_action', 'dismiss_notification']],
+    ['media', 'Controls music, video and volume.', ['get_media_sessions', 'media_control', 'volume']],
+    ['contacts', 'Finds the right person on the phone.', ['resolve_contact']],
+    ['files', 'Finds and opens your files.', ['find_files', 'open_file']],
+    ['deep links', 'Jumps straight to the right screen.', ['list_app_deeplinks', 'resolve_deeplink', 'open_deeplink']],
+    ['system', 'Alarms, timers, calls, sharing, and checking its own work.', ['system_intent', 'get_device_status', 'verify_action', 'end_session']]
+  ];
+  var NEW = { set_value: 1, run_steps: 1, clipboard: 1 };
+  var UNLISTED = { web_search: 'Not listed by this phone: web_search appears only when a search API key is set in AURA, and none was set for this capture.' };
+
+  var D = window.MCP_TOOLS;
+  var list = document.getElementById('list');
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  var NS = 'http://www.w3.org/2000/svg';
+  function sv(tag, attrs) { var n = document.createElementNS(NS, tag); for (var k in attrs) n.setAttribute(k, attrs[k]); return n; }
+
+  if (!D) { list.appendChild(el('div', 'empty', 'The captured outputs have not been generated yet. Run scripts/capture_mcp_tools.mjs with a paired phone.')); return; }
+
+  var W = D.screen.w, H = D.screen.h;
+  var byName = {}; D.tools.forEach(function (t) { byName[t.name] = t; });
+  var runs = {}; D.calls.forEach(function (c, i) { c.i = i; (runs[c.tool] = runs[c.tool] || []).push(c); });
+  document.getElementById('stamp').textContent = 'Captured ' + new Date(D.captured).toLocaleString();
+
+  var status = runs.get_device_status && runs.get_device_status[0];
+  var dev = {}; try { dev = JSON.parse(status.blocks[0].text); } catch (e) {}
+  var shown = D.calls.filter(function (c) { return c.before || c.after; }).length;
+  [['Phone', dev.device_model || '—'], ['Android', dev.android_api_level ? 'API ' + dev.android_api_level : '—'],
+   ['Calls recorded', D.calls.length + ' (' + shown + ' with pictures)'], ['Captured', new Date(D.captured).toLocaleDateString()]]
+    .forEach(function (f) { var d = el('div'); d.appendChild(el('span', '', f[0])); d.appendChild(el('b', '', f[1])); document.getElementById('facts').appendChild(d); });
+
+  // ---------- the walkthrough ----------
+  var walk = document.getElementById('walk');
+  walk.src = D.walkthrough.src; walk.poster = D.walkthrough.poster;
+  var chapters = document.getElementById('chapters'), chapterBtns = [];
+  function mmss(s) { s = Math.round(s); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+  function seek(c) { walk.currentTime = Math.max(0, c.at - 0.5); walk.play(); walk.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  D.calls.forEach(function (c) {
+    var b = el('button'); b.type = 'button';
+    b.appendChild(el('span', '', mmss(c.at))); b.appendChild(el('span', '', c.tool));
+    b.title = c.note; b.onclick = function () { seek(c); };
+    chapters.appendChild(b); chapterBtns.push([c.at, b]);
+  });
+  walk.addEventListener('timeupdate', function () {
+    var cur = null; chapterBtns.forEach(function (p) { if (p[0] <= walk.currentTime + 0.3) cur = p[1]; p[1].classList.remove('on'); });
+    if (cur) { cur.classList.add('on'); if (!walk.paused) cur.scrollIntoView({ block: 'nearest' }); }
+  });
+
+  // ---------- annotations ----------
+  function results(c) {
+    var out = [];
+    c.blocks.forEach(function (b) { if (b.text) splitJson(b.text).forEach(function (p) { try { out.push(JSON.parse(p)); } catch (e) {} }); });
+    return out;
+  }
+  // A result is often two JSON objects back to back (the tool's answer, then the observation).
+  function splitJson(text) {
+    var parts = [], depth = 0, start = -1, inStr = false, esc = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true;
+      else if (ch === '{') { if (depth++ === 0) start = i; }
+      else if (ch === '}' && --depth === 0) parts.push(text.slice(start, i + 1));
+    }
+    return parts.join('').length >= text.trim().length - 2 ? parts : [];
+  }
+  function arrow(svg, x1, y1, x2, y2) {
+    var a = Math.atan2(y2 - y1, x2 - x1), L = 70;
+    svg.appendChild(sv('line', { x1: x1, y1: y1, x2: x2, y2: y2, stroke: 'var(--mark)', 'stroke-width': 18, 'stroke-linecap': 'round' }));
+    svg.appendChild(sv('path', { d: 'M' + x2 + ' ' + y2 + 'L' + (x2 - L * Math.cos(a - .5)) + ' ' + (y2 - L * Math.sin(a - .5)) + 'L' + (x2 - L * Math.cos(a + .5)) + ' ' + (y2 - L * Math.sin(a + .5)) + 'Z', fill: 'var(--mark)' }));
+    svg.appendChild(sv('circle', { cx: x1, cy: y1, r: 26, fill: 'var(--mark)' }));
+  }
+  /** Markers drawn from what the tool itself reported: tap x/y, swipe path, scroll direction. */
+  function marks(c) {
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, 'aria-hidden': 'true' });
+    var r = results(c)[0] || {};
+    if (r.x != null && r.y != null) {
+      svg.appendChild(sv('circle', { cx: +r.x, cy: +r.y, r: 70, fill: 'none', stroke: 'var(--mark)', 'stroke-width': 14 }));
+      svg.appendChild(sv('circle', { cx: +r.x, cy: +r.y, r: 16, fill: 'var(--mark)' }));
+    } else if (r.x1 != null) {
+      arrow(svg, +r.x1, +r.y1, +r.x2, +r.y2);
+    } else if (c.tool === 'scroll' || (c.tool === 'browser_act' && /scroll/.test(c.args.action))) {
+      // Content moves down when the finger moves up.
+      var up = /down/.test(c.args.direction || c.args.action);
+      arrow(svg, W / 2, up ? H * .68 : H * .32, W / 2, up ? H * .32 : H * .68);
+    } else if (c.tool === 'run_steps') {
+      arrow(svg, W / 2, H * .32, W / 2, H * .68);
+    }
+    return svg;
+  }
+  /** Outlines where before and after differ, ignoring the status bar. Runs once both images load. */
+  function diffBox(before, after, svg) {
+    var w = 124, h = 277, cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    var g = cv.getContext('2d', { willReadFrequently: true });
+    try {
+      g.drawImage(before, 0, 0, w, h); var a = g.getImageData(0, 0, w, h).data;
+      g.drawImage(after, 0, 0, w, h); var b = g.getImageData(0, 0, w, h).data;
+    } catch (e) { return; }
+    var x0 = w, y0 = h, x1 = -1, y1 = -1, top = Math.ceil(h * 0.05), n = 0;
+    for (var y = top; y < h; y++) for (var x = 0; x < w; x++) {
+      var i = (y * w + x) * 4;
+      if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 60) {
+        n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+    if (n < 12 || x1 < 0) return;
+    var s = W / w, p = 14;
+    svg.insertBefore(sv('rect', { x: Math.max(6, x0 * s - p), y: Math.max(6, y0 * s - p), width: Math.min(W - 12, (x1 - x0 + 1) * s + 2 * p), height: Math.min(H - 12, (y1 - y0 + 1) * s + 2 * p),
+      rx: 24, fill: 'none', stroke: 'var(--mark)', 'stroke-width': 10, 'stroke-dasharray': '34 22' }), svg.firstChild);
+  }
+
+  // ---------- zoom ----------
+  var zoom = document.getElementById('zoom'), zframe = zoom.querySelector('.frame');
+  zoom.querySelector('button').onclick = function () { zoom.close(); };
+  zoom.addEventListener('click', function (e) { if (e.target === zoom) zoom.close(); });
+  function openZoom(src, svg) {
+    zframe.textContent = '';
+    var img = el('img'); img.src = src; img.alt = ''; zframe.appendChild(img);
+    if (svg) zframe.appendChild(svg.cloneNode(true));
+    zoom.showModal();
+  }
+
+  function fig(src, caption, svg) {
+    var f = el('figure'), fr = el('div', 'frame'), img = el('img');
+    img.src = src; img.alt = caption; img.loading = 'lazy'; img.decoding = 'async';
+    fr.appendChild(img); if (svg) fr.appendChild(svg);
+    fr.tabIndex = 0; fr.setAttribute('role', 'button'); fr.setAttribute('aria-label', 'Enlarge: ' + caption);
+    fr.onclick = function () { openZoom(src, svg); };
+    fr.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openZoom(src, svg); } };
+    f.appendChild(fr); f.appendChild(el('figcaption', '', caption));
+    f.img = img;
+    return f;
+  }
+
+  // Clips play only while on screen.
+  var io = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { var p = e.target.play(); if (p) p.catch(function () {}); } else e.target.pause(); });
+  }, { threshold: 0.4 }) : null;
+
+  function renderRun(c) {
+    var box = el('div', 'run');
+    var head = el('div', 'runhead');
+    head.appendChild(el('span', c.isError ? 'err' : 'ok', c.isError ? '✗ refused / error' : '✓ ok'));
+    head.appendChild(el('span', 'call', c.tool + '(' + (Object.keys(c.args).length ? JSON.stringify(c.args) : '') + ')'));
+    head.appendChild(el('span', 'ms', c.ms + ' ms'));
+    var at = el('button', 'at', '▶ ' + mmss(c.at)); at.type = 'button'; at.title = 'Watch this moment in the recording'; at.onclick = function () { seek(c); };
+    head.appendChild(at);
+    box.appendChild(head);
+    if (c.note) box.appendChild(el('div', 'note', c.note));
+
+    var body = el('div', 'body');
+    if (c.before || c.after) {
+      var shots = el('div', 'shots');
+      var isLook = c.before && c.after && !c.clip;
+      if (c.before && c.after && c.clip) {
+        var svgA = marks(c), svgB = marks(c);
+        var fb = fig(c.before, 'Before · finger marked', svgB);
+        var fa = fig(c.after, 'After · change outlined', svgA);
+        shots.appendChild(fb); shots.appendChild(fa);
+        var pending = 2, done = function () { if (--pending === 0) diffBox(fb.img, fa.img, svgA); };
+        [fb.img, fa.img].forEach(function (im) { if (im.complete && im.naturalWidth) done(); else im.addEventListener('load', done); });
+        var vf = el('figure'), vfr = el('div', 'frame'), v = el('video');
+        v.src = c.clip; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.poster = c.after;
+        v.setAttribute('aria-label', 'Recording of ' + c.tool);
+        vfr.style.cursor = 'default'; vfr.appendChild(v); vf.appendChild(vfr); vf.appendChild(el('figcaption', '', 'Recording of this call'));
+        shots.appendChild(vf);
+        if (io) io.observe(v); else v.controls = true;
+      } else {
+        shots.appendChild(fig(c.after || c.before, isLook ? 'The screen it looked at' : 'The screen at that moment', null));
+      }
+      body.appendChild(shots);
+    } else body.className = 'body noshots';
+
+    var out = el('div', 'out');
+    c.blocks.forEach(function (b) {
+      if (b.type === 'image') {
+        if (!b.src) return;
+        out.appendChild(el('div', 'lbl', 'image returned to the agent'));
+        var img = el('img', 'ret'); img.src = b.src; img.alt = 'Image returned by ' + c.tool; img.loading = 'lazy';
+        img.onclick = function () { openZoom(b.src, null); };
+        out.appendChild(img);
+        return;
+      }
+      var parts = splitJson(b.text);
+      if (parts.length) {
+        parts.forEach(function (p) {
+          var txt; try { txt = JSON.stringify(JSON.parse(p), null, 2); } catch (e) { txt = p; }
+          out.appendChild(el('div', 'lbl', txt.indexOf('"post_action_observation"') >= 0 ? 'post_action_observation: what the screen did afterwards' : 'result'));
+          out.appendChild(el('pre', 'wrapme', txt));
+        });
+      } else {
+        out.appendChild(el('div', 'lbl', 'text'));
+        out.appendChild(el('pre', /\+-{10}/.test(b.text) ? '' : 'wrapme', b.text));
+      }
+    });
+    body.appendChild(out);
+    box.appendChild(body);
+    return box;
+  }
+
+  function renderTool(name) {
+    var t = byName[name], row = el('article', 'tool'); row.id = name;
+    var top = el('div', 'top'), left = el('div');
+    var h = el('h3', '', name);
+    if (NEW[name]) h.appendChild(el('span', 'tag new', 'next app release'));
+    var rs = runs[name] || [];
+    if (rs.some(function (c) { return c.clip; })) h.appendChild(el('span', 'tag act', 'acts on the screen'));
+    if (rs.length) h.appendChild(el('span', 'tag', rs.length + (rs.length > 1 ? ' calls' : ' call')));
+    left.appendChild(h);
+    if (!t) {
+      left.appendChild(el('div', 'skip', UNLISTED[name] || 'Not listed by this phone: its toolset was off during the capture.'));
+      top.appendChild(left); row.appendChild(top); return row;
+    }
+    left.appendChild(el('p', 'desc', t.description));
+    top.appendChild(left);
+    var schema = t.schema || {}, props = schema.properties || {}, req = schema.required || [], keys = Object.keys(props);
+    if (keys.length) {
+      var args = el('div', 'args');
+      keys.forEach(function (k) {
+        var r = el('div'); r.appendChild(el('b', req.indexOf(k) >= 0 ? 'req' : '', k));
+        r.appendChild(el('i', '', (props[k].type ? props[k].type + ' · ' : '') + (props[k].description || '')));
+        args.appendChild(r);
+      });
+      top.appendChild(args);
+    } else top.appendChild(el('div', 'noargs', 'No arguments.'));
+    row.appendChild(top);
+    if (rs.length) rs.forEach(function (c) { row.appendChild(renderRun(c)); });
+    else row.appendChild(el('div', 'skip', 'Listed by the phone but not called in this recording.'));
+    return row;
+  }
+
+  var nav = document.getElementById('catnav'), placed = {}, unlisted = 0, navLinks = [];
+  CATS.forEach(function (cat) {
+    var names = cat[2];
+    names.forEach(function (n) { if (!byName[n]) unlisted++; });
+    var id = 'cat-' + cat[0].replace(/\s+/g, '-');
+    var a = el('a', '', cat[0] + ' ' + names.length); a.href = '#' + id; nav.appendChild(a);
+    var s = el('section', 'cat'); s.id = id;
+    s.appendChild(el('h2', '', cat[0])); s.appendChild(el('p', '', cat[1]));
+    names.forEach(function (n) { placed[n] = 1; s.appendChild(renderTool(n)); });
+    list.appendChild(s); navLinks.push([s, a]);
+  });
+  // Any tool the groups above do not know yet still gets shown.
+  var rest = D.tools.map(function (t) { return t.name; }).filter(function (n) { return !placed[n]; });
+  if (rest.length) {
+    var s = el('section', 'cat'); s.id = 'cat-other';
+    s.appendChild(el('h2', '', 'other'));
+    rest.forEach(function (n) { s.appendChild(renderTool(n)); });
+    list.appendChild(s);
+    var a = el('a', '', 'other ' + rest.length); a.href = '#cat-other'; nav.appendChild(a); navLinks.push([s, a]);
+  }
+  document.getElementById('count').textContent = D.tools.length + unlisted;
+
+  // Highlight the group in view.
+  if ('IntersectionObserver' in window) {
+    var navIo = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (!e.isIntersecting) return; navLinks.forEach(function (p) { p[1].classList.toggle('on', p[0] === e.target); if (p[0] === e.target) p[1].scrollIntoView({ block: 'nearest', inline: 'nearest' }); }); });
+    }, { rootMargin: '-40% 0px -55% 0px' });
+    navLinks.forEach(function (p) { navIo.observe(p[0]); });
+  }
+})();
+</script>
+</body>
+</html>
