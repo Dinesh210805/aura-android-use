@@ -1,40 +1,32 @@
 {
   "name": "claude-code-aura-mcp",
-  "description": "Claude Code driving the phone only through AURA's MCP tools, via the bench bridge.",
+  "description": "Stock Claude Code with AURA added as an MCP server and AURA's own aura-phone skill. Only shell access and tools that act outside the run are taken away.",
   "command": [
-    "claude",
-    "-p",
-    "--output-format",
-    "stream-json",
-    "--verbose",
-    "--model",
-    "{model}",
-    "--max-turns",
-    "{max_steps}",
+    "claude", "-p", "--output-format", "stream-json", "--verbose",
+    "--model", "{model}",
     "--no-session-persistence",
-    "--disable-slash-commands",
-    "--setting-sources",
-    "",
-    "--strict-mcp-config",
-    "--mcp-config",
-    "{profile_dir}/aura.mcp.json",
-    "--allowedTools",
-    "mcp__aura",
-    "--append-system-prompt",
-    "{framing}",
-    "--disallowedTools",
-    "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,NotebookEdit"
+    "--setting-sources", "project",
+    "--strict-mcp-config", "--mcp-config", "{profile_dir}/aura.mcp.json",
+    "--allowedTools", "mcp__aura",
+    "--disallowedTools", "Bash,PowerShell,Monitor,CronCreate,CronDelete,CronList,RemoteTrigger,ScheduleWakeup,PushNotification,Artifact,ArtifactComments,ArtifactData,SendMessage,ListAgents,DesignSync,EnterWorktree,ExitWorktree",
+    "--append-system-prompt", "{framing}"
   ],
+  "workdir_files": {
+    ".claude/skills/aura-phone/SKILL.md": "{repo}/aura-mcp-connect/skills/aura-phone/SKILL.md"
+  },
   "stdin": "goal",
   "parser": "claude-stream",
   "defaults": {
-    "model": "sonnet",
+    "model": "claude-sonnet-5-5",
     "framing": "You are operating an Android phone through the aura MCP tools. Every request is about that phone: carry it out there, not on this computer. When the request asks a question, end with the answer alone as your final message."
   },
-  "models": [
-    "sonnet",
-    "opus",
-    "haiku"
+  "models": ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
+  "step_budget_free": [
+    "read_screen", "perceive_screen", "get_screenshot", "get_device_status", "get_media_sessions",
+    "read_notifications", "lookup_app", "list_app_deeplinks", "resolve_deeplink", "resolve_contact",
+    "find_files", "wait_for", "verify_action", "watch_device_events", "web_search",
+    "browser_read", "browser_find", "browser_screenshot", "browser_extract", "browser_wait",
+    "end_session"
   ],
-  "timeout_s": 600
+  "timeout_s": 1200
 }

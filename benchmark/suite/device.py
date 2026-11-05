@@ -1,6 +1,6 @@
 """The benchmark machine: emulator, adb, the phone's screen recorder, and the bench bridge.
 
-    androidworld-venv/Scripts/python.exe scripts/bench/device.py up
+    androidworld-venv/Scripts/python.exe benchmark/suite/device.py up
 
 `up()` brings everything a run needs to a known state, one step at a time, and
 raises `SetupError` with the exact thing to do when a step cannot be fixed
@@ -9,9 +9,9 @@ automatically. `suite.py` shows those steps as its setup checklist.
 `PhoneScreen` streams the emulator's display to the suite page.
 
 The bench bridge is a second `aura-mcp daemon` on port 4817 with its own home
-directory (`bench-results/.bridge-home`), paired with the emulator. It never
+directory (`benchmark/.runtime/bridge-home`), paired with the emulator. It never
 touches the user's normal bridge on 4816 or its pairing with a real phone.
-- Reads/Writes: `bench-results/.bridge-home/.aura/webrtc.json` (the bench pairing
+- Reads/Writes: `benchmark/.runtime/bridge-home/.aura/webrtc.json` (the bench pairing
   token; keep private), adb forwards for the phone's signalling ports.
 - Why adb forwards: the emulator sits behind its own NAT, so the PC cannot reach
   its signalling port directly. WebRTC itself does connect once signalling has.
@@ -37,12 +37,16 @@ import aura_androidworld  # noqa: E402
 AVD = 'AndroidWorldAvd'
 SERIAL = 'emulator-5554'
 GRPC_PORT = 8554
+# ANGLE over Direct3D, still GPU-rendered. Why not `host`: on this setup the host-GPU path
+# starts failing glReadPixels (0x506) mid-session and every screenshot comes back plain
+# white, which blinds the agent, the recorder and the live view alike.
+EMULATOR_GPU = 'angle_indirect'
 AURA_PACKAGE = 'com.aura.aura_ui.feature.debug'
 SPIKE_ACTION = 'com.aura.aura_ui.AGENT_SPIKE'
 # Change together: LanPolicy.PORTS on the phone and PORTS in aura-mcp-connect/src/lan.js.
 PHONE_SIGNAL_PORTS = (47821, 47822, 47823, 47824, 47825)
 BRIDGE_PORT = 4817
-BRIDGE_HOME = os.path.join(aura_androidworld.RESULTS, '.bridge-home')
+BRIDGE_HOME = os.path.join(aura_androidworld.RUNTIME, 'bridge-home')
 BRIDGE_URL = 'http://127.0.0.1:%d/mcp' % BRIDGE_PORT
 ADB = aura_androidworld.find_adb()
 
@@ -90,18 +94,19 @@ def emulator_attached():
 
 
 def boot_emulator(timeout=300):
-  """Starts the AVD headless unless it is already attached. Returns True if this call started it.
+  """Starts the AVD, with its window, unless it is already attached. Returns True if this call started it.
 
-  Contract: booted means `sys.boot_completed` is 1. No window: the suite page shows
-  the display through PhoneScreen, and an emulator window only costs CPU (and a
-  host-GPU window that gets resized can stop drawing until a restart).
+  Contract: booted means `sys.boot_completed` is 1. The window is where a person
+  uses the phone by hand; the suite page only mirrors the display (PhoneScreen).
+  Nothing here resizes that window: a host-GPU emulator window that is resized
+  programmatically can stop drawing until the emulator restarts.
   """
   if emulator_attached():
     return False
   cmd = [find_emulator(), '-avd', AVD, '-no-snapshot', '-grpc', str(GRPC_PORT), '-no-audio',
-         '-no-window']
-  os.makedirs(aura_androidworld.RESULTS, exist_ok=True)
-  log = open(os.path.join(aura_androidworld.RESULTS, 'emulator.log'), 'w', encoding='utf-8')
+         '-gpu', EMULATOR_GPU]
+  os.makedirs(aura_androidworld.RUNTIME, exist_ok=True)
+  log = open(os.path.join(aura_androidworld.RUNTIME, 'emulator.log'), 'w', encoding='utf-8')
   subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, **_detached())
   deadline = time.time() + timeout
   while time.time() < deadline:
@@ -109,7 +114,7 @@ def boot_emulator(timeout=300):
     if emulator_attached() and adb('shell', 'getprop sys.boot_completed').stdout.strip() == '1':
       time.sleep(5)  # launcher and system services settle after the flag flips
       return True
-  raise SetupError('the emulator did not finish booting in %ds. See bench-results/emulator.log, '
+  raise SetupError('the emulator did not finish booting in %ds. See benchmark/.runtime/emulator.log, '
                    'and check that AVD "%s" starts from Android Studio.' % (timeout, AVD))
 
 
@@ -143,10 +148,27 @@ def require_aura_listening():
   if _spike_receiver_listening():
     return
   open_aura()
-  time.sleep(4)
+  deadline = time.time() + 40  # after a cold boot the app and its service take a while
+  while time.time() < deadline:
+    if _spike_receiver_listening():
+      return
+    time.sleep(3)
   if not _spike_receiver_listening():
     raise SetupError('AURA is not listening on %s. Install the current debug build, open AURA '
                      'once on the emulator and finish onboarding.' % SPIKE_ACTION)
+
+
+def resume_control_lock():
+  """Hands control back to AURA if its human-takeover lock is set.
+
+  Why: the lock reads any screen change it did not cause as a person taking the
+  phone back. AndroidWorld's adb seeding is one, so without this the agent's
+  first call can be refused with paused_by_user. Explicit component, because
+  Android does not deliver implicit broadcasts to manifest receivers.
+  Change together: CompanionTestReceiver.runPause.
+  """
+  adb('shell', 'am broadcast -n %s/com.aura.aura_ui.debugtools.CompanionTestReceiver '
+      '-a com.aura.aura_ui.debug.COMPANION_TEST --es mode pause --es op resume' % AURA_PACKAGE)
 
 
 def start_phone_mcp():
@@ -301,7 +323,7 @@ def start_bridge():
     time.sleep(1)
     if bridge_health() is not None:
       return
-  raise SetupError('the bench bridge did not start. See bench-results/.bridge-home/daemon.log.')
+  raise SetupError('the bench bridge did not start. See benchmark/.runtime/bridge-home/daemon.log.')
 
 
 def stop_bridge():
@@ -331,7 +353,7 @@ def wait_phone(timeout=45):
       return health
     time.sleep(2)
   raise SetupError('the bench bridge cannot reach the phone. /health says: %s. See '
-                   'bench-results/.bridge-home/daemon.log.' % json.dumps(health))
+                   'benchmark/.runtime/bridge-home/daemon.log.' % json.dumps(health))
 
 
 def phone_reachable():
@@ -370,14 +392,129 @@ def up(target='mcp', report=lambda step, state, detail='': None):
   return started == 'started'
 
 
+# --- AURA's step log: the same record its in-app session viewer shows ------
+
+# Change together: McpSessionStore.kt (where the phone writes them) and report.steps_html
+# (which reads metadata.json and screenshots/<index>.<ext>).
+PHONE_SESSIONS = 'files/mcp_logs'
+
+
+def aura_version():
+  """AURA's versionName on the phone, e.g. "1.0.573", or "" when it cannot be read."""
+  m = re.search(r'versionName=(\S+)', adb('shell', 'dumpsys package %s' % AURA_PACKAGE).stdout)
+  return m.group(1) if m else ''
+
+
+def session_marks(before):
+  """How far the newest existing session had got when a task starts: {id: counts}.
+
+  Contract: {sid: {'invocations': n, 'llmCalls': m}} for the newest id in `before`, or {}.
+  A task's steps are the entries after these counts, plus every session that is new.
+  Why: the phone closes a session only on `end_session` or after a quiet spell, so a task
+  that starts soon after the last one logs into the same session. Timestamps cannot split
+  them: AndroidWorld resets the phone's clock to the same date at every task start.
+  Counting works because nothing calls AURA between tasks.
+  """
+  marks = {}
+  for sid in sorted(before)[-1:]:
+    r = adb('shell', 'run-as %s cat %s/%s/metadata.json' % (AURA_PACKAGE, PHONE_SESSIONS, sid))
+    try:
+      log = json.loads(r.stdout)
+    except ValueError:
+      continue
+    marks[sid] = {'invocations': len(log.get('invocations') or []),
+                  'llmCalls': len(log.get('llmCalls') or [])}
+  return marks
+
+
+def phone_sessions():
+  """Ids of the session logs AURA has on the phone, one per MCP connection or agent run.
+
+  Fails: an empty set when they cannot be listed (needs a debuggable build for run-as).
+  """
+  r = adb('shell', 'run-as %s ls %s' % (AURA_PACKAGE, PHONE_SESSIONS))
+  return set(r.stdout.split()) if r.returncode == 0 else set()
+
+
+def pull_sessions(ids, dest):
+  """Copies session logs `ids` (metadata.json and screenshots) into dest/<id>/.
+
+  Contract: one `run-as tar` over adb, so a session is copied whole or not at all;
+  safe to call repeatedly while the session is still being written.
+  Fails: returns False and leaves dest as it was.
+  """
+  import io
+  import tarfile
+  if not ids:
+    return True
+  p = subprocess.run([ADB, '-s', SERIAL, 'exec-out', 'run-as', AURA_PACKAGE, 'tar', '-cf', '-',
+                      '-C', PHONE_SESSIONS, *sorted(ids)], capture_output=True, timeout=60)
+  if p.returncode != 0 or not p.stdout:
+    return False
+  try:
+    with tarfile.open(fileobj=io.BytesIO(p.stdout)) as tar:
+      tar.extractall(dest, filter='data')
+  except (tarfile.TarError, OSError):
+    return False
+  return True
+
+
+# --- AURA's own log, for the suite page -------------------------------------
+
+class AppLog:
+  """Follows everything AURA's process logs (Info and up) while a task runs.
+
+  Contract: start() begins at "now", each line goes to on_line as it arrives,
+  stop() returns the whole text. It is the same log the app's own log screens are
+  built from, unfiltered, so a reader sees what AURA did on every tool call.
+  Fails: if AURA is not running, start() records that and follows nothing.
+  """
+
+  def __init__(self, on_line):
+    self._on_line = on_line
+    self._lines = []
+    self._proc = None
+    self._thread = None
+
+  def start(self):
+    pid = adb('shell', 'pidof %s' % AURA_PACKAGE).stdout.strip().split()
+    if not pid:
+      self._lines.append('(AURA was not running when the task started: no app log)')
+      return
+    self._proc = subprocess.Popen(
+        [ADB, '-s', SERIAL, 'logcat', '-v', 'time', '-T', '1', '--pid', pid[0], '*:I'],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8',
+        errors='replace')
+    self._thread = threading.Thread(target=self._pump, daemon=True)
+    self._thread.start()
+
+  def _pump(self):
+    for line in self._proc.stdout:
+      line = line.rstrip('\n')
+      if line.startswith('--------- beginning of'):
+        continue
+      self._lines.append(line)
+      try:
+        self._on_line(line)
+      except Exception:  # noqa: BLE001 - a broken viewer must not lose the log
+        pass
+
+  def stop(self):
+    if self._proc:
+      self._proc.kill()
+      self._proc.wait(timeout=10)
+      self._thread.join(timeout=5)
+    return '\n'.join(self._lines) + '\n'
+
+
 # --- the live display, for the suite page ----------------------------------
 
 class PhoneScreen:
   """Live JPEG frames of the emulator's display, read from its gRPC port.
 
   Contract: one reader thread however many pages watch; `frames()` yields each
-  new frame as JPEG bytes. Reads the display from the emulator, not the phone, so
-  it costs the phone nothing and is not affected by FLAG_SECURE.
+  new frame as JPEG bytes. Reads the display from the emulator, not the phone,
+  so it costs the phone nothing.
   Fails: while the emulator is down it retries every 2 s; viewers just wait.
   """
 

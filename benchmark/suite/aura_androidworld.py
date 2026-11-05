@@ -13,7 +13,7 @@ grade whatever the phone looks like at the end.
 Setup and the deviations from a stock AndroidWorld run are in README.md next to
 this file. Usage (emulator running, AURA debug build installed and set up):
 
-    androidworld-venv/Scripts/python.exe scripts/bench/aura_androidworld.py \
+    androidworld-venv/Scripts/python.exe benchmark/suite/aura_androidworld.py \
         --tasks=MarkorCreateNote,SimpleCalendarAddOneEvent
 
 Everything writes to ./runs/<timestamp>/ by default. Re-point --checkpoint_dir at
@@ -77,7 +77,10 @@ _fix_apk_install_on_windows()
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-RESULTS = os.path.join(ROOT, 'bench-results')
+# Change together: .gitignore (results/ and .runtime/ are local working data).
+RESULTS = os.path.join(ROOT, 'benchmark', 'results')
+ONDEVICE_RESULTS = os.path.join(RESULTS, 'aura-on-device')
+RUNTIME = os.path.join(ROOT, 'benchmark', '.runtime')
 # Upstream run.py's default, so task parameters match other published runs.
 SEED = 30
 
@@ -289,6 +292,19 @@ class AuraAgent(base_agent.EnvironmentInteractingAgent):
     return base_agent.AgentInteractionResult(done=True, data={'aura_log': last})
 
 
+_STOCK_DT = device_constants.DT
+
+
+def set_device_year(year) -> None:
+  """Pins the benchmark clock to `year`, or back to AndroidWorld's stock 2023 with None.
+
+  Contract: takes effect for tasks created after the call (task parameters are
+  derived from the clock when the suite is built), so call it before
+  `suite_utils.create_suite`. See shift_device_year for why a target shifts.
+  """
+  shift_device_year(year or _STOCK_DT.year)
+
+
 def shift_device_year(year: int) -> None:
   """Moves AndroidWorld's frozen clock into the present.
 
@@ -310,7 +326,7 @@ def shift_device_year(year: int) -> None:
   Contract: call before `load_and_setup_env`, so the first freeze already uses
   the shifted date.
   """
-  device_constants.DT = device_constants.DT.replace(year=year)
+  device_constants.DT = _STOCK_DT.replace(year=year)
   device_constants.ANDROID_DT = device_constants.DT.strftime('%m%d%H%M%y.%S')
   # Bound as a class attribute at import time, so patching the module constant
   # after the import is not enough.

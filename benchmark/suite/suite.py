@@ -1,6 +1,6 @@
 """The benchmark suite: one browser page to set up, pick tasks, run them and watch.
 
-    androidworld-venv/Scripts/python.exe scripts/bench/suite.py
+    androidworld-venv/Scripts/python.exe benchmark/suite/suite.py
     -> opens http://localhost:8777
 
 Pick a target, and the page sets the machine up (`device.up`), builds
@@ -11,9 +11,10 @@ shows the queue, the agent's live activity and the phone's live display
 
 Targets:
 - `mcp`: Claude Code drives the phone through AURA's MCP tools (profile
-  `agents/claude-code-aura-mcp.json`). Results: bench-results/claude-code-aura-mcp/<Task>/.
+  `agents/claude-code-aura-mcp.json`). Results: benchmark/results/claude-code-aura-mcp/<model>/<Task>/,
+  one folder per model so a pass rate never mixes models.
 - `ondevice`: AURA's own agent gets the goal over the debug broadcast.
-  Results: bench-results/<Task>/, the folder `referee.py` and `report.py` already use.
+  Results: benchmark/results/aura-on-device/<Task>/, the folder `referee.py` and `report.py` already use.
 
 Every verdict is AndroidWorld's validator through `external_agent.run_one`; see
 README.md for the rules and how the two targets differ.
@@ -38,17 +39,56 @@ import aura_androidworld  # noqa: E402
 import desktop  # noqa: E402
 import device  # noqa: E402
 import external_agent  # noqa: E402
+import publish  # noqa: E402
 import report  # noqa: E402
 import theme  # noqa: E402
-from aura_androidworld import RESULTS, ROOT, SEED, write_text  # noqa: E402
+from aura_androidworld import ONDEVICE_RESULTS, RESULTS, RUNTIME, SEED, write_text  # noqa: E402
+
+PREVIEW = os.path.join(RUNTIME, 'preview')  # local copy of the pages publish would push
 
 PORT = 8777
 PROFILE = 'claude-code-aura-mcp'
 ONDEVICE_TIMEOUT_S = 300
 MAX_EVENTS = 600
+MAX_APP_LINES = 2000
+SESSION_PULL_S = 4
+CONTENT_TYPES = {'.mp4': 'video/mp4', '.html': 'text/html; charset=utf-8', '.css': 'text/css',
+                 '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg'}
+# Per target: which tasks, which clock, and what to tell readers about both.
+# Change together: the deviations table in README.md.
 TARGETS = {
-    'mcp': {'label': 'MCP server', 'sub': 'Claude Code drives the phone through AURA\'s MCP tools'},
-    'ondevice': {'label': 'On-device agent', 'sub': 'AURA\'s own agent, running on the phone'},
+    'mcp': {
+        'label': 'MCP server',
+        'sub': 'Claude Code drives the phone through AURA\'s MCP tools',
+        'include_ir': True, 'device_year': None,
+        'deviations': [
+            'All 116 tasks, AndroidWorld\'s own 2023-10-15 clock, seed 30: the stock suite.',
+            'Step budget is stock (10 x complexity), counted as actions on the phone; looking is free.',
+            'A 20-minute wall-clock limit only guards against a hung run.',
+            'Claude Code is stock except: no shell, and no tools that act outside the run.',
+        ],
+        'about': {
+            'title': 'Claude Code + AURA MCP on AndroidWorld',
+            'sub': ('Claude Code operating an Android phone only through AURA\'s MCP server, '
+                    'scored by Google\'s AndroidWorld benchmark. Every task was recorded.'),
+            'method': ('The stock suite: all 116 tasks, AndroidWorld\'s own clock and seed 30. '  
+                       'The step budget is AndroidWorld\'s (10 x complexity), counted as '
+                       'actions on the phone. Claude Code is stock apart from having no '
+                       'shell and no tools that act outside the run; each run records the '
+                       'tools it had.'),
+        },
+    },
+    'ondevice': {
+        'label': 'On-device agent',
+        'sub': 'AURA\'s own agent, running on the phone',
+        'include_ir': False, 'device_year': 2026,
+        'deviations': [
+            '91 tasks: the 25 information-retrieval tasks need a typed answer AURA cannot give.',
+            'Device clock moved from 2023 to 2026, so the phone\'s calls to its model pass TLS.',
+            'A wall-clock limit instead of a step budget: AURA\'s steps happen on the phone.',
+        ],
+        'about': report.ABOUT_ONDEVICE,
+    },
 }
 
 
@@ -88,6 +128,20 @@ class OnDeviceAgent(aura_androidworld.AuraAgent):
       write_text(os.path.join(self._out_dir, 'agent.log'), self.report.pop('log', ''))
 
 
+def planned_goals(target):
+  """Every task's exact goal for `target`, before anything runs.
+
+  Contract: the same text the agent will be given. AndroidWorld seeds each task's
+  parameters from (SEED, task name), and they derive from the device clock, so this
+  builds the suite once on the target's clock. Runs offline in about 2 s.
+  """
+  from android_world import suite_utils
+  aura_androidworld.set_device_year(target['device_year'])
+  built = suite_utils.create_suite(aura_androidworld.scored_tasks(target['include_ir']),
+                                   n_task_combinations=1, seed=SEED)
+  return {name: instances[0].goal for name, instances in built.items()}
+
+
 class Suite:
   """Everything the page shows. One instance; every field is guarded by `lock`."""
 
@@ -98,9 +152,11 @@ class Suite:
     self.setup_busy = False
     self.ready = False
     self.env = None
+    self.publishing = {}  # state of the Publish button's job, shown on the page
     self.started_emulator = False
-    self.opts = {'model': 'sonnet', 'record': 'page' if desktop.available() else 'phone',
-                 'timeout': None}
+    self.spec = external_agent.load_profile(PROFILE, {})
+    self.opts = {'model': self.spec['vars']['model'],
+                 'record': 'page' if desktop.available() else 'phone', 'timeout': None}
     self.queue = []
     self.run_tasks = []
     self.current = None
@@ -108,12 +164,17 @@ class Suite:
     self.cancel = threading.Event()
     self.session = {'passed': 0, 'failed': 0, 'stopped': 0, 'cost': 0.0}
     self.message = ''
-    self.spec = external_agent.load_profile(PROFILE, {})
+    self.goals = {}  # task -> its exact goal at SEED, shown before it runs
 
   # --- where results live --------------------------------------------------
 
+  def task_names(self):
+    return sorted(aura_androidworld.scored_tasks(TARGETS[self.target]['include_ir']))
+
   def results_dir(self):
-    return os.path.join(RESULTS, PROFILE) if self.target == 'mcp' else RESULTS
+    if self.target == 'mcp':
+      return os.path.join(RESULTS, PROFILE, self.opts['model'])
+    return ONDEVICE_RESULTS
 
   def timeout(self):
     if self.opts['timeout']:
@@ -123,14 +184,17 @@ class Suite:
   def rows(self):
     rows = []
     base = self.results_dir()
-    for i, name in enumerate(sorted(aura_androidworld.scored_tasks()), 1):
+    for i, name in enumerate(self.task_names(), 1):
       m = external_agent._read_json(os.path.join(base, name, 'meta.json'))
       agent = m.get('agent') or {}
       rows.append({
-          'n': i, 'task': name, 'goal': m.get('goal', ''), 'success': m.get('success'),
+          'n': i, 'task': name, 'goal': m.get('goal') or self.goals.get(name, ''),
+          'success': m.get('success'),
           'validator': m.get('validator_success'), 'run_time': m.get('run_time'),
           'cost': (agent.get('usage') or {}).get('cost_usd'),
           'timed_out': agent.get('timed_out'), 'stopped': agent.get('stopped'),
+          'out_of_steps': agent.get('out_of_steps'), 'steps_used': agent.get('steps_used'),
+          'step_budget': agent.get('step_budget'),
           'blind': m.get('blind'), 'videos': m.get('videos') or [],
           'error': (m.get('error') or '')[-300:],
       })
@@ -145,6 +209,9 @@ class Suite:
       if target not in TARGETS:
         raise ValueError('unknown target %r' % target)
       self.target, self.ready, self.message = target, False, ''
+    goals = planned_goals(TARGETS[target])
+    with self.lock:
+      self.goals = goals
     self.start_setup()
 
   def start_setup(self):
@@ -183,7 +250,7 @@ class Suite:
   # --- running -------------------------------------------------------------
 
   def run(self, tasks):
-    known = set(aura_androidworld.scored_tasks())
+    known = set(self.task_names())
     tasks = [t for t in tasks if t in known]
     with self.lock:
       if not self.ready:
@@ -205,13 +272,49 @@ class Suite:
 
   def _push(self, kind, text):
     with self.lock:
-      if self.current is not None and kind == 'goal':
+      if self.current is None:
+        return
+      if kind == 'goal':
+        # The goal arrives once run_one has cleared the task folder, so from here on
+        # live.log can be written as it happens and opened mid-run.
         self.current['goal'] = text
-      elif self.current is not None:
+        self.current['dir'] = os.path.join(self.results_dir(), self.current['task'])
+        self._append_live('Goal: %s\n\n' % text)
+      elif kind == 'steps':
+        self.current['steps'] = text
+      elif kind == 'app':
+        self.current['applog'].append(text)
+        del self.current['applog'][:-MAX_APP_LINES]
+      else:
         events = self.current['events']
         events.append({'t': round(time.time() - self.current['started'], 1), 'kind': kind,
                        'text': text})
         del events[:-MAX_EVENTS]
+        self._append_live('%7.1fs  %-5s %s\n' % (events[-1]['t'], kind, text))
+
+  def _append_live(self, line):
+    """Appends to the current task's live.log. Caller holds the lock."""
+    if self.current.get('dir'):
+      with open(os.path.join(self.current['dir'], 'live.log'), 'a', encoding='utf-8') as f:
+        f.write(line)
+
+  def _pull_steps(self, name, before, marks, done):
+    """Copies AURA's session logs for task `name` off the phone every few seconds.
+
+    Contract: copies the sessions that are new since the task started (`before`) and the
+    ones in `marks` (an older session the task may continue). Readers skip the entries
+    `marks` counts, so each task shows only its own steps (see device.session_marks).
+    """
+    while True:
+      finished = done.wait(SESSION_PULL_S)
+      with self.lock:
+        cur = self.current or {}
+        folder = cur.get('dir') if cur.get('task') == name else None
+      if folder:
+        ids = (device.phone_sessions() - before) | set(marks)
+        device.pull_sessions(ids, os.path.join(folder, 'session'))
+      if finished:
+        return
 
   def _make_agent(self, out):
     recorder = RECORDERS[self.opts['record']]
@@ -219,10 +322,11 @@ class Suite:
       return OnDeviceAgent(self.env, out, self.timeout(), recorder, self._push, self.cancel)
     spec = external_agent.load_profile(PROFILE, {'model': self.opts['model']})
     return external_agent.ExternalAgent(self.env, spec, out, self.timeout(), recorder=recorder,
-                                        on_event=self._push, cancel=self.cancel)
+                                        on_event=self._push, cancel=self.cancel)  
 
   def _worker(self):
-    tasks = aura_androidworld.scored_tasks()
+    target = TARGETS[self.target]
+    tasks = aura_androidworld.scored_tasks(target['include_ir'])
     if self.opts['record'] == 'page' and desktop.find_page_window() is None:
       with self.lock:
         self.message = ('No browser window titled "AURA Bench" is open, so the video will show '
@@ -234,17 +338,30 @@ class Suite:
             break
           name = self.queue[0]
           self.current = {'task': name, 'goal': '', 'started': time.time(),
-                          'timeout': self.timeout(), 'events': []}
+                          'timeout': self.timeout(), 'events': [], 'applog': [], 'steps': ''}
         if self.target == 'mcp' and not device.phone_reachable():
           self._push('info', 'bridge lost the phone; reconnecting…')
           device.wait_phone()  # raises SetupError: the run stops, nothing is filed as a FAIL
-        meta = external_agent.run_one(self.env, self._make_agent, name, tasks, SEED,
-                                      self.results_dir(), PROFILE if self.target == 'mcp' else 'aura')
+        app_log = device.AppLog(lambda line: self._push('app', line))
+        app_log.start()
+        before, done = device.phone_sessions(), threading.Event()
+        marks = device.session_marks(before)
         with self.lock:
-          events = list(self.current['events'])
-        write_text(os.path.join(self.results_dir(), name, 'live.log'),
-                   'Goal: %s\n\n' % meta['goal'] + ''.join(
-                       '%7.1fs  %-5s %s\n' % (e['t'], e['kind'], e['text']) for e in events))
+          self.current['session_marks'] = marks
+        puller = threading.Thread(target=self._pull_steps, args=(name, before, marks, done),
+                                  daemon=True)
+        puller.start()
+        try:
+          meta = external_agent.run_one(
+              self.env, self._make_agent, name, tasks, SEED, self.results_dir(),
+              PROFILE if self.target == 'mcp' else 'aura',
+              self.opts['model'] if self.target == 'mcp' else None, target['device_year'],
+              extra={'aura_version': device.aura_version(), 'session_marks': marks})
+        finally:
+          app_text = app_log.stop()
+          done.set()
+          puller.join()
+        write_text(os.path.join(self.results_dir(), name, 'app.log'), app_text)
         with self.lock:
           key = 'stopped' if meta['success'] is None else 'passed' if meta['success'] else 'failed'
           self.session[key] += 1
@@ -266,6 +383,7 @@ class Suite:
       cur = dict(self.current) if self.current else None
       if cur:
         cur['events'] = list(cur['events'])
+        cur['applog'] = cur['applog'][-500:]
         cur['elapsed'] = round(time.time() - cur['started'], 1)
       return {
           'target': self.target, 'targets': TARGETS, 'setup': [dict(s) for s in self.setup],
@@ -274,11 +392,16 @@ class Suite:
           'queue': list(self.queue), 'run_tasks': list(self.run_tasks), 'current': cur, 'session': dict(self.session),
           'message': self.message, 'timeout': self.timeout() if self.target else None,
           'tasks': self.rows() if self.target else [],
+          'deviations': TARGETS[self.target]['deviations'] if self.target else [],
+          'publishing': dict(self.publishing),
+          'stopping': 'now' if self.cancel.is_set() else 'after' if self.stop_after else '',
       }
 
   def set_options(self, opts):
     with self.lock:
       if 'model' in opts and opts['model'] in self.spec.get('models', []):
+        if self.queue or self.current:
+          raise RuntimeError('cannot change the model during a run')
         self.opts['model'] = opts['model']
       if 'record' in opts and opts['record'] in RECORDERS:
         if opts['record'] == 'page' and not desktop.available():
@@ -288,9 +411,52 @@ class Suite:
         t = opts['timeout']
         self.opts['timeout'] = int(t) if t not in (None, '', 0) and 30 <= int(t) <= 3600 else None
 
-  def build_report(self):
-    site = os.path.join(ROOT, 'bench-site', PROFILE if self.target == 'mcp' else '')
-    return report.build(self.results_dir(), site)
+  def run_id(self):
+    """The run's folder name on the website: one per agent and model, replaced on republish."""
+    return '%s-%s' % (PROFILE, self.opts['model']) if self.target == 'mcp' else 'aura-on-device'
+
+  def run_info(self):
+    """What the run's pages say about it: agent, model, AURA build, clock, seed, rules."""
+    target, mcp = TARGETS[self.target], self.target == 'mcp'
+    metas = report._read_results(self.results_dir())
+    builds = sorted({m['aura_version'] for m in metas if m.get('aura_version')})
+    facts = [('Agent', 'Claude Code via AURA MCP' if mcp else 'AURA on-device agent')]
+    if mcp:
+      facts.append(('Model', self.opts['model']))
+    facts += [('AURA', ', '.join(builds) or 'not recorded'),
+              ('Clock', '2023-10-15 (stock)' if mcp else '2026-10-15 (shifted)'), ('Seed', SEED)]
+    about = dict(target['about'], title='Claude Code + AURA MCP' if mcp else 'AURA on-device agent')
+    return report.run_info(about, facts, target['deviations'],
+                           eyebrow='AndroidWorld · %s' % (self.opts['model'] if mcp else 'on-device'))
+
+  def build_preview(self):
+    """Builds the run's pages as the website will show them; returns their local URL."""
+    report.build(self.results_dir(), os.path.join(PREVIEW, self.run_id()), self.task_names(),
+                 self.run_info())
+    return '/preview/%s/index.html' % self.run_id()
+
+  def start_publish(self):
+    with self.lock:
+      if self.queue or self.current:
+        raise RuntimeError('wait for the run to finish before publishing')
+      if self.publishing.get('state') == 'running':
+        raise RuntimeError('already publishing')
+      self.publishing = {'state': 'running', 'detail': 'Starting', 'url': ''}
+    args = (self.results_dir(), self.task_names(), self.run_info(), self.run_id())
+    threading.Thread(target=self._publish, args=args, daemon=True).start()
+
+  def _publish(self, *args):
+    def step(text):
+      with self.lock:
+        self.publishing['detail'] = text
+    try:
+      url = publish.publish(*args, on_step=step)
+      result = {'state': 'done', 'detail': 'Pull request opened. Merge it to put the run live.',
+                'url': url}
+    except Exception as e:  # noqa: BLE001 - shown on the page
+      result = {'state': 'failed', 'detail': str(e)[-1500:], 'url': ''}
+    with self.lock:
+      self.publishing = result
 
   def shutdown(self):
     self.stop(now=True)
@@ -336,7 +502,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
     if path == '/api/state':
       return self._json(200, SUITE.state())
     if path.startswith('/results/'):
-      return self._file(urllib.parse.unquote(path[len('/results/'):]))
+      return self._file(SUITE.results_dir(), urllib.parse.unquote(path[len('/results/'):]))
+    if path.startswith('/preview/'):
+      return self._file(PREVIEW, urllib.parse.unquote(path[len('/preview/'):]))
+    if path == '/api/steps':
+      task = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('task', [''])[0]
+      if task not in SUITE.task_names():
+        return self._send(404, b'unknown task', 'text/plain')
+      folder = os.path.join(SUITE.results_dir(), task)
+      with SUITE.lock:
+        cur = SUITE.current or {}
+        marks = cur.get('session_marks') if cur.get('task') == task else None
+      if marks is None:
+        marks = (external_agent._read_json(os.path.join(folder, 'meta.json')) or {}).get('session_marks')
+      body = report.steps_html(os.path.join(folder, 'session'),
+                               '/results/%s/session/' % urllib.parse.quote(task), marks)
+      return self._send(200, body, 'text/html; charset=utf-8')
     if path == '/screen.mjpg':
       return self._stream_screen()
     self._send(404, b'not found', 'text/plain')
@@ -354,13 +535,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
     except (ConnectionError, OSError):
       pass  # the page closed or reloaded
 
-  def _file(self, rel):
-    """Serves a file from the current target's results, with Range so videos can seek."""
-    base = os.path.abspath(SUITE.results_dir())
+  def _file(self, base, rel):
+    """Serves a file under `base`, with Range so videos can seek."""
+    base = os.path.abspath(base)
     full = os.path.abspath(os.path.join(base, rel))
     if not full.startswith(base + os.sep) or not os.path.isfile(full):
       return self._send(404, b'not found', 'text/plain')
-    ctype = 'video/mp4' if full.endswith('.mp4') else 'text/plain; charset=utf-8'
+    ctype = CONTENT_TYPES.get(os.path.splitext(full)[1].lower(), 'text/plain; charset=utf-8')
     size = os.path.getsize(full)
     rng = self.headers.get('Range', '')
     start, end = 0, size - 1
@@ -390,8 +571,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         SUITE.run(body.get('tasks') or [])
       elif path == '/api/stop':
         SUITE.stop(bool(body.get('now')))
-      elif path == '/api/report':
-        return self._json(200, {'ok': True, 'path': SUITE.build_report()})
+      elif path == '/api/preview':
+        return self._json(200, {'ok': True, 'url': SUITE.build_preview()})
+      elif path == '/api/publish':
+        SUITE.start_publish()
       else:
         return self._json(404, {'error': 'unknown route'})
       return self._json(200, {'ok': True})
