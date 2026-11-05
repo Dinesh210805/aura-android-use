@@ -299,6 +299,13 @@ class AuraAccessibilityService : AccessibilityService() {
 
         startForegroundService()
 
+        // The system rebinds this service right after a swipe-from-recents kills the process, and a
+        // system-bound accessibility service is the state most likely to be allowed the background
+        // microphone foreground service on Android 14+. Idempotent if the wake word is already up.
+        if (getSharedPreferences("aura_settings", Context.MODE_PRIVATE).getBoolean("wake_word_enabled", false)) {
+            com.aura.aura_ui.services.WakeWordListeningService.start(this)
+        }
+
         observeScreenCapturePreference()
 
         observeUiStreamPreference()
@@ -481,10 +488,15 @@ class AuraAccessibilityService : AccessibilityService() {
             // skip the fallback. That failure mode is not hypothetical here: the same
             // ambient stream produced 13 false pauses in one session (see
             // [TouchWatchOverlay]) before it was scoped.
+            // Input echoes (a click or focus event) are left out: they say the touch
+            // arrived, not that the app acted on it. See [SemanticFallbackPolicy.isReaction].
             if (!isAura && eventPackageName.isNotEmpty()) {
                 val at = System.currentTimeMillis()
-                lastForeignUiMutation = UiMutation(eventPackageName, it.eventType, at)
-                lastEventAtByPackage[eventPackageName] = at
+                if (SemanticFallbackPolicy.isReaction(it.eventType)) {
+                    lastForeignUiMutation = UiMutation(eventPackageName, it.eventType, at)
+                    lastEventAtByPackage[eventPackageName] = at
+                }
+                if (SemanticFallbackPolicy.isNavigation(it.eventType)) lastForeignNavigationAt = at
                 recentMutations.add("$eventPackageName:${it.eventType}@$at")
                 while (recentMutations.size > RECENT_MUTATION_LIMIT) recentMutations.poll()
             }
@@ -535,9 +547,10 @@ class AuraAccessibilityService : AccessibilityService() {
             //
             //  1. A tap on something labelled like a restricted app (its launcher
             //     icon) — fires before the target process has even spawned.
-            //  2. The first event of ANY type carrying a restricted package —
+            //  2. The first event of almost any type carrying a restricted package —
             //     strictly earlier than waiting for TYPE_WINDOW_STATE_CHANGED,
             //     which lands about when their check runs, and lost every time.
+            //     Notifications and toasts are excluded inside the gate.
             if (!isAura) {
                 if (it.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
                     val label = it.text?.joinToString(" ")?.takeIf { t -> t.isNotBlank() }
@@ -545,7 +558,7 @@ class AuraAccessibilityService : AccessibilityService() {
                     RestrictedAppAccessibilityGate.onNodeClicked(this, label)
                 }
                 if (eventPackageName.isNotBlank()) {
-                    RestrictedAppAccessibilityGate.onPackageSeen(this, eventPackageName)
+                    RestrictedAppAccessibilityGate.onPackageSeen(this, eventPackageName, it.eventType)
                 }
             }
 
@@ -630,6 +643,7 @@ class AuraAccessibilityService : AccessibilityService() {
         releaseKeepScreenOn()
         touchWatchOverlay?.detach()
         touchWatchOverlay = null
+        agentCursor.detach()
         // Accessibility and the UI overlay have independent lifecycles. If the service is
         // disabled outside RestrictedAppAccessibilityGate, do not leave a full-screen overlay
         // alive above the next app.
@@ -741,7 +755,7 @@ class AuraAccessibilityService : AccessibilityService() {
             options = options,
         )
 
-        flashGestureTarget(target, endTarget)
+        flashGestureTarget(target, endTarget, options)
         gestureInjector.execute(
             command,
             object : GestureCallback {
@@ -790,7 +804,7 @@ class AuraAccessibilityService : AccessibilityService() {
             endTarget = endTarget,
             options = options,
         )
-        flashGestureTarget(target, endTarget)
+        flashGestureTarget(target, endTarget, options)
         // AURA's run controls are a TOUCHABLE window. `dispatchGesture` injects real
         // MotionEvents, so they are delivered to the TOPMOST window at those coordinates —
         // meaning a target sitting under the bottom-centre Pause button would have had its
@@ -866,8 +880,13 @@ class AuraAccessibilityService : AccessibilityService() {
         // No idea what we tapped — any foreign repaint is the best evidence available.
         val pkg = targetPackage
             ?: return (lastForeignUiMutation?.atMs ?: 0L) > dispatchedAtMs
-        return (lastEventAtByPackage[pkg] ?: 0L) > dispatchedAtMs
+        return (lastEventAtByPackage[pkg] ?: 0L) > dispatchedAtMs ||
+            lastForeignNavigationAt > dispatchedAtMs
     }
+
+    /** Last time any non-AURA app opened or closed a window. See [SemanticFallbackPolicy.isNavigation]. */
+    @Volatile
+    private var lastForeignNavigationAt: Long = 0L
 
     /**
      * Last non-AURA repaint. A single immutable value rather than two fields so the tap
@@ -999,6 +1018,28 @@ class AuraAccessibilityService : AccessibilityService() {
             options = GestureOptions(durationMs = duration),
         )
 
+    /**
+     * Traces finger paths one after another: drawing, signatures, drags. See
+     * `DeviceBridge.performStrokes`.
+     *
+     * - Contract: false as soon as one stroke fails; later strokes are not sent.
+     * - Why exact paths: [GestureBuilder.buildSwipe] bends a swipe into a humanized curve,
+     *   which would distort a drawing.
+     */
+    suspend fun strokesAwait(strokes: List<List<Pair<Int, Int>>>, durationMs: Long, holdMs: Long): Boolean =
+        withAuraOverlaysHiddenIf(
+            OverlayEvasion.decide(
+                bounds = OverlayCaptureGate.hook?.controlsBounds(),
+                points = strokes.flatten(),
+                padPx = GESTURE_EVASION_PAD_PX,
+            ) == OverlayEvasion.Decision.HIDE,
+        ) {
+            strokes.all {
+                agentCursor.trace(it.map { (x, y) -> x.toFloat() to y.toFloat() }, durationMs, holdMs)
+                gestureInjector.executeStroke(it, durationMs, holdMs)
+            }
+        }
+
     suspend fun scrollAwait(direction: String): Boolean {
         val swipeDirection = when (direction.lowercase()) {
             "up" -> SwipeDirection.UP
@@ -1023,13 +1064,25 @@ class AuraAccessibilityService : AccessibilityService() {
      * so som_id-resolved taps flash too. Coordinates targets only; directional
      * scrolls have no meaningful point to mark.
      */
-    private fun flashGestureTarget(target: GestureTarget, endTarget: GestureTarget.Coordinates?) {
+    private fun flashGestureTarget(
+        target: GestureTarget,
+        endTarget: GestureTarget.Coordinates?,
+        options: GestureOptions,
+    ) {
         val coords = target as? GestureTarget.Coordinates ?: return
         if (coords.normalized) return // 0..1 space — not screen pixels; skip rather than mis-draw
-        tapFlash.flash(coords.x, coords.y, endTarget?.takeIf { !it.normalized }?.x, endTarget?.takeIf { !it.normalized }?.y)
+        val end = endTarget?.takeIf { !it.normalized }
+        tapFlash.flash(coords.x, coords.y, end?.x, end?.y)
+        if (end == null) {
+            agentCursor.pointAt(coords.x, coords.y)
+        } else {
+            agentCursor.trace(listOf(coords.x to coords.y, end.x to end.y), options.durationMs, options.holdMs)
+        }
     }
 
     private val tapFlash by lazy { TapFlashOverlay(this) }
+
+    private val agentCursor by lazy { AgentCursorOverlay(this) }
 
     /** Boolean variants of the global-action gestures (the OS call already returns success). */
     fun performHomeResult(): Boolean = performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
@@ -1074,6 +1127,7 @@ class AuraAccessibilityService : AccessibilityService() {
         // Stamped BEFORE dispatch: the resulting touch events can reach the control lock before
         // dispatchGesture() returns, and an unstamped echo reads as the user taking over.
         ControlLockStore.shared.noteDispatch(SelfActionWindow.ActionKind.TAP)
+        agentCursor.pointAt(x.toFloat(), y.toFloat())
         val dispatched = dispatchGesture(gesture, null, null)
         AgentLogger.Auto.d("Tap at ($x, $y) dispatched: $dispatched")
         dispatched
@@ -1920,7 +1974,10 @@ class AuraAccessibilityService : AccessibilityService() {
         if (hide) withAuraOverlaysHidden(block) else block()
 
     private suspend fun <T> withAuraOverlaysHidden(block: suspend () -> T): T {
-        val gate = OverlayCaptureGate.hook ?: return block()
+        // The agent cursor is AURA's own window too, and is up even when the overlay service
+        // (and so [OverlayCaptureGate.hook]) is not, e.g. a run driven over MCP.
+        val gate = OverlayCaptureGate.hook
+        if (gate == null && !agentCursor.isShowing) return block()
 
         // The legacy blocking bridge [captureScreen] wraps this in `runBlocking`. Called from
         // the main thread that pins the Looper: the hide would never be dispatched, the frame
@@ -1933,14 +1990,19 @@ class AuraAccessibilityService : AccessibilityService() {
         }
 
         withContext(Dispatchers.Main) {
-            gate.hideForCapture()
-            awaitFrame()
-            awaitFrame()
+            gate?.hideForCapture()
+            if (agentCursor.hideForCapture() || gate != null) {
+                awaitFrame()
+                awaitFrame()
+            }
         }
         return try {
             block()
         } finally {
-            withContext(NonCancellable + Dispatchers.Main) { gate.restoreAfterCapture() }
+            withContext(NonCancellable + Dispatchers.Main) {
+                gate?.restoreAfterCapture()
+                agentCursor.restoreAfterCapture()
+            }
         }
     }
 

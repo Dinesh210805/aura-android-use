@@ -141,8 +141,16 @@ class AssistantForegroundService : LifecycleService() {
                     ),
                 ),
             ),
-            // Phase 10B — forensic per-call log with raw screenshots.
-            sessionLogSink = sessionLogger,
+            // Phase 10B — forensic per-call log with raw screenshots, wrapped so the same calls
+            // drive the overlay's status strip, run controls and report card (RemoteRun).
+            sessionLogSink = RemoteRun.Sink(sessionLogger) {
+                // The overlay service only runs on demand; its windows need it alive.
+                ForegroundServiceCompat.startSafely(
+                    applicationContext,
+                    Intent(applicationContext, AuraOverlayService::class.java)
+                        .setAction(AuraOverlayService.ACTION_ATTACH_RUN_SURFACE),
+                )
+            },
             // Spec 2026-07-17 — shared memory: external clients read learned hints
             // in tool results and teach the store back via end_session outcomes.
             learningsGateway = com.aura.aura_ui.mcp.AppLearningsGateway(applicationContext),
@@ -171,7 +179,8 @@ class AssistantForegroundService : LifecycleService() {
             // Spec 2026-07-31 — control lock. This is the server remote MCP clients talk
             // to, and the gap it closes: today a PC keeps firing tap / type_text /
             // browser_act into a phone whose owner picked it up thirty seconds ago.
-            pausedByHuman = { ControlLockStore.shared.isPausedByHuman },
+            // A client the user cancelled is refused the same way until it goes quiet.
+            pausedByHuman = { ControlLockStore.shared.isPausedByHuman || RemoteRun.shared.isRefusing },
             readScreenImage = { com.aura.aura_ui.data.preferences.ReadScreenImageStore.enabled.value },
             // …and this is what ARMS that lock for the remote case. A remote client has
             // no run lifecycle AURA can see, so "a PC is driving right now" can only be
@@ -229,8 +238,11 @@ class AssistantForegroundService : LifecycleService() {
      * is how the UI→store→agent wiring is validated until the Phase 3 voice/overlay
      * entry points land. The `vision`/`models` probe modes still require `--es key`.
      *
+     * `--es mode mcp_start` starts the MCP server, as the MCP tab's "Start server" does; the
+     * benchmark suite (`benchmark/suite/device.py`) uses it because this service is not exported.
+     *
      * `--es mode cancel` stops the overlay run in flight. A broadcast with no goal logs
-     * "Missing --es goal", which `scripts/bench/aura_androidworld.py` uses as a liveness probe.
+     * "Missing --es goal", which `benchmark/suite/aura_androidworld.py` uses as a liveness probe.
      *
      * Observe the run with `adb logcat -s AuraAgentSpike`. This is a throwaway
      * harness to prove the Koog-on-device + MCP round-trip on a real device; it
@@ -257,7 +269,7 @@ class AssistantForegroundService : LifecycleService() {
             // `--es mode mcp_start` starts the MCP server exactly as the MCP tab's "Start server" does,
             // so the benchmark can bring the phone side up without touching the UI. The service
             // itself is not exported, so `am start-foreground-service` from a shell is refused.
-            // Change together: scripts/bench/device.py start_phone_mcp.
+            // Change together: benchmark/suite/device.py start_phone_mcp.
             if (mode == "mcp_start") {
                 Log.i("AuraAgentSpike", "MCP start requested over adb")
                 if (RemoteGateManager.isBlocked()) {

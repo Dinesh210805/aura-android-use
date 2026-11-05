@@ -15,7 +15,9 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -126,6 +128,8 @@ private val OTP_SOURCE_TOOLS = setOf(
     "read_notifications",
     "read_screen",
     "perceive_screen",
+    // A copied verification code is one read away.
+    "clipboard",
 )
 
 /**
@@ -238,7 +242,9 @@ internal fun Server.scopedTool(
         // [BrowserHandoff] for the full argument, including why the human lock above is
         // right to have no exemptions at all while this one must.
         if (name.startsWith("browser_")) {
-            val verdict = BrowserHandoff.evaluate(sinks.browserHandedOff(), required)
+            val isHandoffPoll = name == "browser_handoff" &&
+                (request.arguments?.get("check") as? JsonPrimitive)?.booleanOrNull == true
+            val verdict = BrowserHandoff.evaluate(sinks.browserHandedOff(), required, isHandoffPoll)
             trail.step("gate", "BrowserHandoff", if (verdict is BrowserHandoff.Verdict.Block) "refuse" else "pass")
             if (verdict is BrowserHandoff.Verdict.Block) {
                 val result = CallToolResult(

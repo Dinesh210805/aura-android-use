@@ -90,8 +90,11 @@ internal object StatusStripVisibility {
  */
 class AgentStatusOverlay(private val context: Context) {
 
-    private val windowManager =
-        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    /** The window manager the strip was added through, so [detach] removes it from the same one. */
+    private var windowManager: WindowManager? = null
+
+    /** Whether the attached window is a trusted accessibility overlay; picks the plate's alpha. */
+    private var trusted: Boolean = false
 
     private var root: LinearLayout? = null
     private var statusLine: TextView? = null
@@ -117,6 +120,16 @@ class AgentStatusOverlay(private val context: Context) {
 
     /** Whether the strip is ALLOWED on screen — a run is going, or the chat overlay is open. */
     private var enabled: Boolean = false
+
+    /**
+     * True while a run has the wheel. The spoken line is withheld then, so the strip shows only
+     * the work being done; it comes back for conversation and for the reply after the run.
+     */
+    private var runActive: Boolean = false
+
+    /** [speech] as the strip may draw it right now. */
+    private val visibleSpeech: AgentStatusRegistry.Utterance?
+        get() = speech.takeUnless { runActive }
 
     /**
      * Set while the agent screenshots the screen — the strip must not be in the picture.
@@ -178,6 +191,13 @@ class AgentStatusOverlay(private val context: Context) {
         sync()
     }
 
+    /** A local run started or ended; hides or restores the spoken line (see [runActive]). */
+    fun setRunActive(active: Boolean) {
+        if (runActive == active) return
+        runActive = active
+        sync()
+    }
+
     /**
      * The window lives as long as the strip is ALLOWED; only its visibility follows content.
      *
@@ -203,7 +223,7 @@ class AgentStatusOverlay(private val context: Context) {
         applyVisibility()
     }
 
-    private fun hasContent(): Boolean = status.isNotBlank() || speech != null
+    private fun hasContent(): Boolean = status.isNotBlank() || visibleSpeech != null
 
     /**
      * The only place `root.visibility` is written.
@@ -262,20 +282,26 @@ class AgentStatusOverlay(private val context: Context) {
 
     private fun attach() {
         if (root != null) return
-        if (!Settings.canDrawOverlays(context)) {
+        // Hosted by the accessibility service when it is bound: that makes the window a
+        // trusted overlay, which is what lets the plate be opaque (see [CANVAS]).
+        val a11y = com.aura.aura_ui.accessibility.AuraAccessibilityService.instance
+        trusted = a11y != null
+        if (!trusted && !Settings.canDrawOverlays(context)) {
             Log.e(TAG, "Cannot show status strip — overlay permission missing")
             return
         }
+        val wm = (a11y ?: context).getSystemService(WindowManager::class.java) ?: return
 
         // Built already hidden. `addView` paints before the first [applyVisibility] runs and
         // the plate has a background, so attaching VISIBLE flashes an empty black bar for a
         // frame at the start of every run.
         val view = buildView().apply { visibility = View.INVISIBLE }
-        runCatching { windowManager.addView(view, layoutParams()) }
+        runCatching { wm.addView(view, layoutParams()) }
             .onFailure {
                 Log.e(TAG, "Status strip rejected by WindowManager: ${it.message}")
                 return
             }
+        windowManager = wm
         root = view
         // The strip is up for exactly as long as a run is: attach/detach bracket the whole
         // run, so this is the cheapest correct place to hold the screen. Without it a long
@@ -295,8 +321,9 @@ class AgentStatusOverlay(private val context: Context) {
         handler.removeCallbacks(hideRunnable)
         root?.let {
             showOrHide(false)
-            runCatching { windowManager.removeView(it) }
+            runCatching { windowManager?.removeView(it) }
         }
+        windowManager = null
         AgentLogger.UI.i("strip DETACHED", emptyMap())
         root = null
         statusLine = null
@@ -374,7 +401,7 @@ class AgentStatusOverlay(private val context: Context) {
             if (changed && text.isNotBlank()) logRendered(view, "status", text) { lastLoggedStatus = it }
         }
         val view = spokenLine ?: return
-        val said = speech
+        val said = visibleSpeech
         if (said == null) {
             if (view.visibility == View.VISIBLE) {
                 AgentLogger.UI.i("strip SPEECH CLEARED", mapOf("was" to lastLoggedSpeech))
@@ -562,7 +589,7 @@ class AgentStatusOverlay(private val context: Context) {
 
         val spoken = TextView(context).apply {
             // Full white, not the 90% ink it used to be. This row IS the content — it is what
-            // the user is reading while AURA talks — and it sits on a translucent dark plate
+            // the user is reading while AURA talks — and it sits on a dark plate
             // over arbitrary app pixels, where every step down in alpha costs real legibility.
             setTextColor(INK)
             // Biggest thing on the strip. The status line above is a caption ABOUT the work;
@@ -598,11 +625,7 @@ class AgentStatusOverlay(private val context: Context) {
     }
 
     /**
-     * The glass plate: a dark vertical gradient behind a bright rim.
-     *
-     * Translucent on purpose, and not only for looks: this strip can still land in a
-     * screenshot if a capture path is ever added that does not go through the gate, and a
-     * translucent panel over readable content degrades far better than an opaque one.
+     * The plate: a flat fill in the chat input bar's colour, behind a bright rim.
      *
      * **No window blur, and no gradient.** `FLAG_BLUR_BEHIND` was tried and removed —
      * frosting the app underneath destroys the thing the user is trying to watch AURA
@@ -611,20 +634,19 @@ class AgentStatusOverlay(private val context: Context) {
      * overlay are one surface as far as the user is concerned, and the chat overlay draws a
      * flat fill. A plate with its own lighting model beside a flat one reads as two apps.
      *
-     * Both stops keep [CANVAS]'s alpha. See its KDoc — the alpha is a touch-passthrough
-     * requirement, so a gradient that brightens the top by raising alpha would reintroduce
-     * the dead band it exists to prevent. Only the RGB moves.
      */
     private fun stripBackground() = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = CORNER_DP.dp().toFloat()
-        setColor(CANVAS)
+        setColor(if (trusted) CANVAS else CANVAS_UNTRUSTED)
         setStroke(1.dp(), RIM)
     }
 
     private fun layoutParams(): WindowManager.LayoutParams {
         val type =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (trusted) {
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
                 @Suppress("DEPRECATION")
@@ -720,30 +742,27 @@ class AgentStatusOverlay(private val context: Context) {
         const val CORNER_DP = 16
 
         /**
-         * Ink, held open so the screen beneath still reads through.
+         * The plate when hosted as a trusted accessibility overlay: the chat input bar's fill,
+         * `Mono.scheme(dark = true).chip` (`#1C1A18`) at the bar's own alpha 0.98, so the strip
+         * and the mic bar read as one surface.
          *
-         * Black rather than white: this sits over arbitrary app content, and a dark panel
-         * with bright text holds its contrast against both a white feed and a photo, where
-         * a white panel washes out over anything pale.
-         *
-         * The RGB is the chat overlay's own surface — `Mono.scheme(dark = true).card`,
-         * `#141210`, the warm near-black behind the mic button — so the caption strip and
-         * the chat read as one layer rather than two overlays that happen to be on screen
-         * together. The chat draws it at alpha 0.94; this cannot (see below), so the strip
-         * is slightly the lighter of the two. That gap is a platform floor, not a choice.
-         *
-         * **The alpha is a platform requirement, not a taste decision.** Android 12 blocks
-         * touches that pass through an *untrusted* overlay — and `TYPE_APPLICATION_OVERLAY`
-         * is explicitly untrusted — unless the window's combined opacity is at most 0.8.
-         * Above that, a tap landing under this strip is DISCARDED by the system and logged
-         * as "Untrusted touch due to occlusion by com.aura…"; the app underneath never
-         * hears it. Since the strip spans the top of the screen for the whole run, a higher
-         * alpha would leave a dead band across every app — for the user AND for the agent.
-         *
-         * 0xC8 = 200/255 = 0.784. Do not raise it past 0xCC (0.8).
-         * https://developer.android.com/about/versions/12/behavior-changes-all
+         * - Change together: `inputBarBackground` in `VoiceAssistantOverlay.kt`.
+         * - Why opaque is safe here: accessibility overlays are trusted, so Android 12's
+         *   untrusted-occlusion rule below does not apply and taps still pass through.
          */
-        val CANVAS: Int = Color.parseColor("#C8141210")
+        val CANVAS: Int = Color.parseColor("#FA1C1A18")
+
+        /**
+         * The same colour for the fallback `TYPE_APPLICATION_OVERLAY` window (accessibility
+         * service not bound), held at alpha 0xC8 = 0.784.
+         *
+         * - Why: Android 12 discards touches that pass through an *untrusted* overlay whose
+         *   combined opacity exceeds 0.8, logging "Untrusted touch due to occlusion by
+         *   com.aura…". Above that this strip would be a dead band across the top of every
+         *   app. Do not raise it past 0xCC.
+         *   https://developer.android.com/about/versions/12/behavior-changes-all
+         */
+        val CANVAS_UNTRUSTED: Int = Color.parseColor("#C81C1A18")
 
         /**
          * The rim, matching the hairline the chat overlay puts on its own dark surfaces

@@ -113,11 +113,9 @@ internal class ControlLockStore(
      * Observable "a local agent run has the wheel", so the on-screen run controls can
      * appear and disappear without polling.
      *
-     * Deliberately the **local** half of [isDriving] only. A remote MCP client has no
-     * finished event — [isDriving] covers it with a rolling window — and turning that
-     * window into a flow would need a timer whose only job is to hide a button. Remote
-     * driven runs therefore get no on-screen controls; the notification still carries
-     * Cancel.
+     * Deliberately the **local** half of [isDriving] only. Remote MCP runs have their own
+     * flow, [RemoteRun.active], which ends on `end_session`, Cancel, or idle; the overlay
+     * shows the controls while either is true.
      */
     val localRunning: StateFlow<Boolean> = _localRunActive.asStateFlow()
 
@@ -133,6 +131,9 @@ internal class ControlLockStore(
      */
     @Volatile
     private var pausedExplicitly: Boolean = false
+
+    /** True when the current pause came from the Pause button or voice, not an inferred touch. */
+    val isPausedExplicitly: Boolean get() = pausedExplicitly
 
     @Volatile
     private var lastRemoteCallAtMs: Long? = null

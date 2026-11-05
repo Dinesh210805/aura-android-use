@@ -12,6 +12,11 @@ import java.nio.LongBuffer
  * Silero VAD v5 (assets/silero_vad.onnx, MIT) — raw 512-sample 16 kHz PCM in,
  * speech probability out, recurrent state threaded between calls.
  *
+ * Why the 64-sample prefix: the model is trained on each frame preceded by the last
+ * [CONTEXT_SIZE] samples of the previous one (576 in total), exactly as the official
+ * `OnnxWrapper` feeds it. A bare 512-sample frame scores speech far too low, so speech
+ * start fires late or never and the turn never auto-ends.
+ *
  * Shares the process-wide [OrtEnvironment] with OnnxYoloRunner (multi-session
  * by design) but pins its own session to CPU with ONE intra-op thread so it
  * can never contend with the YOLO provider chosen by calibration. Never touches
@@ -22,6 +27,7 @@ class SileroVadScorer(context: Context) : FrameScorer, AutoCloseable {
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
     private val session: OrtSession
     private var state = FloatArray(STATE_SIZE) // [2,1,128] flattened, zeros = fresh
+    private val input = FloatArray(CONTEXT_SIZE + SpeechSegmenter.FRAME_SAMPLES) // context ++ frame
 
     init {
         val bytes = context.assets.open(MODEL_ASSET).use { it.readBytes() }
@@ -32,13 +38,17 @@ class SileroVadScorer(context: Context) : FrameScorer, AutoCloseable {
 
     override fun score(frame: FloatArray): Float {
         require(frame.size == SpeechSegmenter.FRAME_SAMPLES) { "expected 512 samples" }
-        OnnxTensor.createTensor(env, FloatBuffer.wrap(frame), longArrayOf(1, 512)).use { input ->
+        // input[0, 64) still holds the previous frame's tail; append this frame after it.
+        frame.copyInto(input, CONTEXT_SIZE)
+        OnnxTensor.createTensor(env, FloatBuffer.wrap(input), longArrayOf(1, input.size.toLong())).use { x ->
             OnnxTensor.createTensor(env, FloatBuffer.wrap(state), longArrayOf(2, 1, 128)).use { st ->
                 OnnxTensor.createTensor(env, LongBuffer.wrap(longArrayOf(16000)), longArrayOf()).use { sr ->
-                    session.run(mapOf("input" to input, "state" to st, "sr" to sr)).use { result ->
+                    session.run(mapOf("input" to x, "state" to st, "sr" to sr)).use { result ->
                         // Access outputs by name — never trust graph ordering.
                         val prob = (result.get("output").get() as OnnxTensor).floatBuffer[0]
                         (result.get("stateN").get() as OnnxTensor).floatBuffer.get(state)
+                        // This frame's last 64 samples become the next frame's context.
+                        input.copyInto(input, 0, input.size - CONTEXT_SIZE)
                         return prob
                     }
                 }
@@ -48,6 +58,7 @@ class SileroVadScorer(context: Context) : FrameScorer, AutoCloseable {
 
     override fun reset() {
         state = FloatArray(STATE_SIZE)
+        input.fill(0f)
     }
 
     override fun close() {
@@ -58,5 +69,6 @@ class SileroVadScorer(context: Context) : FrameScorer, AutoCloseable {
         private const val TAG = "SileroVad"
         private const val MODEL_ASSET = "silero_vad.onnx"
         private const val STATE_SIZE = 2 * 1 * 128
+        private const val CONTEXT_SIZE = 64 // samples of the previous frame, at 16 kHz
     }
 }

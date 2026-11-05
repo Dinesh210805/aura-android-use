@@ -4,7 +4,7 @@ import kotlin.math.sqrt
 
 /**
  * Fallback scorer when the Silero model can't load: frame RMS against the
- * legacy WhisperSttController threshold (0.06). Binary output — the segmenter's
+ * legacy LocalSttController threshold (0.06). Binary output — the segmenter's
  * hysteresis still applies, but end-pointing stays sloppy, so pair with
  * [LEGACY_CONFIG] (1500 ms trailing silence, like the code this replaces).
  */

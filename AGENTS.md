@@ -17,6 +17,8 @@ computer reach the phone.
 
 `aura-android-use-website/` is the static website, deployed by Vercel from `main` (see its README).
 
+`benchmark/` is the AndroidWorld benchmark harness for AURA (see its README).
+
 ## Build and test
 Run from `aura-android/` (`gradlew.bat` on Windows):
 ```
@@ -24,6 +26,9 @@ Run from `aura-android/` (`gradlew.bat` on Windows):
 ./gradlew :app:testDebugUnitTest
 ./gradlew :mcp-server:test
 ```
+`:mcp-server` tests include the tool bench (`bench/ToolBenchTest`): adversarial scenarios run
+against a mock phone (`bench/MockPhone`, no emulator) and write `mcp-server/build/toolbench/report.html`.
+It fails only on status `fail`; a `gap` scenario names the planned change that will close it.
 The build needs two git-ignored files:
 - `aura-android/app/google-services.json`: copy the shape from `google-services.example.json`.
 - `aura-android/local.properties`: copy `local.properties.example` (SDK path, optional release
@@ -36,7 +41,7 @@ see `aura-mcp-connect/README.md`.
 ## Documentation rules
 - **Folder READMEs are the map.** Before editing a folder, read its `README.md` if it has one.
   Current ones, under `aura-android/app/src/main/java/com/aura/aura_ui/`: `presentation/`, `remote/`.
-  Also `scripts/bench/` (the AndroidWorld benchmark).
+  Also `benchmark/` (the AndroidWorld benchmark).
 - **Update the README in the same commit** when you add, remove, rename or repurpose anything it
   describes, then bump its **Last reviewed** date.
 - "Last reviewed" means *someone checked this doc against the code on that date*. Don't bump it

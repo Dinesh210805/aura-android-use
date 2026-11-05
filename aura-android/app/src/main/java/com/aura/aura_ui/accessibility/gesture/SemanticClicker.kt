@@ -2,8 +2,11 @@ package com.aura.aura_ui.accessibility.gesture
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.aura.aura_ui.utils.AgentLogger
+import com.aura.mcp.bridge.BBox
+import com.aura.mcp.tools.TouchTarget
 
 /**
  * The escape hatch for apps that ignore accessibility-injected touches.
@@ -41,9 +44,9 @@ import com.aura.aura_ui.utils.AgentLogger
 internal object SemanticClicker {
 
     /**
-     * Deepest clickable node whose on-screen bounds contain ([x], [y]), or null.
+     * Topmost clickable node whose on-screen bounds contain ([x], [y]), or null.
      *
-     * Two rules here are load-bearing, both learned by measuring Swiggy:
+     * Three rules here are load-bearing; the first two were learned by measuring Swiggy:
      *
      * 1. **Never prune a subtree on its ancestor's bounds.** A parent's
      *    `getBoundsInScreen` does not reliably contain its children's — scroll
@@ -53,52 +56,48 @@ internal object SemanticClicker {
      * 2. **Walk every window, not just `rootInActiveWindow`.** Sheets, dialogs and nav
      *    bars routinely live in a sibling window.
      *
-     * Deepest-wins because these layouts nest a clickable row inside a clickable
-     * container, and the inner one is what a finger would have hit.
+     * 3. **Topmost, not deepest.** Android gives a touch to the view painted last at that
+     *    point, and depth is not paint order: a floating button sits shallow in the tree
+     *    over a deep list row, and a dialog's buttons are shallower than the app behind
+     *    them. Deepest-wins clicked the hidden row. Walking windows by ascending layer,
+     *    each in drawing order, puts the nodes in paint order; [TouchTarget.pick] takes the
+     *    last one under the point. A clickable row inside a clickable container still
+     *    resolves to the inner one, because a child is painted after its parent.
+     *
+     * AURA's own windows are skipped: its pause button must never take the agent's tap.
      */
     fun clickableNodeAt(service: AccessibilityService, x: Int, y: Int): AccessibilityNodeInfo? {
-        var bestClickable: AccessibilityNodeInfo? = null
-        var bestClickableDepth = -1
-        var bestAny: AccessibilityNodeInfo? = null
-        var bestAnyDepth = -1
+        val nodes = mutableListOf<AccessibilityNodeInfo>()
+        val candidates = mutableListOf<TouchTarget.Candidate>()
+        val ownPackage = service.packageName
 
-        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+        fun walk(node: AccessibilityNodeInfo) {
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
-            // Recycled off-screen list items report inverted rects (left > right);
-            // Rect.contains already rejects those, so no extra guard is needed.
-            if (node.isEnabled && bounds.contains(x, y)) {
-                if (node.isClickable && depth > bestClickableDepth) {
-                    bestClickable = node
-                    bestClickableDepth = depth
-                }
-                // Also remember the deepest node of ANY kind under the point. Requiring
-                // isClickable here was too strict and silently disabled the fallback on
-                // the element it was built for: Swiggy's search bar is reachable by
-                // perceive_screen (the agent taps it by som_id) but is not flagged
-                // clickable — it is a plain View with a touch listener, which is common in
-                // React-Native and custom-drawn UIs. With no candidate at all, click()
-                // never got the chance to climb to a clickable ancestor.
-                if (depth > bestAnyDepth) {
-                    bestAny = node
-                    bestAnyDepth = depth
-                }
-            }
-            for (i in 0 until node.childCount) {
-                walk(node.getChild(i) ?: continue, depth + 1)
-            }
+            nodes += node
+            candidates += TouchTarget.Candidate(
+                // Recycled off-screen list items report inverted rects (left > right); the
+                // containment test in TouchTarget rejects those, so no extra guard is needed.
+                box = BBox(bounds.left, bounds.top, bounds.right, bounds.bottom),
+                clickable = node.isClickable,
+                enabled = node.isEnabled,
+                own = node.packageName?.toString() == ownPackage,
+            )
+            (0 until node.childCount)
+                .mapNotNull { i -> node.getChild(i)?.let { child -> Triple(child, child.drawingOrder, i) } }
+                .sortedWith(compareBy({ it.second }, { it.third }))
+                .forEach { (child, _, _) -> walk(child) }
         }
 
-        val roots = buildList {
-            runCatching { service.windows }.getOrNull()?.forEach { w ->
-                runCatching { w.root }.getOrNull()?.let { add(it) }
-            }
-            runCatching { service.rootInActiveWindow }.getOrNull()?.let { add(it) }
-        }
-        roots.forEach { root -> runCatching { walk(root, 0) } }
-        // Prefer a genuinely clickable node; otherwise hand back the deepest node under
-        // the point and let [click] climb to whatever ancestor actually handles clicks.
-        return bestClickable ?: bestAny
+        val windows = runCatching { service.windows }.getOrNull().orEmpty().sortedBy { it.layer }
+        val roots = windows.mapNotNull { w -> runCatching { w.root }.getOrNull() }
+            .ifEmpty { listOfNotNull(runCatching { service.rootInActiveWindow }.getOrNull()) }
+        roots.forEach { root -> runCatching { walk(root) } }
+        // Prefer a genuinely clickable node. Otherwise the topmost node of ANY kind: Swiggy's
+        // search bar is a plain View with a touch listener, not flagged clickable, and
+        // requiring the flag disabled the fallback on the element it was built for. [click]
+        // climbs from there to whatever ancestor actually handles clicks.
+        return TouchTarget.pick(candidates, x, y)?.let { nodes[it] }
     }
 
     /**
@@ -158,6 +157,47 @@ internal object SemanticFallbackPolicy {
      *   gesture left — the app visibly reacted to something.
      * @param hasClickableNode a clickable node was found under the target point.
      */
+    /**
+     * Whether an accessibility event of [eventType] shows the app reacted to a tap.
+     *
+     * Contract: false for input echoes (click, focus, hover, touch start/end), true for
+     * everything else (repaints, navigation, scrolling, text, selection).
+     * Why: an echo only says the touch arrived. The Files app (DocumentsUI) emits
+     * `TYPE_VIEW_CLICKED` for an accessibility-injected tap and then ignores it, so
+     * counting the echo skipped the fallback on every tap and nothing ever opened. A tap
+     * that does something also repaints, so dropping echoes does not hide real reactions.
+     */
+    fun isReaction(eventType: Int): Boolean = eventType !in INPUT_ECHOES
+
+    /**
+     * Whether [eventType] means a window opened or closed, which counts as a tap's reaction
+     * whichever app it came from.
+     *
+     * Why: a tap that opens another app's screen (Settings' search bar opens
+     * `com.google.android.settings.intelligence`) emits its events from that other
+     * package, so a check limited to the tapped app's package would miss it and fire a
+     * second, semantic click on top of a tap that worked.
+     */
+    fun isNavigation(eventType: Int): Boolean =
+        eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+
+    private val INPUT_ECHOES = setOf(
+        AccessibilityEvent.TYPE_VIEW_CLICKED,
+        AccessibilityEvent.TYPE_VIEW_LONG_CLICKED,
+        AccessibilityEvent.TYPE_VIEW_FOCUSED,
+        AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED,
+        AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED,
+        AccessibilityEvent.TYPE_VIEW_HOVER_ENTER,
+        AccessibilityEvent.TYPE_VIEW_HOVER_EXIT,
+        AccessibilityEvent.TYPE_TOUCH_INTERACTION_START,
+        AccessibilityEvent.TYPE_TOUCH_INTERACTION_END,
+        AccessibilityEvent.TYPE_GESTURE_DETECTION_START,
+        AccessibilityEvent.TYPE_GESTURE_DETECTION_END,
+        AccessibilityEvent.TYPE_TOUCH_EXPLORATION_GESTURE_START,
+        AccessibilityEvent.TYPE_TOUCH_EXPLORATION_GESTURE_END,
+    )
+
     fun shouldFallBack(
         uiMutatedAfterDispatch: Boolean,
         hasClickableNode: Boolean,

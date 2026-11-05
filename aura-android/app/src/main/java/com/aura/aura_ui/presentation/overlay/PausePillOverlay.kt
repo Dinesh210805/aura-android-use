@@ -241,20 +241,24 @@ class PausePillOverlay(private val context: Context) {
         return if (id > 0) context.resources.getDimensionPixelSize(id) else 0
     }
 
-    private companion object {
-        const val TAG = "RunControlsOverlay"
+    internal companion object {
+        private const val TAG = "RunControlsOverlay"
 
-        /** Matches the overlay's mic button, so the two read as the same family of control. */
+        /**
+         * Matches the overlay's mic button, so the two read as the same family of control.
+         * Change together: `BrowserWindow` reads this and [MIN_BOTTOM_MARGIN_DP] to end its
+         * full-size card above these buttons.
+         */
         const val BUTTON_DP = 64
-        const val GLYPH_INSET_DP = 18
-        const val GAP_DP = 8
+        private const val GLYPH_INSET_DP = 18
+        private const val GAP_DP = 8
         const val MIN_BOTTOM_MARGIN_DP = 48
 
-        const val ACTION_CANCEL_TASK = "com.aura.CANCEL_TASK"
+        private const val ACTION_CANCEL_TASK = "com.aura.CANCEL_TASK"
 
-        val INK: Int = Color.parseColor("#E6101010")
+        private val INK: Int = Color.parseColor("#E6101010")
 
         /** Mono's blood red — reserved for destructive actions, which cancelling a run is. */
-        val BLOOD: Int = Color.parseColor("#E6A31621")
+        private val BLOOD: Int = Color.parseColor("#E6A31621")
     }
 }

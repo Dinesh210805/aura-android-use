@@ -171,6 +171,9 @@ object SensitivePolicy {
             evalUrl(stringArg(args, "uri")),
         )
         "type_text" -> evalText(stringArg(args, "text"))
+        // set_value types its value into a field; a clipboard write hands text to every app.
+        "set_value" -> evalText(stringArg(args, "value"))
+        "clipboard" -> evalText(stringArg(args, "text"))
         // Assistant plane — free-text that leaves the device (a reply, an SMS
         // body, a share payload) gets the same screen as type_text.
         "notification_action" -> evalText(stringArg(args, "reply_text"))

@@ -6,47 +6,29 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.audiofx.AcousticEchoCanceler
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.aura.aura_ui.agent.voice.vad.SpeechDetectorFactory
 import com.aura.aura_ui.agent.voice.vad.SpeechEvent
 import com.aura.aura_ui.agent.voice.vad.SpeechSegmenter
+import com.aura.aura_ui.voice.MoonshineStt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.TimeUnit
 
 /**
- * Speech-to-text via **Groq Whisper Large v3 Turbo** (cloud) — the best free-tier STT
- * for the on-device agent. Chosen over on-device recognizers because the agent already
- * requires a network round-trip for the LLM, so offline STT buys nothing here, while
- * Whisper gives <5% WER and 52 languages and reuses the existing Groq key.
+ * Push-to-talk / hands-free speech capture with on-device transcription (Moonshine). Nothing leaves the phone.
  *
- * Lifecycle mirrors a push-to-talk mic button: [start] begins capturing 16 kHz mono
- * PCM; [stopAndTranscribe] ends capture, wraps the PCM as a WAV, and uploads it to
- * Groq's `audio/transcriptions` endpoint, returning the text. [cancel] aborts.
- *
- * Captures at 16 kHz (Whisper-native) to keep the upload small. The caller supplies the
- * Groq key (independent of the *LLM* provider the user picked — Whisper is Groq-only);
- * when no Groq key is configured the caller falls back to Android's on-device
- * SpeechRecognizer.
- *
- * End-pointing is Silero VAD (energy-RMS fallback) via [SpeechDetectorFactory]; capture
- * uses VOICE_COMMUNICATION + AcousticEchoCanceler so the mic can stay hot while the
- * assistant's own TTS plays — the [start] onSpeechStart callback is the barge-in hook.
+ * - Contract: [start] captures 16 kHz mono PCM; [stopAndTranscribe] ends capture and returns the text;
+ *   [cancel] aborts. `onSpeechStart` fires when speech begins, `onSpeechEnd` is the VAD auto-submit.
+ * - Fails: [stopAndTranscribe] throws with a user-facing message on too-short audio or a missing model.
+ *   Callers check [isModelReady] first and fall back to Android's on-device SpeechRecognizer.
  */
-class WhisperSttController(private val context: Context) {
+class LocalSttController(private val context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var captureJob: Job? = null
@@ -54,20 +36,11 @@ class WhisperSttController(private val context: Context) {
     @Volatile private var capturing = false
     private val pcm = ByteArrayOutputStream()
 
-    /**
-     * True when a hardware AcousticEchoCanceler attached to the last capture. Only
-     * then is full-duplex barge-in (mic hot while TTS plays) safe; without it the
-     * caller must go half-duplex to avoid the speaker feeding back into the mic.
-     */
-    @Volatile var aecActive: Boolean = false
-        private set
-
     /** Neural (Silero) or energy-fallback end-pointing; state reset per capture. */
     private val detector: SpeechSegmenter by lazy { SpeechDetectorFactory.create(context) }
 
-    private val http = OkHttpClient.Builder()
-        .callTimeout(60, TimeUnit.SECONDS)
-        .build()
+    /** True once the on-device speech model is downloaded. */
+    fun isModelReady(): Boolean = MoonshineStt.isAvailable(context)
 
     /** True if RECORD_AUDIO is granted (the overlay/service requests it elsewhere). */
     fun hasMicPermission(): Boolean =
@@ -79,7 +52,7 @@ class WhisperSttController(private val context: Context) {
      * [onAmplitude] is invoked with a normalized 0..1 RMS level per buffer so the caller
      * can animate a waveform (this path doesn't go through VoiceCaptureController, which
      * is what normally drives the overlay's amplitude). [onSpeechStart] fires once when
-     * sustained speech begins (the barge-in hook); [onSpeechEnd] fires when trailing
+     * sustained speech begins; [onSpeechEnd] fires when trailing
      * silence ends the turn (VAD auto-submit).
      */
     fun start(
@@ -89,7 +62,7 @@ class WhisperSttController(private val context: Context) {
     ) {
         if (capturing) return
         if (!hasMicPermission()) {
-            Log.e(TAG, "RECORD_AUDIO not granted — cannot start Whisper capture")
+            Log.e(TAG, "RECORD_AUDIO not granted — cannot start capture")
             return
         }
         val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
@@ -97,12 +70,10 @@ class WhisperSttController(private val context: Context) {
         // look frozen) and voice-activity detection is responsive. The AudioRecord ring
         // buffer itself is kept larger so nothing drops between reads.
         val chunkBytes = SAMPLE_RATE * 2 * READ_CHUNK_MS / 1000
-        // VOICE_COMMUNICATION routes through the platform's echo-cancelling
-        // pre-processing chain; with the explicit AEC effect attached the mic
-        // stream no longer hears the phone's own TTS — the prerequisite for
-        // barge-in listening while the assistant is speaking.
+        // VOICE_RECOGNITION: the platform's ASR tuning, without call-style processing. The mic is
+        // only open while AURA is silent (half-duplex), so no echo cancellation is needed.
         val record = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION, SAMPLE_RATE, CHANNEL, ENCODING,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION, SAMPLE_RATE, CHANNEL, ENCODING,
             maxOf(minBuf, chunkBytes * 4),
         )
         if (record.state != AudioRecord.STATE_INITIALIZED) {
@@ -110,22 +81,11 @@ class WhisperSttController(private val context: Context) {
             runCatching { record.release() }
             return
         }
-        aecActive = false
-        if (AcousticEchoCanceler.isAvailable()) {
-            runCatching {
-                val canceller = AcousticEchoCanceler.create(record.audioSessionId)
-                if (canceller != null) {
-                    canceller.enabled = true
-                    aecActive = true
-                }
-            }.onFailure { Log.w(TAG, "AEC attach failed: ${it.message}") }
-        }
-        Log.i(TAG, if (aecActive) "✅ AEC attached — full-duplex barge-in safe" else "⚠️ no AEC — caller should go half-duplex")
         audioRecord = record
         pcm.reset()
         capturing = true
         record.startRecording()
-        Log.i(TAG, "🎙️ Whisper capture started (16 kHz mono, ${READ_CHUNK_MS}ms chunks)")
+        Log.i(TAG, "🎙️ capture started (16 kHz mono, ${READ_CHUNK_MS}ms chunks)")
         detector.reset()
         captureJob = scope.launch {
             val buf = ByteArray(chunkBytes)
@@ -140,9 +100,8 @@ class WhisperSttController(private val context: Context) {
                 for (event in detector.acceptPcm(buf, n)) when (event) {
                     SpeechEvent.SpeechStart -> {
                         spoke = true
-                        // Barge-in capture starts when TTS starts, so the buffer
-                        // may hold seconds of (echo-cancelled) lead-in. Keep a
-                        // short pre-roll so Whisper gets clean context, not junk.
+                        // A hands-free capture can sit open for seconds before the user
+                        // speaks; keep only a short pre-roll so the recognizer gets clean context.
                         trimBufferToTail(PRE_ROLL_MS)
                         scope.launch(Dispatchers.Main) { onSpeechStart() }
                     }
@@ -188,18 +147,14 @@ class WhisperSttController(private val context: Context) {
         return (Math.sqrt(sum / count).toFloat() / 32767f).coerceIn(0f, 1f)
     }
 
-    /**
-     * Stop capture and transcribe via Groq Whisper. [language] is an optional ISO-639-1
-     * hint (e.g. "en", "hi") that improves accuracy; null lets Whisper auto-detect.
-     */
-    suspend fun stopAndTranscribe(apiKey: String, language: String? = null): String {
+    /** Stop capture and transcribe on-device. Blocking-heavy: runs on [Dispatchers.Default]. */
+    suspend fun stopAndTranscribe(): String {
         stopCapture()
         val pcmBytes = synchronized(pcm) { pcm.toByteArray() }
         if (pcmBytes.size < SAMPLE_RATE) { // < ~0.5 s of audio
             error("Didn't catch that — hold the mic a little longer.")
         }
-        val wav = pcmToWav(pcmBytes)
-        return withContext(Dispatchers.IO) { transcribe(wav, apiKey, language) }
+        return withContext(Dispatchers.Default) { MoonshineStt.transcribe(context, pcmBytes) }
     }
 
     /** Abort an in-progress capture without transcribing. */
@@ -219,81 +174,13 @@ class WhisperSttController(private val context: Context) {
         audioRecord = null
     }
 
-    private fun transcribe(wav: ByteArray, apiKey: String, language: String?): String {
-        val body = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart("model", WHISPER_MODEL)
-            .addFormDataPart("response_format", "text")
-            .apply { if (!language.isNullOrBlank()) addFormDataPart("language", language) }
-            .addFormDataPart(
-                "file", "speech.wav",
-                wav.toRequestBody("audio/wav".toMediaType()),
-            )
-            .build()
-        val request = Request.Builder()
-            .url(GROQ_TRANSCRIBE_URL)
-            .header("Authorization", "Bearer $apiKey")
-            .post(body)
-            .build()
-        http.newCall(request).execute().use { resp ->
-            val text = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) {
-                Log.e(TAG, "Whisper HTTP ${resp.code}: ${text.take(200)}")
-                error("Transcription failed (${resp.code}).")
-            }
-            // response_format=text returns the raw transcript; tolerate a JSON body too.
-            val transcript = if (text.trimStart().startsWith("{")) {
-                runCatching { JSONObject(text).optString("text", "") }.getOrDefault("")
-            } else {
-                text
-            }.trim()
-            Log.i(TAG, "📝 Whisper transcript: ${transcript.take(80)}")
-            return transcript
-        }
-    }
-
-    /** Wrap raw 16-bit mono PCM in a 44-byte WAV (RIFF) header. */
-    private fun pcmToWav(data: ByteArray): ByteArray {
-        val channels = 1
-        val byteRate = SAMPLE_RATE * channels * 2
-        val totalDataLen = 36 + data.size
-        val header = ByteArray(44)
-        fun putLe32(o: Int, v: Int) {
-            header[o] = (v and 0xff).toByte()
-            header[o + 1] = ((v shr 8) and 0xff).toByte()
-            header[o + 2] = ((v shr 16) and 0xff).toByte()
-            header[o + 3] = ((v shr 24) and 0xff).toByte()
-        }
-        fun putLe16(o: Int, v: Int) {
-            header[o] = (v and 0xff).toByte()
-            header[o + 1] = ((v shr 8) and 0xff).toByte()
-        }
-        "RIFF".forEachIndexed { i, c -> header[i] = c.code.toByte() }
-        putLe32(4, totalDataLen)
-        "WAVE".forEachIndexed { i, c -> header[8 + i] = c.code.toByte() }
-        "fmt ".forEachIndexed { i, c -> header[12 + i] = c.code.toByte() }
-        putLe32(16, 16)          // PCM fmt chunk size
-        putLe16(20, 1)           // audio format = PCM
-        putLe16(22, channels)
-        putLe32(24, SAMPLE_RATE)
-        putLe32(28, byteRate)
-        putLe16(32, channels * 2) // block align
-        putLe16(34, 16)           // bits per sample
-        "data".forEachIndexed { i, c -> header[36 + i] = c.code.toByte() }
-        putLe32(40, data.size)
-        return header + data
-    }
-
     companion object {
-        private const val TAG = "WhisperStt"
+        private const val TAG = "LocalStt"
         private const val SAMPLE_RATE = 16000
         private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
         private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
-        private const val WHISPER_MODEL = "whisper-large-v3-turbo"
-        private const val GROQ_TRANSCRIBE_URL =
-            "https://api.groq.com/openai/v1/audio/transcriptions"
         private const val READ_CHUNK_MS = 100        // ~10 amplitude updates/sec
         private const val PRE_ROLL_MS = 400          // audio kept before detected speech
-        private const val MAX_CAPTURE_MS = 30_000L   // safety cap (Groq free tier 25 MB)
+        private const val MAX_CAPTURE_MS = 30_000L   // safety cap on one utterance
     }
 }

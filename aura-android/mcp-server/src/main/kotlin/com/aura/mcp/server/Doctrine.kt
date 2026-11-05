@@ -52,7 +52,7 @@ object Doctrine {
                 "you what you need; its description says when.",
             "Target elements by som_id from the latest screen you were shown. som_ids expire after " +
                 "every action. Never pass pixel coordinates.",
-            "Take one consequential action per step.",
+            "Take one consequential action per step; routine steps already on screen may share one run_steps call.",
         ),
         section(
             "choosing_a_route",
@@ -133,8 +133,7 @@ object Doctrine {
             "Finish with end_session. Its reason is spoken to the user, so write it as your answer: " +
                 "specific and in your own voice — what you saw, found or did, not a flat \"done\".",
             "Claim success only when the latest screen you saw confirms it. If it did not work, or " +
-                "only partly, say so with outcome failure or partial; that is always accepted.",
-        ),
+                "only partly, say so with outcome failure or partial; that is always accepted.",        ),
     )
 
     /**

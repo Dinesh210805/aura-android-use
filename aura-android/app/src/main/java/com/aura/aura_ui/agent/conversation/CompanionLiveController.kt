@@ -144,19 +144,20 @@ internal object CaptionReveal {
             else -> full.lastIndexOf(' ', spoken - 1).coerceAtLeast(0)
         }
         if (end == 0) return ""
-        val head = full.take(end)
-        val startOfSentence = head.indexOfLast { it in SENTENCE_ENDERS }
-            .let { if (it < 0) 0 else it + 1 }
-        return head.substring(startOfSentence).trimStart()
+        val head = full.take(end).trimEnd()
+        val startOfSentence = SENTENCE_START.findAll(head).lastOrNull()?.range?.last?.plus(1) ?: 0
+        return head.substring(startOfSentence).trim()
     }
 
     /**
-     * What ends a sentence, for deciding where the caption restarts.
+     * Where the next sentence starts: `.!?` followed by whitespace, or a newline.
      *
-     * A String rather than a CharArray so a newline can be written as an escape without a
-     * literal line break sitting inside a character literal.
+     * - Why "followed by whitespace": the full stop that ENDS the sentence on screen must not
+     *   restart it, or the last word of every sentence is replaced by a blank; and a dot inside
+     *   `nasa.gov` or `.75` is not a sentence end.
+     * - Change together: `SpeechChunker.SENTENCE_END` (same rule for where speech chunks split).
      */
-    const val SENTENCE_ENDERS = ".!?\n"
+    private val SENTENCE_START = Regex("[.!?]\\s+|\\n")
 }
 
 /**

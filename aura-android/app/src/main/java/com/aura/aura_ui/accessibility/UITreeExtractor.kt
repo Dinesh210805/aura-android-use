@@ -48,7 +48,16 @@ class UITreeExtractor(private val service: AccessibilityService) {
          */
         private const val MAX_OFFSCREEN_TEXT = 200
         private const val MAX_OFFSCREEN_TEXT_LEN = 120
+
+        /**
+         * Paint-order values one window may use, so every value in a higher layer is larger
+         * than every value in a lower one. Far above [WALK_CEILING] nodes per window.
+         */
+        private const val PAINT_WINDOW_STRIDE = 1_000_000L
     }
+
+    /** The next paint-order value in the window being walked; see [UIElementData.paint]. */
+    private var paintNext = 0L
 
     /** Result of a tree walk plus honesty flags about what the walk could not see. */
     data class Extraction(
@@ -94,7 +103,8 @@ class UITreeExtractor(private val service: AccessibilityService) {
             // agent used to perceive the screen BEHIND a dialog and tap through it.
             val roots = resolveRoots()
             if (roots.isNotEmpty()) {
-                for (root in roots) {
+                for ((root, layer) in roots) {
+                    paintNext = layer.toLong() * PAINT_WINDOW_STRIDE
                     extractUIElements(root, elements, parentNode = null, stats = stats)
                     @Suppress("DEPRECATION")
                     root.recycle()
@@ -103,6 +113,7 @@ class UITreeExtractor(private val service: AccessibilityService) {
                 // No window list (pre-Lollipop, or the framework refused it).
                 val activeRoot = service.rootInActiveWindow
                 if (activeRoot != null) {
+                    paintNext = 0L
                     extractUIElements(activeRoot, elements, parentNode = null, stats = stats)
                     @Suppress("DEPRECATION")
                     activeRoot.recycle()
@@ -147,7 +158,7 @@ class UITreeExtractor(private val service: AccessibilityService) {
      * window's package to exclude AURA's own overlay, and only the root carries it.
      * Every root that does not make the cut is recycled here.
      */
-    private fun resolveRoots(): List<AccessibilityNodeInfo> {
+    private fun resolveRoots(): List<Pair<AccessibilityNodeInfo, Int>> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return emptyList()
 
         return try {
@@ -200,7 +211,8 @@ class UITreeExtractor(private val service: AccessibilityService) {
                     root.recycle()
                 }
             }
-            chosen.mapNotNull { rootsById[it] }
+            val layerById = descriptors.associate { it.id to it.layer }
+            chosen.mapNotNull { id -> rootsById[id]?.let { it to (layerById[id] ?: 0) } }
         } catch (e: Exception) {
             AgentLogger.UI.e("Error getting windows, falling back to active window", e)
             emptyList()
@@ -229,10 +241,12 @@ class UITreeExtractor(private val service: AccessibilityService) {
             return
         }
 
+        // Assigned before the children so every descendant gets a larger value.
+        val paint = paintNext++
         try {
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
-            
+
             // Smart bounds handling: Use parent bounds if current node has text but 0x0 size
             val hasText = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank()
             val hasZeroSize = bounds.width() == 0 || bounds.height() == 0
@@ -344,32 +358,43 @@ class UITreeExtractor(private val service: AccessibilityService) {
                         isCheckable = node.isCheckable,
                         isChecked = node.isChecked,
                         isLongClickable = node.isLongClickable,
+                        paint = paint,
                     )
 
                 elements.add(element)
             }
+            val ownIndex = if (shouldInclude) elements.lastIndex else -1
 
             if (elements.size >= maxElements) {
                 stats?.countHit = true
                 return
             }
 
-            val childCount = node.childCount
-            for (i in 0 until childCount) {
+            // Drawing order, not child index: a view with elevation (a floating button) or a
+            // custom child order paints after siblings that come later in the list. Ties keep
+            // child order, which is what Compose's all-zero drawing orders reduce to.
+            val children = (0 until node.childCount).mapNotNull { i ->
+                runCatching { node.getChild(i) }
+                    .onFailure { AgentLogger.UI.d("Skipping unreadable child $i of ${node.className}: ${it.message}") }
+                    .getOrNull()
+                    ?.let { child -> Triple(child, runCatching { child.drawingOrder }.getOrDefault(0), i) }
+            }.sortedWith(compareBy({ it.second }, { it.third }))
+            for ((child, _, i) in children) {
                 if (elements.size >= maxElements) {
                     stats?.countHit = true
                     break
                 }
-
                 try {
-                    val child = node.getChild(i)
                     extractUIElements(child, elements, currentDepth + 1, maxDepth, maxElements, node, stats)
-                    @Suppress("DEPRECATION")
-                    child?.recycle()
                 } catch (e: Exception) {
                     AgentLogger.UI.d("Skipping unreadable child $i of ${node.className}: ${e.message}")
                 }
             }
+            for ((child, _, _) in children) {
+                @Suppress("DEPRECATION")
+                child.recycle()
+            }
+            if (ownIndex >= 0) elements[ownIndex] = elements[ownIndex].copy(paintEnd = paintNext - 1)
         } catch (e: Exception) {
             AgentLogger.Auto.e("Error extracting UI element", e)
         }

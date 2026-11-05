@@ -26,6 +26,17 @@ data class UIElementData(
     val isChecked: Boolean = false,
     /** Long-press-only affordances are invisible without this. */
     val isLongClickable: Boolean = false,
+    /**
+     * Paint order: this node's position in a pre-order walk of its window in drawing order,
+     * offset by the window's layer, so a larger value is painted later (on top). Null when
+     * unknown.
+     *
+     * - Contract: [paintEnd] is the largest [paint] inside this node's subtree, so another node
+     *   is a descendant exactly when its [paint] falls in `(paint, paintEnd]`.
+     * - Change together: `Occlusion` in `:mcp-server`, which reads both as `z` / `zEnd`.
+     */
+    val paint: Long? = null,
+    val paintEnd: Long? = null,
 )
 
 /**
@@ -35,7 +46,13 @@ data class UIElementData(
  * [com.aura.aura_ui.accessibility.UiElementSerializationTest]. Anything not
  * emitted here is invisible to the agent no matter what the tree contained.
  */
-fun UIElementData.toTreeMap(): Map<String, Any> = mapOf(
+fun UIElementData.toTreeMap(): Map<String, Any> = buildMap {
+    putAll(baseTreeMap())
+    paint?.let { put("z", it) }
+    paintEnd?.let { put("zEnd", it) }
+}
+
+private fun UIElementData.baseTreeMap(): Map<String, Any> = mapOf(
     "text" to (text ?: ""),
     "contentDescription" to (contentDescription ?: ""),
     "className" to (className ?: ""),

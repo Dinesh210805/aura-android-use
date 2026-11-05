@@ -1,5 +1,6 @@
 package com.aura.aura_ui.accessibility
 
+import android.view.accessibility.AccessibilityEvent
 import com.aura.mcp.bridge.RestrictedAppCategory
 import com.aura.mcp.bridge.RestrictedAppEntry
 import com.aura.mcp.bridge.RestrictedAppSource
@@ -85,5 +86,19 @@ class RestrictedAppAccessibilityGateTest {
 
     @Test fun `older API falls back to the generic accessibility list`() {
         assertFalse(RestrictedAppAccessibilityGate.supportsDetailsDeepLink(30))
+    }
+
+    // --- which events mean the app is on screen --------------------------------
+
+    @Test fun `a notification or toast from a restricted app does not count as opening it`() {
+        assertFalse(
+            RestrictedAppAccessibilityGate.meansAppOnScreen(AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED),
+        )
+    }
+
+    @Test fun `window and view events still count`() {
+        assertTrue(RestrictedAppAccessibilityGate.meansAppOnScreen(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED))
+        assertTrue(RestrictedAppAccessibilityGate.meansAppOnScreen(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED))
+        assertTrue(RestrictedAppAccessibilityGate.meansAppOnScreen(AccessibilityEvent.TYPE_VIEW_FOCUSED))
     }
 }

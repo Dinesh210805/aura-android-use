@@ -1,6 +1,7 @@
 package com.aura.mcp.tools
 
 import com.aura.mcp.bridge.DetectedElement
+import com.aura.mcp.cache.PerceptionCache
 
 /**
  * Exactly what `read_screen` sends the model: the character-grid picture of the screen,
@@ -90,6 +91,28 @@ internal object ScreenPayload {
         return (listOf("SEEN: ${pkg.ifBlank { "?" }}") + labels).joinToString(" | ")
     }
 
+    /**
+     * What to print below the header.
+     *
+     * - [Full]: the grid and the table.
+     * - [Changes]: only the rows that are new or changed since [Changes.previous], then every
+     *   other actionable row by som_id and name. Falls back to [Full] when there is nothing to
+     *   compare with, or when most of the screen changed (a diff would be longer than the picture).
+     * - [Query]: only the rows whose label contains [Query.text], plus off-screen text matching it.
+     * - [Revealed]: after a scroll, the rows whose label was not visible before, then the rest by
+     *   name. Matched by label, not fingerprint: a scroll moves every row, so by fingerprint
+     *   everything would read as changed.
+     */
+    sealed interface View {
+        data object Full : View
+        data class Changes(val previous: List<DetectedElement>) : View
+        data class Query(val text: String) : View
+        data class Revealed(val seenLabels: Set<String>) : View
+    }
+
+    /** Unchanged rows listed by name in a [View.Changes] payload, at most. */
+    private const val MAX_UNCHANGED = 40
+
     fun render(
         elements: List<DetectedElement>,
         pkg: String,
@@ -97,6 +120,7 @@ internal object ScreenPayload {
         settled: Boolean,
         escalateReason: String? = null,
         offscreen: List<String> = emptyList(),
+        view: View = View.Full,
     ): Result? {
         val drawn = ScreenGrid.fit(elements) ?: return null
         val screenW = elements.maxOf { it.bbox.x2 }
@@ -124,20 +148,87 @@ internal object ScreenPayload {
             append("  ${drawn.rows.size} elements in ${drawn.boxCount} boxes")
             if (drawn.frameCount > 0) append("  (${drawn.frameCount} full-screen frame(s) not drawn)")
             appendLine()
-            appendLine(NOTE)
-            appendLine(drawn.canvas)
-            appendLine()
-            append("som  in   flg  label (only if not on the grid)")
-            for (row in drawn.rows.sortedBy { it.somId }) {
-                // Wrappers are drawn and numbered but never listed: on a launcher home
-                // screen 288 of 312 nodes are pure scaffolding, and listing them buries
-                // the two dozen things the model can actually act on.
-                if (!row.actionable()) continue
+            // Covers are recorded as bounds (som_ids are assigned after occlusion runs); map
+            // them back to this numbering, preferring an interactive element on shared bounds.
+            val somByBox = drawn.rows.sortedBy { it.element.interactive }
+                .associate { it.element.bbox to it.somId }
+            fun row(r: ScreenGrid.Row, withLabel: Boolean) {
                 append("\n")
-                append(row.somId.toString().padEnd(5))
-                append((row.parent?.toString() ?: "-").padEnd(5))
-                append(row.flags.padEnd(5))
-                if (!row.labelOnGrid) append(row.label)
+                append(r.somId.toString().padEnd(5))
+                append((r.parent?.toString() ?: "-").padEnd(5))
+                append(r.flags.padEnd(5))
+                if (withLabel) append(r.label)
+                r.element.coveredBy?.let { cover ->
+                    if (withLabel) append(' ')
+                    append("under ").append(somByBox[cover]?.toString() ?: "?")
+                }
+            }
+            // Wrappers are drawn and numbered but never listed: on a launcher home
+            // screen 288 of 312 nodes are pure scaffolding, and listing them buries
+            // the two dozen things the model can actually act on.
+            val listed = drawn.rows.sortedBy { it.somId }.filter { it.actionable() }
+            val diff = when (view) {
+                is View.Changes -> changesAgainst(view.previous, listed)
+                // A list's own label is borrowed from its rows, so it changes on every scroll; the
+                // list itself did not come into view.
+                is View.Revealed -> listed.filter { it.label !in view.seenLabels && !it.element.scrollable } to emptyList()
+                else -> null
+            }
+            when {
+                view is View.Query -> {
+                    val q = view.text.trim().lowercase()
+                    val hits = listed.filter { q in it.label.lowercase() }
+                    if (hits.isEmpty()) {
+                        append("NO on-screen element is labelled like \"${view.text}\".")
+                    } else {
+                        append("MATCHES for \"${view.text}\" (som_ids are current):\nsom  in   flg  label")
+                        hits.forEach { row(it, withLabel = true) }
+                    }
+                    val off = offscreen.filter { q in it.lowercase() }
+                    if (off.isNotEmpty()) {
+                        append("\n\nOFFSCREEN matches (exist but not visible; scroll to reach): ")
+                        append(off.joinToString(" | "))
+                    }
+                    if (escalateReason != null) append("\n\nESCALATE to perceive_screen — $escalateReason")
+                    return@buildString
+                }
+                diff != null -> {
+                    val (changed, gone) = diff
+                    if (view is View.Revealed) {
+                        if (changed.isEmpty()) {
+                            append("Nothing new came into view.")
+                        } else {
+                            append("CAME INTO VIEW (som_ids are current; tap them directly):\nsom  in   flg  label")
+                            changed.forEach { row(it, withLabel = true) }
+                        }
+                    } else if (changed.isEmpty() && gone.isEmpty()) {
+                        append("NO CHANGES since your last look.")
+                    } else {
+                        append("CHANGES since your last look; som_ids are renumbered every look, use these.")
+                        if (changed.isNotEmpty()) {
+                            append("\nnew or changed:\nsom  in   flg  label")
+                            changed.forEach { row(it, withLabel = true) }
+                        }
+                        if (gone.isNotEmpty()) append("\ngone: ").append(gone.joinToString(" | "))
+                    }
+                    // Only what can be acted on: every element has some name (down to its class), so
+                    // listing all of them repeats the layout scaffolding the grid exists to hide.
+                    val rest = listed.filterNot { it in changed }
+                        .filter { it.element.interactive || it.element.editable || it.element.scrollable }
+                    if (rest.isNotEmpty()) {
+                        append(if (view is View.Revealed) "\nstill in view: " else "\nunchanged: ")
+                        append(rest.take(MAX_UNCHANGED).joinToString(" · ") { "${it.somId} ${it.label}" })
+                        if (rest.size > MAX_UNCHANGED) append(" (+${rest.size - MAX_UNCHANGED} more; read_screen for all)")
+                    }
+                }
+                else -> {
+                    if (view is View.Changes) appendLine("(most of the screen changed, so here is all of it)")
+                    appendLine(NOTE)
+                    appendLine(drawn.canvas)
+                    appendLine()
+                    append("som  in   flg  label (only if not on the grid)")
+                    listed.forEach { row(it, withLabel = !it.labelOnGrid) }
+                }
             }
             if (offscreen.isNotEmpty()) {
                 append("\n\nOFFSCREEN (exists but not visible; no som_id, cannot be tapped): ")
@@ -150,6 +241,30 @@ internal object ScreenPayload {
         val elements = drawn.rows.map { it.element }
         val marked = drawn.marked.toSet()
         return Result(text, elements, elements.filter { it.somId in marked })
+    }
+
+    /**
+     * Rows of [listed] that were not on [previous] (new, or changed in label, flags or place),
+     * and the labels on [previous] that are gone. Null when the diff would not be worth reading:
+     * nothing to compare with, or more than half the rows changed.
+     */
+    private fun changesAgainst(
+        previous: List<DetectedElement>,
+        listed: List<ScreenGrid.Row>,
+    ): Pair<List<ScreenGrid.Row>, List<String>>? = with(PerceptionCache) {
+        if (previous.isEmpty()) return null
+        // Covered-ness counts as a change: a popup landing on a button changes nothing about the
+        // button itself, but it changes whether a tap on it works.
+        fun DetectedElement.key() = fingerprint() to (coveredBy != null)
+        val before = previous.map { it.key() }.toSet()
+        val now = listed.map { it.element.key() }.toSet()
+        val changed = listed.filter { it.element.key() !in before }
+        val gone = previous
+            .filter { it.label.isNotBlank() && it.key() !in now }
+            .map { it.label }
+            .filterNot { label -> listed.any { it.label == label } }
+            .distinct()
+        if (changed.size + gone.size > maxOf(4, listed.size / 2)) null else changed to gone
     }
 
     private fun ScreenGrid.Row.actionable(): Boolean =

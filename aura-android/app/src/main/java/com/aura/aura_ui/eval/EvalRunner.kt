@@ -194,7 +194,7 @@ class EvalRunner(
                 if (outcome == Outcome.NOT_PREPARED) {
                     halt(
                         "Stopped at task ${task.number}: the AndroidWorld host did not set the " +
-                            "task up, so nothing was run. Start scripts/bench/referee.py on the " +
+                            "task up, so nothing was run. Start benchmark/suite/referee.py on the " +
                             "PC, then Resume.",
                         rateLimited = false,
                     )

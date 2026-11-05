@@ -66,7 +66,7 @@ class SpeechSegmenterTest {
 
     @Test
     fun `partial frames are buffered across acceptPcm calls`() {
-        // 100 ms chunks (1600 samples = 3.125 frames) like WhisperSttController sends.
+        // 100 ms chunks (1600 samples = 3.125 frames) like LocalSttController sends.
         val seg = SpeechSegmenter(ScriptedScorer(List(20) { 0.9f }), config)
         val out = mutableListOf<SpeechEvent>()
         repeat(4) { out += seg.acceptPcm(ByteArray(1600 * 2), 1600 * 2) }

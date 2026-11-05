@@ -1,9 +1,12 @@
 package com.aura.aura_ui.mcp.bridge
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.DisplayMetrics
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import android.view.WindowManager
@@ -14,6 +17,7 @@ import com.aura.mcp.bridge.AppLookupResult
 import com.aura.mcp.bridge.DeviceBridge
 import com.aura.mcp.bridge.DeviceStatus
 import com.aura.mcp.bridge.ScrollDirection
+import com.aura.mcp.bridge.TapVia
 import com.aura.mcp.bridge.VolumeDirection
 import com.aura.aura_ui.services.startActivityAsAura
 
@@ -50,6 +54,16 @@ class AppDeviceBridge(
     override fun performTap(x: Int, y: Int): Boolean {
         val svc = service ?: return false
         return runCatching { runBlocking { svc.tapAwait(x, y) } }.getOrDefault(false)
+    }
+
+    override fun lastTapVia(): TapVia? {
+        val path = service?.lastTapPath ?: return null
+        return when {
+            path.startsWith("gesture-unverified") -> TapVia.UNVERIFIED
+            path.startsWith("gesture") -> TapVia.GESTURE
+            path == "semantic" -> TapVia.SEMANTIC
+            else -> null
+        }
     }
 
     override fun performHome(): Boolean {
@@ -134,6 +148,11 @@ class AppDeviceBridge(
         }.getOrDefault(false)
     }
 
+    override fun performStrokes(strokes: List<List<Pair<Int, Int>>>, durationMs: Long, holdMs: Long): Boolean {
+        val svc = service ?: return false
+        return runCatching { runBlocking { svc.strokesAwait(strokes, durationMs, holdMs) } }.getOrDefault(false)
+    }
+
     override fun performScroll(direction: ScrollDirection): Boolean {
         val svc = service ?: return false
         val dir = when (direction) {
@@ -197,6 +216,25 @@ class AppDeviceBridge(
             typed
         }.getOrDefault(false)
     }
+
+    /**
+     * Fails: null when Android refuses the read. From Android 10 only the focused app and the
+     * default keyboard may read the clipboard, so this works while AURA's own keyboard is active
+     * or AURA is in front, and returns null otherwise.
+     */
+    override fun readClipboard(): String? = runCatching {
+        runBlocking(Dispatchers.Main) {
+            clipboard()?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(appContext)?.toString()
+        }
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
+
+    override fun writeClipboard(text: String): Boolean = runCatching {
+        runBlocking(Dispatchers.Main) {
+            clipboard()?.let { it.setPrimaryClip(ClipData.newPlainText("AURA", text)); true } ?: false
+        }
+    }.getOrDefault(false)
+
+    private fun clipboard(): ClipboardManager? = appContext.getSystemService(ClipboardManager::class.java)
 
     override fun isTextInjectionKeyboardEnabled(): Boolean =
         service?.isAuraImeEnabled() ?: false

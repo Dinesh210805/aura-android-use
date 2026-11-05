@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
 import com.aura.aura_ui.R
 import com.aura.aura_ui.mcp.AppRestrictedApps
@@ -77,12 +78,14 @@ object RestrictedAppAccessibilityGate {
     /**
      * Call for EVERY event carrying a non-AURA package, regardless of event
      * type — whichever event type happens to arrive first for a restricted app
-     * is the one that buys us the head start. No-op unless [packageName] is
+     * is the one that buys us the head start. No-op for events that do not mean
+     * the app is on screen (see [meansAppOnScreen]), and unless [packageName] is
      * registered at [RestrictedTier.DISABLE_ACCESSIBILITY] in
      * [AppRestrictedApps]; the softer [RestrictedTier.DECLINE_ONLY] tier is
      * enforced elsewhere, at the agent-invocation fast path, not here.
      */
-    fun onPackageSeen(service: AccessibilityService, packageName: String) {
+    fun onPackageSeen(service: AccessibilityService, packageName: String, eventType: Int) {
+        if (!meansAppOnScreen(eventType)) return
         if (packageName.isBlank() || packageName == lastSeenPackage) return
         lastSeenPackage = packageName
 
@@ -124,6 +127,16 @@ object RestrictedAppAccessibilityGate {
             shouldDisableFor(entry) && entry.appName.trim().lowercase() == needle
         }
     }
+
+    /**
+     * Whether an event of [eventType] carrying an app's package means that app is on screen.
+     *
+     * Why: `TYPE_NOTIFICATION_STATE_CHANGED` (notifications and toasts) carries the package of
+     * the app that POSTED it, from the background. Counting it would turn AURA off whenever a
+     * restricted app sends a notification, with the app never opened. Pure — unit-tested.
+     */
+    internal fun meansAppOnScreen(eventType: Int): Boolean =
+        eventType != AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED
 
     /** Pure decision, isolated for testability: does [entry] warrant the auto-disable? */
     internal fun shouldDisableFor(entry: RestrictedAppEntry?): Boolean =

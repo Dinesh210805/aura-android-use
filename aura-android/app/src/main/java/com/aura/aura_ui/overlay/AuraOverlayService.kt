@@ -85,7 +85,11 @@ import com.aura.aura_ui.agent.ledger.RunLedgerStore
 import com.aura.aura_ui.agent.memory.EncryptedJsonStore
 import com.aura.aura_ui.audio.AuraTTSManager
 import com.aura.aura_ui.agent.llm.LlmEndpointCatalog
-import com.aura.aura_ui.agent.voice.WhisperSttController
+import com.aura.aura_ui.agent.voice.LocalSttController
+import com.aura.aura_ui.voice.LocalVoiceModels
+import com.aura.aura_ui.voice.LocalVoices
+import com.aura.aura_ui.voice.PiperSpeaker
+import com.aura.aura_ui.voice.MoonshineStt
 import com.aura.mcp.bridge.McpScope
 import com.aura.mcp.server.McpToolScopes
 import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
@@ -170,15 +174,10 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
 
     companion object {
         private const val TAG = "AuraOverlayService"
-        // Default neural voice for spoken agent answers (AuraTTSManager maps this
-        // edge-tts-style id to the device's best offline neural voice).
-        private const val TTS_VOICE_ID = "en-US-AriaNeural"
 
         /** How long the mic stays open for a follow-up after the assistant finishes speaking. */
         private const val FOLLOW_UP_WINDOW_MS = 8_000L
 
-        /** Ignore barge-in VAD onsets this long after TTS starts (hardware AEC convergence). */
-        private const val AEC_CONVERGENCE_MS = 400L
         private const val NOTIFICATION_ID = 1001
 
         /**
@@ -210,6 +209,12 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         private const val ACTION_MINIMIZE = "com.aura.MINIMIZE_OVERLAY"
         private const val ACTION_RESTORE = "com.aura.RESTORE_OVERLAY"
         const val ACTION_CANCEL_TASK = "com.aura.CANCEL_TASK"
+
+        /**
+         * Only makes sure this service is alive: a remote MCP run started and needs the status
+         * strip, run controls and report card, which live here. Opens nothing.
+         */
+        const val ACTION_ATTACH_RUN_SURFACE = "com.aura.ATTACH_RUN_SURFACE"
 
         /**
          * Run a task exactly as if it had been typed into the overlay — pill, THINKING phase,
@@ -437,6 +442,16 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         com.aura.aura_ui.presentation.overlay.PausePillOverlay(this)
     }
 
+    /** The report card shown when a remote MCP run ends or is paused; see [RemoteRun]. */
+    private val reportCard by lazy {
+        com.aura.aura_ui.presentation.overlay.RunReportOverlay(this, this, this) {
+            com.aura.aura_ui.services.RemoteRun.shared.dismissReport()
+        }
+    }
+
+    /** Previous value of the paused flag, so the paused report fires on the edge only. */
+    private var pausedWas = false
+
     /** Previous value of the run flag, so the strip can act on the edge rather than the level. */
     private var runWasActive = false
 
@@ -522,19 +537,11 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     private val providerKeyStore by lazy { ProviderKeyStore(applicationContext) }
     private var agentRunJob: Job? = null
 
-    // Voice input → on-device agent (Phase 3 slice 2b). Groq Whisper STT; the LLM
-    // provider can be anything, but Whisper needs a Groq key. whisperActive tracks an
+    // Voice input → on-device agent, transcribed on the phone (Moonshine). sttActive tracks an
     // in-progress push-to-talk capture so the mic button knows to stop+transcribe.
-    private val whisperStt by lazy { WhisperSttController(applicationContext) }
+    private val localStt by lazy { LocalSttController(applicationContext) }
 
-    /** Voice-communication audio mode (AEC path + speakerphone) for the cascade loop. */
-    private val commAudioMode by lazy {
-        com.aura.aura_ui.audio.CommAudioModeController(applicationContext)
-    }
-
-    /** Elapsed-time stamp when the current TTS playback began — AEC convergence guard. */
-    private var ttsStartElapsed = 0L
-    private var whisperActive = false
+    private var sttActive = false
 
     // Voice output (Phase 3 slice 2b — TTS). The agent's final answer is spoken via
     // Android TextToSpeech, which on Google-TTS devices uses offline neural voices.
@@ -625,6 +632,15 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         setOverlayInputFocusable(false)
     }
 
+    /**
+     * Voice picked in Voice settings; read per utterance so a change applies without a restart.
+     * - Reads: prefs `aura_voice_settings` key `selected_voice_id`.
+     * - Change together: `VoiceSettingsScreen` (writer).
+     */
+    private fun selectedVoiceId(): String =
+        getSharedPreferences("aura_voice_settings", Context.MODE_PRIVATE)
+            .getString("selected_voice_id", null) ?: "en-US-AriaNeural"
+
     /** True once the user has configured a provider (key when required + selected model). */
     private fun isAgentConfigured(): Boolean {
         val id = providerKeyStore.getSelectedEndpointId()
@@ -662,7 +678,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     /**
      * The agent-run body itself. Assumes it is already running inside a tracked
      * coroutine ([agentRunJob]) — both the typed path ([runOnDeviceAgent]) and the
-     * voice path ([stopWhisperAndRun]) call it from within that job. Crucially, the
+     * voice path ([stopListeningAndRun]) call it from within that job. Crucially, the
      * voice path calls this *directly* rather than via [runOnDeviceAgent]: the
      * transcription and the run share one job, so the "already active" re-entrancy
      * guard in [runOnDeviceAgent] would otherwise reject the run against itself and
@@ -681,7 +697,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
      */
     private fun announceThenRun(task: String) {
         conversationViewModel.updatePhase(ConversationPhase.RESPONDING)
-        ttsManager.speak("Okay, I am starting this task. $task", TTS_VOICE_ID) {
+        ttsManager.speak("Okay, I am starting this task. $task", selectedVoiceId()) {
             // Fires on a TTS thread; serviceScope.launch is the safe way back onto our own context.
             serviceScope.launch { runOnDeviceAgent(task, source = "external") }
         }
@@ -695,7 +711,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
      * The typed path had this check and the SPOKEN path did not, so answering out loud started a
      * brand-new run — the agent asked "which Amma?", the user said "Amma", and that became a
      * fresh task while the original run sat waiting for an answer that had already been given.
-     * Voice is the default input on this device (Silero → Whisper → agent), so the lane most
+     * Voice is the default input on this device (Silero → Moonshine → agent), so the lane most
      * people use was the broken one.
      *
      * One rule, stated once: **while a question is pending, the next thing the user says or types
@@ -794,6 +810,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             throw ce
         } catch (t: Throwable) {
             Log.e(TAG, "On-device agent run failed: ${t.message}", t)
+            releaseAgentControl()
             failure = t
             t.message ?: "The on-device agent hit an error. Check Settings → Agent Brain."
         }
@@ -911,6 +928,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             throw ce
         } catch (t: Throwable) {
             Log.e(TAG, "Resume run failed: ${t.message}", t)
+            releaseAgentControl()
             t.message ?: "Couldn't resume the task. Check Settings → Agent Brain."
         }
         conversationViewModel.addAssistantMessage(reply)
@@ -918,65 +936,50 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     }
 
     /**
-     * Speak [text] with the neural TTS engine and drive the closing phase. Replaces
-     * the old unconditional finally→IDLE: the run isn't "done" until AURA has finished
-     * speaking, so IDLE is set from the TTS completion callback.
+     * Speak [text] with the neural TTS engine and drive the closing phase: the run isn't "done"
+     * until AURA has finished speaking, so the follow-up/IDLE step runs from the TTS completion.
+     *
+     * - Contract: THINKING while the first audio is synthesized, RESPONDING from the moment it is
+     *   audible, so the panel never shows AURA speaking into silence. [cache] is for fixed phrases only.
      */
-    private fun respondWithVoice(text: String) {
+    private fun respondWithVoice(text: String, cache: Boolean = false) {
         if (text.isBlank()) {
             conversationViewModel.updatePhase(ConversationPhase.IDLE)
-            commAudioMode.exit()
             return
         }
-        conversationViewModel.updatePhase(ConversationPhase.RESPONDING)
-        // Edge-TTS exposes no PCM stream, so drive the chat waveform with a
-        // speech-shaped synthetic pulse while playback runs (the Live path uses
-        // real playback amplitude). Cancelled the moment RESPONDING ends.
-        speakingPulseJob?.cancel()
-        speakingPulseJob = serviceScope.launch {
-            val rnd = java.util.Random()
-            while (conversationViewModel.state.value.conversationState == ConversationPhase.RESPONDING) {
-                audioAmplitude.floatValue = 0.25f + rnd.nextFloat() * 0.5f
-                kotlinx.coroutines.delay(90)
-            }
-            audioAmplitude.floatValue = 0f
+        conversationViewModel.updatePhase(ConversationPhase.THINKING)
+        // Half-duplex: the mic stays closed while AURA speaks. Replies play as loud media audio,
+        // which the hardware echo canceller ignores, so an open mic would hear AURA and cut it off.
+        if (sttActive) {
+            sttActive = false
+            localStt.cancel()
         }
-        // Barge-in: keep the mic + VAD hot while TTS plays so the user can interrupt —
-        // but ONLY when a hardware AEC actually attached, else the speaker feeds straight
-        // back into the mic. Without AEC we go half-duplex: mic closed during playback,
-        // reopened for the follow-up once TTS stops (echo-safe because the speaker is silent).
-        var bargeInArmed = false
-        if (!whisperActive && startCascadeListening(phase = ConversationPhase.RESPONDING)) {
-            if (whisperStt.aecActive) {
-                bargeInArmed = true
-                ttsStartElapsed = SystemClock.elapsedRealtime()
-            } else {
-                Log.i(TAG, "no AEC → half-duplex, mic closed during TTS")
-                whisperActive = false
-                whisperStt.cancel()
-                audioAmplitude.floatValue = 0f
-            }
-        }
-        ttsManager.speak(text, TTS_VOICE_ID) {
+        ttsManager.speak(
+            text,
+            selectedVoiceId(),
+            cache = cache,
+            onStart = {
+                // Not THINKING any more → dismissed or interrupted before the audio started.
+                if (conversationViewModel.state.value.conversationState == ConversationPhase.THINKING) {
+                    conversationViewModel.updatePhase(ConversationPhase.RESPONDING)
+                }
+            },
+        ) {
             // Fires on a TTS thread when playback finishes. Only act if we're still the
-            // active response — a dismiss, or a barge-in that already moved us to
-            // LISTENING, means someone else owns the phase now.
+            // active response — a dismiss means someone else owns the phase now.
             if (conversationViewModel.state.value.conversationState == ConversationPhase.RESPONDING) {
-                startFollowUpWindow(alreadyListening = bargeInArmed && whisperActive)
+                startFollowUpWindow()
             }
         }
     }
 
     /**
-     * After the assistant finishes speaking, open (or keep) the mic for a short
-     * follow-up so the user can continue hands-free; wind down to IDLE if they don't.
-     * [alreadyListening] is true when full-duplex barge-in kept the mic hot through TTS.
+     * After the assistant finishes speaking, open the mic for a short follow-up so the user
+     * can continue hands-free; wind down to IDLE if they don't.
      */
-    private fun startFollowUpWindow(alreadyListening: Boolean) {
-        val listening = alreadyListening || startCascadeListening(phase = ConversationPhase.LISTENING)
-        if (!listening) {
+    private fun startFollowUpWindow() {
+        if (!startCascadeListening(phase = ConversationPhase.LISTENING)) {
             conversationViewModel.updatePhase(ConversationPhase.IDLE)
-            commAudioMode.exit()
             return
         }
         conversationViewModel.updatePhase(ConversationPhase.LISTENING)
@@ -989,25 +992,20 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             // listening — the card was still up, so it looked like AURA was ignoring them.
             // first { it == null } returns immediately when nothing pends, so the ordinary
             // follow-up is unchanged. The broker's own 120s deadline bounds this wait.
-            // Cost: comm audio mode stays entered for the life of the question, so media
-            // routing is not restored until it resolves — correct when the question IS the run.
             AskUserBroker.shared.pending.first { it == null }
             kotlinx.coroutines.delay(FOLLOW_UP_WINDOW_MS)
-            // Nothing said → wind down to IDLE and leave comm mode (restores media routing).
-            if (whisperActive &&
+            // Nothing said → wind down to IDLE.
+            if (sttActive &&
                 conversationViewModel.state.value.conversationState == ConversationPhase.LISTENING
             ) {
-                whisperActive = false
-                whisperStt.cancel()
+                sttActive = false
+                localStt.cancel()
                 audioAmplitude.floatValue = 0f
                 conversationViewModel.updatePhase(ConversationPhase.IDLE)
-                commAudioMode.exit()
             }
         }
     }
 
-    /** Synthetic waveform driver for classic-TTS speech (no PCM available). */
-    private var speakingPulseJob: kotlinx.coroutines.Job? = null
 
     /**
      * Map a live [AgentStreamEvent] into the conversation trace. Fires on the agent's
@@ -1076,97 +1074,94 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             // (added as the assistant bubble by runOnDeviceAgent). Minimize is not
             // a one-way trip.
             is AgentStreamEvent.Finished ->
-                serviceScope.launch {
-                    // Release the touch guard BEFORE restoring, or restoreOverlay's
-                    // setOverlayTouchable(true) is refused and the chat comes back
-                    // unable to receive taps.
-                    agentDriving = false
-                    hitlAwaitingInput = false
-                    if (_isMinimized.value) restoreOverlay() else setOverlayTouchable(true)
-                }
+                serviceScope.launch { releaseAgentControl() }
         }
+    }
+
+    /**
+     * Hands the screen back to the user when a run ends, however it ended.
+     *
+     * - Contract: main thread only; idempotent, so a path that also saw [AgentStreamEvent.Finished]
+     *   may call it again.
+     * - Why: the touch guard is cleared BEFORE restoring, or restoreOverlay's
+     *   setOverlayTouchable(true) is refused and the panel comes back drawn but passing every tap
+     *   through. Cancelled and crashed runs never emit Finished, so they must call this directly.
+     */
+    private fun releaseAgentControl() {
+        agentDriving = false
+        hitlAwaitingInput = false
+        if (_isMinimized.value) restoreOverlay() else setOverlayTouchable(true)
+    }
+
+    /**
+     * Silence AURA and drop any open capture; with [cancelRun], also abort the run in flight
+     * (transcription included). Callers set the phase afterwards.
+     */
+    private fun interruptTurn(cancelRun: Boolean) {
+        followUpJob?.cancel()
+        if (cancelRun) agentRunJob?.cancel()
+        if (sttActive) {
+            sttActive = false
+            localStt.cancel()
+            audioAmplitude.floatValue = 0f
+        }
+        if (ttsManagerLazy.isInitialized()) ttsManager.stop()
     }
 
     /** Follow-up countdown after TTS finishes; cancelled the moment anyone speaks. */
     private var followUpJob: kotlinx.coroutines.Job? = null
 
     /**
-     * Start (or restart) cascade listening. Used by the mic tap, by barge-in
-     * capture while TTS speaks, and by the follow-up window after TTS ends.
-     * Returns false when the cascade isn't available (no key/permission/agent,
+     * Start (or restart) cascade listening. Used by the mic tap and by the follow-up
+     * window after TTS ends.
+     * Returns false when the cascade isn't available (no speech model/permission/agent,
      * or a Live mode owns the audio).
      */
     private fun startCascadeListening(phase: ConversationPhase = ConversationPhase.LISTENING): Boolean {
         if (liveActive()) return false
-        val groqKey = providerKeyStore.getKey(LlmEndpointCatalog.GROQ_ID)
-        if (!isAgentConfigured() || groqKey.isNullOrBlank() || !whisperStt.hasMicPermission()) return false
+        if (!isAgentConfigured() || !localStt.isModelReady() || !localStt.hasMicPermission()) return false
         conversationViewModel.clearError()
-        // Enter comm mode BEFORE capture so the AEC binds to the voice-comm path and
-        // TTS (also on that path) is cancelled from the mic. Idempotent across turns.
-        commAudioMode.enter()
-        whisperActive = true
-        whisperStt.start(
+        // Half-duplex: opening the mic always silences AURA first, or it would hear itself.
+        if (ttsManagerLazy.isInitialized()) ttsManager.stop()
+        sttActive = true
+        localStt.start(
             onAmplitude = { amp ->
-                // During RESPONDING the synthetic speaking pulse owns the waveform.
+                // The waveform shows the user's voice only; mic buffers outside LISTENING are not theirs to draw.
                 if (conversationViewModel.state.value.conversationState == ConversationPhase.LISTENING) {
                     audioAmplitude.floatValue = amp
                 }
             },
             onSpeechStart = { onCascadeSpeechStart() },
-            onSpeechEnd = { stopWhisperAndRun() },
+            onSpeechEnd = { stopListeningAndRun() },
         )
         conversationViewModel.updatePhase(phase)
         return true
     }
 
-    /**
-     * Sustained speech detected. If the assistant is mid-reply this is a
-     * barge-in: kill TTS and hand the floor to the user. Either way the
-     * follow-up idle countdown is cancelled — someone is talking.
-     */
+    /** Sustained speech detected: someone is talking, so the follow-up idle countdown stops. */
     private fun onCascadeSpeechStart() {
         followUpJob?.cancel()
-        if (conversationViewModel.state.value.conversationState == ConversationPhase.RESPONDING) {
-            // Hardware AEC needs a moment to converge after playback starts; onsets in
-            // that window are residual echo, not the user. Ignore them so the assistant
-            // doesn't barge in on its own first syllable.
-            if (SystemClock.elapsedRealtime() - ttsStartElapsed < AEC_CONVERGENCE_MS) {
-                Log.d(TAG, "barge-in onset ignored (AEC convergence window)")
-                return
-            }
-            Log.i(TAG, "barge-in — stopping TTS, user has the floor")
-            if (ttsManagerLazy.isInitialized()) ttsManager.stop()
-            speakingPulseJob?.cancel()
-            audioAmplitude.floatValue = 0f
-            conversationViewModel.updatePhase(ConversationPhase.LISTENING)
-        }
     }
 
-    /** Stop the push-to-talk Whisper capture, transcribe via Groq, and run the result. */
-    private fun stopWhisperAndRun() {
+    /** Stop the push-to-talk capture, transcribe on-device, and run the result. */
+    private fun stopListeningAndRun() {
         // Guard against double-fire (VAD auto-stop racing a manual mic tap).
-        if (!whisperActive) return
+        if (!sttActive) return
         followUpJob?.cancel()
-        Log.i(TAG, "⏹️ stopWhisperAndRun — transcribing")
-        whisperActive = false
+        Log.i(TAG, "⏹️ stopListeningAndRun — transcribing")
+        sttActive = false
         audioAmplitude.floatValue = 0f
-        val groqKey = providerKeyStore.getKey(LlmEndpointCatalog.GROQ_ID)
-        if (groqKey.isNullOrBlank()) {
-            whisperStt.cancel()
-            conversationViewModel.updatePhase(ConversationPhase.IDLE)
-            return
-        }
         conversationViewModel.updatePhase(ConversationPhase.THINKING)
         // Track the transcription on agentRunJob so a dismiss/cancel during the THINKING
         // window aborts it — otherwise the HTTP call would complete and launch a full
         // agent run against an overlay the user already dismissed.
         agentRunJob = serviceScope.launch {
             val text = try {
-                withContext(Dispatchers.IO) { whisperStt.stopAndTranscribe(groqKey, language = null) }
+                localStt.stopAndTranscribe()
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
-                Log.e(TAG, "Whisper transcribe failed: ${t.message}", t)
+                Log.e(TAG, "Transcribe failed: ${t.message}", t)
                 conversationViewModel.addAssistantMessage(t.message ?: "Couldn't transcribe that.")
                 conversationViewModel.updatePhase(ConversationPhase.IDLE)
                 return@launch
@@ -1176,6 +1171,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 return@launch
             }
             conversationViewModel.addRecentCommand(text)
+            com.aura.aura_ui.services.AgentStatusRegistry.setHeard(text)
             // Run on *this* job, not via runOnDeviceAgent() — we are already inside
             // agentRunJob, so its "already active" guard would reject the handoff and
             // strand the overlay on THINKING. One continuous job also means onDismiss's
@@ -1244,26 +1240,38 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         // flag and the pause flag each drive their own show/hide is how you end up with a
         // Resume button offering to resume a run that already ended.
         //
-        // Driven off the control lock's LOCAL run flag: a remote MCP client has no
-        // "finished" event, so it cannot turn these off again. Remote-driven runs keep the
-        // notification's Cancel and get no on-screen controls.
+        // A run is either the on-device agent (the lock's local flag) or a remote MCP client
+        // (RemoteRun, which ends on end_session, Cancel or idle). Both get the same surface.
         serviceScope.launch {
             val lock = com.aura.aura_ui.services.ControlLockStore.shared
+            val remoteRun = com.aura.aura_ui.services.RemoteRun.shared
             kotlinx.coroutines.flow.combine(
                 lock.localRunning,
+                remoteRun.active,
                 lock.pausedByHuman,
-            ) { running, paused -> running to paused }
-                .collect { (running, paused) ->
+            ) { local, remote, paused -> Triple(local, remote, paused) }
+                .collect { (local, remote, paused) ->
+                    val running = local || remote
+                    // Report progress only for a deliberate Pause: an inferred pause means the
+                    // user just grabbed the phone, and a card would land on what they reached for.
+                    if (remote && paused && !pausedWas && lock.isPausedExplicitly) remoteRun.notePaused()
+                    if (!paused) remoteRun.noteResumed()
+                    pausedWas = paused
                     pausePill.render(localRunActive = running, paused = paused)
                     // On the TRANSITION into a run only — during the run AURA may speak, and
-                    // clearing on every emission would swallow that.
-                    if (running && !runWasActive) {
-                        com.aura.aura_ui.services.AgentStatusRegistry.clearSpeech()
+                    // clearing on every emission would swallow that. A USER line is kept: it is
+                    // the command that started this run, and it should stay up while AURA works.
+                    val registry = com.aura.aura_ui.services.AgentStatusRegistry
+                    if (running && !runWasActive &&
+                        registry.speech.value?.speaker != com.aura.aura_ui.services.AgentStatusRegistry.Speaker.USER
+                    ) {
+                        registry.clearSpeech()
                     }
                     runWasActive = running
+                    statusStrip.setRunActive(running)
                     // Controls follow the RUN; the strip follows the CONVERSATION, which is
                     // wider — it stays up while the chat overlay is open so a spoken exchange
-                    // (and a barge-in) is visible even when no tool is being called.
+                    // is visible even when no tool is being called.
                     renderStatusStrip(runActive = running)
                 }
         }
@@ -1277,13 +1285,28 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         serviceScope.launch {
             com.aura.aura_ui.services.AgentStatusRegistry.speech.collect { statusStrip.setSpeech(it) }
         }
+        serviceScope.launch {
+            com.aura.aura_ui.services.RemoteRun.shared.report.collect { report ->
+                if (report == null) {
+                    reportCard.hide()
+                } else {
+                    // Compose's recomposer is paused below STARTED, and a remote run can bring
+                    // this service up through ACTION_ATTACH_RUN_SURFACE without showOverlay().
+                    if (!lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                        lifecycleRegistry.currentState = Lifecycle.State.STARTED
+                    }
+                    reportCard.show(report)
+                }
+            }
+        }
 
         // The chat overlay opening or closing changes the strip's answer too — a spoken
         // exchange with no tool call still belongs on screen.
         serviceScope.launch {
             _isOverlayVisible.collect {
                 renderStatusStrip(
-                    runActive = com.aura.aura_ui.services.ControlLockStore.shared.localRunning.value,
+                    runActive = com.aura.aura_ui.services.ControlLockStore.shared.localRunning.value ||
+                        com.aura.aura_ui.services.RemoteRun.shared.active.value,
                 )
             }
         }
@@ -1296,22 +1319,26 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 override fun hideForCapture() {
                     statusStrip.setHiddenForCapture(true)
                     pausePill.setHiddenForCapture(true)
+                    reportCard.setHiddenForCapture(true)
                 }
 
                 override fun restoreAfterCapture() {
                     statusStrip.setHiddenForCapture(false)
                     pausePill.setHiddenForCapture(false)
+                    reportCard.setHiddenForCapture(false)
                 }
 
                 // Only the controls: the status strip cannot swallow a gesture.
-                override fun controlsBounds() = pausePill.boundsOnScreen()
+                // The report card is touchable too, and its window can outlive the tool call
+                // that cleared it by a frame; evasion covers it when the controls are gone.
+                override fun controlsBounds() = pausePill.boundsOnScreen() ?: reportCard.boundsOnScreen()
             }
 
         // Publishes the conversation phase (Listening/Thinking/Speaking) to the
         // process-global VoiceStatusRegistry, which AssistantForegroundService
         // merges into the single promoted chip. Registered ONCE here — it used
         // to live inside the legacy Gemini-Live branch only, so the BYOK
-        // companion and classic Whisper modes never showed "Listening".
+        // companion and classic cascade modes never showed "Listening".
         serviceScope.launch {
             combine(conversationViewModel.state, _isOverlayVisible) { state, visible -> state to visible }
                 .collect { (state, visible) ->
@@ -1394,7 +1421,17 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     announceThenRun(task)
                 }
             }
+            ACTION_ATTACH_RUN_SURFACE -> Unit
             ACTION_CANCEL_TASK -> {
+                val remoteRun = com.aura.aura_ui.services.RemoteRun.shared
+                if (remoteRun.active.value) {
+                    // A remote client's run: end it, refuse that client until it goes quiet,
+                    // and hand the lock back so the next request is not met by a stale pause.
+                    Log.i(TAG, "Cancel requested for a remote MCP run")
+                    remoteRun.stopByUser()
+                    com.aura.aura_ui.services.ControlLockStore.shared.resume()
+                    return START_STICKY
+                }
                 Log.i(TAG, "Cancel task requested from notification")
                 // Stop an in-flight on-device agent loop (maxIterations=50) first.
                 agentRunJob?.cancel()
@@ -1411,7 +1448,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     else -> voiceCaptureController?.sendCancelTask()
                 }
                 if (!liveTaskCancelled) {
-                    restoreOverlay()
+                    releaseAgentControl()
                     conversationViewModel.resetToIdle()
                 }
             }
@@ -1435,6 +1472,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         // A window left attached after the service dies leaks and can strand a control the
         // user can no longer act on.
         pausePill.hide()
+        reportCard.hide()
         statusStrip.setEnabled(false)
         com.aura.aura_ui.services.AgentStatusRegistry.clear()
         // Leaving a hook pointing at a dead service would suspend every future capture on
@@ -1635,8 +1673,12 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             }
 
             if (voiceCaptureController != null) {
-                Log.i(TAG, "Auto-starting VoiceCaptureController after wake word")
-                voiceCaptureController?.startCapture()
+                // A fresh session is already greeting and will open the mic itself.
+                if (conversationViewModel.state.value.conversationState != ConversationPhase.IDLE) return@launch
+                if (!startCascadeListening()) {
+                    Log.i(TAG, "Auto-starting VoiceCaptureController after wake word")
+                    voiceCaptureController?.startCapture()
+                }
             } else {
                 Log.e(TAG, "No voice controller ready for auto-capture")
             }
@@ -1813,13 +1855,12 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         }
         Log.i(TAG, "endVoiceConversation — task still running=${agentRunJob?.isActive == true}")
         followUpJob?.cancel()
-        if (whisperActive) {
-            whisperActive = false
-            whisperStt.cancel()
+        if (sttActive) {
+            sttActive = false
+            localStt.cancel()
             audioAmplitude.floatValue = 0f
         }
         if (ttsManagerLazy.isInitialized()) ttsManager.stop()
-        commAudioMode.exit()
         conversationViewModel.resetToIdle()
         // Release the global input/focus channel before the window goes away.
         deactivateTextInput()
@@ -1925,8 +1966,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
      * Show the status strip whenever AURA is either working or talking.
      *
      * Two triggers, one decision point: the run controls follow the RUN, but the strip also
-     * has to be up during a plain conversation, which is when a barge-in happens and when
-     * there is no tool call to drive it. Resolving both here keeps the two collectors from
+     * has to be up during a plain conversation, when there is no tool call to drive it. Resolving both here keeps the two collectors from
      * fighting over show/hide.
      */
     private fun renderStatusStrip(runActive: Boolean) {
@@ -2584,32 +2624,21 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         // Create callbacks
         val overlayCallbacks = VoiceAssistantCallbacks(
             onDismiss = {
-                Log.i(TAG, "onDismiss phase=${conversationState.conversationState} whisperActive=$whisperActive")
+                Log.i(TAG, "onDismiss phase=${conversationState.conversationState} sttActive=$sttActive")
                 // Cancel any ongoing operation and hide
                 when (conversationState.conversationState) {
                     ConversationPhase.LISTENING -> {
                         followUpJob?.cancel()
-                        if (whisperActive) {
-                            whisperActive = false
-                            whisperStt.cancel()
+                        if (sttActive) {
+                            sttActive = false
+                            localStt.cancel()
                             audioAmplitude.floatValue = 0f
                         }
-                        commAudioMode.exit()
                         if (liveActive()) liveCancelCapture() else voiceCaptureController?.cancelCapture()
                         conversationViewModel.resetToIdle()
                     }
                     ConversationPhase.THINKING, ConversationPhase.RESPONDING -> {
-                        // Cancel an in-flight on-device agent run, if any, stop any
-                        // spoken answer mid-playback, and drop the barge-in capture.
-                        followUpJob?.cancel()
-                        agentRunJob?.cancel()
-                        if (whisperActive) {
-                            whisperActive = false
-                            whisperStt.cancel()
-                            audioAmplitude.floatValue = 0f
-                        }
-                        if (ttsManagerLazy.isInitialized()) ttsManager.stop()
-                        commAudioMode.exit()
+                        interruptTurn(cancelRun = true)
                         conversationViewModel.resetToIdle()
                     }
                     else -> { }
@@ -2623,22 +2652,34 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             },
             onMicClick = {
                 val phase = conversationState.conversationState
-                Log.i(TAG, "onMicClick phase=$phase whisperActive=$whisperActive")
+                Log.i(TAG, "onMicClick phase=$phase sttActive=$sttActive")
                 when {
                     // In-progress push-to-talk capture → stop + transcribe (manual stop;
                     // voice-activity detection also auto-stops). Works from any phase.
-                    whisperActive -> stopWhisperAndRun()
+                    sttActive -> stopListeningAndRun()
                     // Gemini Live owns the mic when active.
                     liveActive() && phase == ConversationPhase.LISTENING -> liveCancelCapture()
                     liveActive() -> liveStartCapture()
                     // Legacy Android STT mid-listen → stop.
                     phase == ConversationPhase.LISTENING -> voiceCaptureController?.stopCapture()
+                    // Tap while AURA talks or works = "stop and listen to me" (there is no voice
+                    // barge-in). A pending ask_user question keeps its run: the user is answering it.
+                    phase == ConversationPhase.THINKING || phase == ConversationPhase.RESPONDING -> {
+                        val answering = AskUserBroker.shared.pending.value != null
+                        interruptTurn(cancelRun = !answering)
+                        if (!answering) {
+                            releaseAgentControl()
+                            // A cancelled run never completes its steps; drop them or they spin forever.
+                            conversationViewModel.clearAgentSteps()
+                        }
+                        conversationViewModel.resetToIdle()
+                        if (!startCascadeListening()) voiceCaptureController?.startCapture()
+                    }
                     // Otherwise START. Treat IDLE *and* a stale ERROR (from the retired
-                    // Python connection) as "ready to listen". On-device Whisper if
-                    // configured, else legacy Android STT.
+                    // Python connection) as "ready to listen".
                     else -> {
-                        // Cascade (Silero VAD → Whisper → agent) when available,
-                        // else legacy Android STT.
+                        // Cascade (Silero VAD → Moonshine → agent) once the speech model
+                        // is downloaded, else Android's on-device SpeechRecognizer.
                         if (!startCascadeListening()) {
                             voiceCaptureController?.startCapture()
                         }
@@ -2874,7 +2915,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 // VoiceCaptureController owns mic + TTS + gesture pipe. This is the only
                 // path left once BYOK Live isn't configured — the server-routed Gemini
                 // Live mode was retired along with the Python backend it depended on.
-                Log.i(TAG, "Classic mode — using Groq STT + Edge-TTS pipeline")
+                Log.i(TAG, "Classic mode — on-device STT + TTS")
+                preloadLocalVoice()
 
                 voiceCaptureController = VoiceCaptureController(
                     context = this@AuraOverlayService,
@@ -2883,6 +2925,16 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     scope = serviceScope,
                     onAmplitudeUpdate = { amplitude ->
                         audioAmplitude.floatValue = amplitude
+                    },
+                    onLocalTranscript = { text ->
+                        if (!answerPendingQuestion(text)) {
+                            conversationViewModel.addRecentCommand(text)
+                            if (isAgentConfigured()) {
+                                runOnDeviceAgent(text, source = "voice")
+                            } else {
+                                voiceCaptureController?.sendTextCommand(text)
+                            }
+                        }
                     },
                 )
                 // When the on-device agent is the brain, the legacy Python WebSocket
@@ -2902,10 +2954,35 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     }
                 }
 
+                // Fresh session (wake word OR manual open): greet and open the mic, as Live does.
+                greetLocally()
             } catch (e: Exception) {
                 Log.e(TAG, "Error initializing voice controller", e)
             }
         }
+    }
+
+    /** Load the selected voice and Moonshine in the background so the first turn doesn't pay the model load. */
+    private fun preloadLocalVoice() {
+        serviceScope.launch(Dispatchers.IO) { LocalVoiceModels.deleteRetired(applicationContext) }
+        PiperSpeaker.preload(applicationContext, LocalVoices.byId(selectedVoiceId()))
+        serviceScope.launch(Dispatchers.Default) { MoonshineStt.preload(applicationContext) }
+    }
+
+    /**
+     * Speak a short time-of-day greeting, then open the mic (via [respondWithVoice]'s follow-up).
+     * Local and instant on purpose: no model call stands between opening AURA and hearing it.
+     * Skipped when the cascade can't listen afterwards (no speech model / agent / mic permission).
+     */
+    private fun greetLocally() {
+        if (liveActive() || !isAgentConfigured() || !localStt.isModelReady() || !localStt.hasMicPermission()) return
+        val greeting = when (java.time.LocalTime.now().hour) {
+            in 5..11 -> "Good morning"
+            in 12..16 -> "Good afternoon"
+            else -> "Good evening"
+        }
+        // Cached: three fixed strings, so after the first open the greeting plays without the model.
+        respondWithVoice("$greeting. What can I do for you?", cache = true)
     }
 
     /**
@@ -3096,7 +3173,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     private fun cleanupResources() {
         cleanupVoiceController()
         if (ttsManagerLazy.isInitialized()) ttsManager.release()
-        commAudioMode.exit()
         releaseWakeLock()
         overlayView = null
     }
