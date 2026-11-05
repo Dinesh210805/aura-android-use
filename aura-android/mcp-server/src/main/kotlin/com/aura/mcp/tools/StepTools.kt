@@ -6,6 +6,7 @@ import com.aura.mcp.bridge.DeviceBridge
 import com.aura.mcp.bridge.UiTreeBridge
 import com.aura.mcp.cache.PerceptionCache
 import com.aura.mcp.server.ActionGuard
+import com.aura.mcp.server.SensitivePolicy
 import com.aura.mcp.server.scopedTool
 import com.aura.mcp.server.sinks
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -298,9 +299,18 @@ private fun Server.registerClipboard(bridge: DeviceBridge) {
         ),
     ) { request ->
         when (request.arguments?.stringArg("action")?.trim()?.lowercase()) {
-            "read" -> bridge.readClipboard()
-                ?.let { jsonOk(true, mapOf("action" to "clipboard_read", "text" to it.take(MAX_CLIP))) }
-                ?: errorResult("The clipboard is empty, or Android does not let AURA read it from the background on this phone.")
+            "read" -> {
+                val text = bridge.readClipboard()
+                    ?: return@scopedTool errorResult(
+                        "The clipboard is empty, holds something marked sensitive, or Android does not let AURA " +
+                            "read it from the background on this phone.",
+                    )
+                // The same screen a write gets: a copied code, password or card must not leave the phone.
+                when (val decision = SensitivePolicy.screen(text)) {
+                    is SensitivePolicy.Decision.Block -> errorResult(decision.message)
+                    else -> jsonOk(true, mapOf("action" to "clipboard_read", "text" to text.take(MAX_CLIP)))
+                }
+            }
             "write" -> {
                 val text = request.arguments?.stringArg("text")
                     ?: return@scopedTool errorResult("clipboard write needs 'text'")
