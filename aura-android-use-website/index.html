@@ -76,6 +76,7 @@ summary::-webkit-details-marker{display:none}
     <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
       <nav aria-label="Main" style="display:flex;gap:24px;font-size:14px">
         <a href="#tools">Tools</a>
+        <a href="/mcp-tools">Tool outputs</a>
         <a href="#apps">Apps</a>
         <a href="#browser">Browser</a>
         <a href="#testing">Testing</a>
@@ -102,6 +103,7 @@ summary::-webkit-details-marker{display:none}
   <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
     <nav id="mnav" aria-label="Main" style="border-top:1px solid var(--line);padding:12px 20px 24px;display:flex;flex-direction:column;background:var(--paper)">
       <a href="#tools" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Tools</a>
+      <a href="/mcp-tools" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Tool outputs</a>
       <a href="#apps" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Apps</a>
       <a href="#browser" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">Browser</a>
       <a href="#testing" onClick="{{ closeMenu }}" style="padding:14px 0;font-size:20px;border-bottom:1px solid var(--line)">App testing</a>
