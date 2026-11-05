@@ -1,5 +1,6 @@
 package com.aura.aura_ui.accessibility.gesture
 
+import android.view.accessibility.AccessibilityEvent
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,6 +44,44 @@ class SemanticFallbackPolicyTest {
                 hasClickableNode = false,
             ),
         )
+    }
+
+    @Test
+    fun `an input echo is not a reaction`() {
+        // The Files app (DocumentsUI) emits TYPE_VIEW_CLICKED for an injected tap and then
+        // ignores it. Counting that echo as a reaction skipped the fallback on every tap.
+        listOf(
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_HOVER_ENTER,
+            AccessibilityEvent.TYPE_VIEW_HOVER_EXIT,
+            AccessibilityEvent.TYPE_TOUCH_INTERACTION_START,
+            AccessibilityEvent.TYPE_TOUCH_INTERACTION_END,
+        ).forEach { assertFalse("type $it", SemanticFallbackPolicy.isReaction(it)) }
+    }
+
+    @Test
+    fun `a repaint or navigation is a reaction`() {
+        listOf(
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SELECTED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+        ).forEach { assertTrue("type $it", SemanticFallbackPolicy.isReaction(it)) }
+    }
+
+    @Test
+    fun `a new window from any app is navigation`() {
+        // Settings' search bar opens com.google.android.settings.intelligence: the reaction
+        // comes from a different package than the one tapped, and must still count.
+        assertTrue(SemanticFallbackPolicy.isNavigation(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED))
+        assertTrue(SemanticFallbackPolicy.isNavigation(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+        assertFalse(SemanticFallbackPolicy.isNavigation(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED))
+        assertFalse(SemanticFallbackPolicy.isNavigation(AccessibilityEvent.TYPE_VIEW_CLICKED))
     }
 
     @Test

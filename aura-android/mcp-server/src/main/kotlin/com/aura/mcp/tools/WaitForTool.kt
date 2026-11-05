@@ -28,7 +28,8 @@ internal fun Server.registerWaitForTool(uiTreeBridge: UiTreeBridge) {
     scopedTool(
         name = "wait_for",
         description = "Wait for slow content — a download, upload, processing, a ride or order status — until " +
-            "loading indicators clear or timeout_ms passes (default 5000, max 30000). Not needed " +
+            "loading indicators clear or timeout_ms passes (default 5000, max 30000). Pass expect to wait " +
+            "until that text is on screen instead (gone=true: until it leaves). Not needed " +
             "after taps, typing or launching; those already wait for the screen. Returns the state; " +
             "you judge whether it matches condition.",
         inputSchema = ToolSchema(
@@ -42,6 +43,8 @@ internal fun Server.registerWaitForTool(uiTreeBridge: UiTreeBridge) {
                     "timeout_ms" to numberSchema(
                         "Maximum total wait in milliseconds (default 5000, max 30000)",
                     ),
+                    "expect" to stringSchema("Optional: wait until an element's text contains this"),
+                    "gone" to booleanSchema("With expect: wait until that text is no longer on screen"),
                     "poll_interval_ms" to numberSchema(
                         "Time between UI tree polls in milliseconds (default 500, min 100)",
                     ),
@@ -58,6 +61,8 @@ internal fun Server.registerWaitForTool(uiTreeBridge: UiTreeBridge) {
             .coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)
         val pollIntervalMs = (args.intArg("poll_interval_ms") ?: DEFAULT_POLL_MS)
             .coerceAtLeast(MIN_POLL_MS)
+        val expect = args.stringArg("expect")?.trim()?.takeIf { it.isNotEmpty() }?.lowercase()
+        val gone = args.boolArg("gone") == true
 
         val started = System.currentTimeMillis()
         var lastSummary: UiTreeHeuristics.Summary = UiTreeHeuristics.summarize("{}")
@@ -69,7 +74,16 @@ internal fun Server.registerWaitForTool(uiTreeBridge: UiTreeBridge) {
             val snapshot = uiTreeBridge.snapshot()
             if (snapshot.ok) {
                 lastSummary = UiTreeHeuristics.summarize(snapshot.payloadJson)
-                if (!lastSummary.loadingIndicatorPresent && lastSummary.elementCount > 0) {
+                // With expect, the text decides, not the loading heuristics: a spinner can stop
+                // long before the thing you are waiting for shows up.
+                val done = if (expect != null) {
+                    val present = UiTreeToElements.extract(snapshot.payloadJson, minElements = 1)
+                        .any { expect in it.label.lowercase() }
+                    present != gone
+                } else {
+                    !lastSummary.loadingIndicatorPresent && lastSummary.elementCount > 0
+                }
+                if (done) {
                     loadingCleared = true
                     break
                 }
@@ -84,6 +98,7 @@ internal fun Server.registerWaitForTool(uiTreeBridge: UiTreeBridge) {
             put("elapsed_ms", elapsed)
             put("poll_count", pollCount)
             put("timed_out", !loadingCleared)
+            if (expect != null) put(if (gone) "gone" else "found", loadingCleared)
             put("foreground_app", lastSummary.foregroundApp)
             put("element_count", lastSummary.elementCount)
             put("loading_indicator_present", lastSummary.loadingIndicatorPresent)
@@ -96,7 +111,9 @@ internal fun Server.registerWaitForTool(uiTreeBridge: UiTreeBridge) {
             )
             put(
                 "hint",
-                if (loadingCleared) {
+                if (loadingCleared && expect != null) {
+                    "The text you expected is ${if (gone) "gone" else "on screen"}. Call read_screen for fresh som_ids before tapping."
+                } else if (loadingCleared) {
                     "Loading heuristics passed. Call read_screen for fresh som_ids before tapping."
                 } else {
                     "Timed out. Final state may not match your `condition` — decide " +
@@ -104,7 +121,8 @@ internal fun Server.registerWaitForTool(uiTreeBridge: UiTreeBridge) {
                 },
             )
         }
-        CallToolResult(content = listOf(TextContent(payload.toString())))
+        // An expected text that never came is a failed wait, so run_steps stops there.
+        CallToolResult(content = listOf(TextContent(payload.toString())), isError = expect != null && !loadingCleared)
     }
 }
 

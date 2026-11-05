@@ -1,6 +1,6 @@
 """Host referee for running AndroidWorld from AURA's on-device eval cockpit.
 
-    androidworld-venv/Scripts/python.exe scripts/bench/referee.py
+    androidworld-venv/Scripts/python.exe benchmark/suite/referee.py
 
 The phone is the trigger; this is the referee. It has no web page - you start
 tasks from Settings -> Eval on the device, and this process does the two things
@@ -14,7 +14,7 @@ the phone cannot:
     POST /score {"task": "MarkorCreateNote"}
         stops recording, pulls the video and AURA's log, asks
         `task.is_successful(env)` for the verdict, tears the task down, and
-        writes bench-results/<Task>/.  ->  {"ok": true, "success": false}
+        writes benchmark/results/aura-on-device/<Task>/.  ->  {"ok": true, "success": false}
 
 ### Why the phone cannot do this itself
 
@@ -26,12 +26,12 @@ referee is not.
 
 ### It writes what report.py already reads
 
-bench-results/<Task>/{meta.json, run.mp4, agent.log, referee.log, ...} - the
-same layout bench_server.py produces, so `python scripts/bench/report.py` builds
-the public site from these runs with no changes.
+benchmark/results/aura-on-device/<Task>/{meta.json, run.mp4, agent.log, referee.log, ...} - the
+same layout suite.py's on-device target produces, so `python benchmark/suite/report.py`
+builds the public site from these runs with no changes.
 
-Port 8778, not 8777: bench_server.py's web UI can stay running alongside this so
-the report page is available while a device-driven sweep is going.
+Port 8778, not 8777, so suite.py can stay open alongside this. Do not run tasks
+from both at once: they drive the same emulator.
 """
 
 import http.server
@@ -50,10 +50,9 @@ sys.path.insert(
                     'android_world')
 )
 
-# Reuses the recorder, adb wrapper and results root the web UI already debugged
-# rather than growing a second copy of each.
-from bench_server import ADB, RESULTS, SEED, SERIAL, Recorder, adb, _write  # noqa: E402
 import aura_androidworld  # noqa: E402
+from aura_androidworld import ONDEVICE_RESULTS as RESULTS, SEED, write_text as _write  # noqa: E402
+from device import ADB, SERIAL, Recorder, adb  # noqa: E402
 
 PORT = 8778
 
@@ -134,8 +133,8 @@ def prepare(name):
   # emulator has no IPv6 route, and every model call dies with ECONNREFUSED
   # having never tried IPv4.
   adb('shell', 'sysctl -w net.ipv6.conf.all.disable_ipv6=1')
-  # Re-asserted per task: bench_server's adapter builds its own env, and every
-  # env build switches AURA's accessibility service off again.
+  # Re-asserted per task: every AndroidWorld env build, here or in suite.py,
+  # switches AURA's accessibility service off again.
   aura_androidworld.restore_aura_a11y(ADB, SERIAL, AURA_PACKAGE)
   task.initialize_task(_env)
   adb('logcat', '-c')
@@ -195,7 +194,7 @@ def score(name):
       # describes a blind agent - the report says so rather than hiding it.
       'blind': 'no extractable image' in agent_log,
       'error': error,
-      'trigger': 'device',  # started from the cockpit, not bench_server's web UI
+      'trigger': 'device',  # started from the phone's cockpit, not suite.py
   }
   _write(os.path.join(cur['out'], 'agent.log'), agent_log)
   _write(os.path.join(cur['out'], 'meta.json'), json.dumps(meta, indent=2))

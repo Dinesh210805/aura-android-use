@@ -15,7 +15,9 @@ import android.util.Base64
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonObject
 
 /**
  * `read_screen` — the agent's default way to look at the screen.
@@ -88,6 +90,7 @@ internal fun Server.registerReadScreenTool(
               S  scrolls          c  toggle, on
               l  long-press       o  toggle, off
               d  disabled — meet its prerequisite first
+              x  covered by the som_id after "under"; a tap would reach that one, so it is refused
               -  nothing declared; usually still tappable, but prefer a flagged element
 
             N+k means som_id N plus k more elements with the same bounds (a row and its wrapper). Target N.
@@ -95,8 +98,20 @@ internal fun Server.registerReadScreenTool(
             The header says IDLE, or BUSY if the screen was still moving when the wait ran out.
 
             Use perceive_screen instead when the answer depends on how something looks (a colour, an image, an unlabelled icon), when this ends with ESCALATE, when your target is missing here, or when tapping what this offered did nothing.
+
+            Cheaper looks: changes_only=true lists only what changed since your last look, plus every other actionable som_id by name. query="text" lists only elements whose label contains it.
             """.trimIndent(),
-    ) { _ ->
+        inputSchema = ToolSchema(
+            properties = JsonObject(
+                mapOf(
+                    "changes_only" to booleanSchema("Only what changed since your last look; the whole screen when most of it changed"),
+                    "query" to stringSchema("Only elements whose label contains this text"),
+                ),
+            ),
+        ),
+    ) { request ->
+        val query = request.arguments?.stringArg("query")?.trim()?.takeIf { it.isNotEmpty() }
+        val changesOnly = request.arguments?.boolArg("changes_only") == true
         // Compare against the last time the server LOOKED, by either route — a perceive
         // or the settle after the previous gesture. Anchoring anywhere else would make
         // `screenChanged` describe a screen from two actions ago.
@@ -115,13 +130,23 @@ internal fun Server.registerReadScreenTool(
         // the count to the agent. Letting the parser silently return an empty list at
         // the threshold would turn "thin screen" into "blank screen".
         val elements = UiTreeToElements.extract(outcome.payloadJson, minElements = 1)
+        val pkg = ScreenFrame.metaOf(outcome.payloadJson).pkg
+        // A diff only means something against a look at the same app.
+        val view = when {
+            query != null -> ScreenPayload.View.Query(query)
+            changesOnly -> perceptionCache.previous()
+                .let { (prev, prevPkg) -> if (prevPkg == pkg) prev else emptyList() }
+                .let { ScreenPayload.View.Changes(it) }
+            else -> ScreenPayload.View.Full
+        }
 
         // The grid renumbers by area, so the som_ids the model reads off the picture
         // are NOT the tree order. Cache the renumbered elements — caching the input list
         // would make every tap(som_id) land on a different element than the one drawn.
         val payload = ScreenPayload.render(
             elements = elements,
-            pkg = ScreenFrame.metaOf(outcome.payloadJson).pkg,
+            pkg = pkg,
+            view = view,
             idle = ReadScreen.idle(outcome.settled, outcome.eventCount),
             settled = outcome.settled,
             escalateReason = ReadScreen.escalateReason(
@@ -135,13 +160,15 @@ internal fun Server.registerReadScreenTool(
             elements = payload?.elements ?: elements,
             signature = outcome.signature,
             activityAtCapture = activityAtRead,
+            pkg = pkg,
         )
         // A read IS a look: the next gesture's change detection must compare against
         // this, not against whatever the previous settle saw.
         lastSeenScreen.set(outcome.signature)
 
+        // A narrowed look skips the picture: it would cost more than the text it narrows.
         val image = payload?.marked
-            ?.takeIf { it.isNotEmpty() && annotateImage() }
+            ?.takeIf { it.isNotEmpty() && view == ScreenPayload.View.Full && annotateImage() }
             ?.let { marked -> annotatedScreenshot(screenshotBridge, perceptionBridge, marked) }
 
         CallToolResult(

@@ -47,6 +47,9 @@ A tool missing from your list means its group is switched off for this computer
   colour, a picture) or when `read_screen` says escalate (web views, maps, games).
 - Act by `som_id` only: `tap` (style single, double or long), `type_text`, `scroll(direction,
   som_id?)`, `swipe`. Never invent coordinates.
+- `swipe` with `hold_ms` is a drag. To draw, sign or trace a pattern, pass `swipe(som_id,
+  strokes)`: each stroke is a list of `[x, y]` points, 0–1 inside that element. Strokes run one
+  after another with the finger lifted between them.
 - Flags on an element: `d` disabled (tapping does nothing), `c`/`o` toggle on/off (read it before
   tapping a switch), `e` editable, `w` a scroll wrapper (pick something inside it).
 - `som_id`s die when the screen changes. After a gesture that changed the screen, look again
@@ -54,6 +57,15 @@ A tool missing from your list means its group is switched off for this computer
 - After typing in a search box or a field with suggestions, `press_enter` submits it and commits
   the top suggestion.
 - `press_key` is back, home or recents, and works on any screen.
+- `read_screen(changes_only=true)` lists only what changed since your last look (plus every other
+  actionable `som_id` by name); `read_screen(query="text")` lists only matching elements. Both are
+  far cheaper than the full grid.
+- `set_value(som_id, value)` sets a switch on/off or a field to exact text, and confirms it. Safe to
+  repeat. `type_text` and `scroll` report `field_text` / `moved` so a cut-off field or the end of
+  a list is a fact, not a guess.
+- `run_steps(steps)` runs up to 8 routine actions from the current screen in one call and stops at
+  the first refusal. Never batch anything that sends, pays, deletes or confirms.
+- `wait_for(expect="text")` waits for that text to appear (`gone=true`: to leave).
 
 ## After every gesture
 

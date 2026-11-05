@@ -3,7 +3,7 @@
 > **Keep this file current.** If you add, remove, rename or repurpose anything in this folder,
 > update this README in the same commit. A stale map is worse than no map.
 >
-> **Last reviewed:** 2026-09-26, against the `prod` branch.
+> **Last reviewed:** 2026-11-05.
 
 Everything the user sees in the AURA **app** (Settings, onboarding, the MCP centre, traces, eval),
 plus the **overlay UI** the assistant draws on top of other apps. All of it is Jetpack Compose.
@@ -35,7 +35,7 @@ presentation/
 ├── navigation/   the app's router
 ├── screens/      one file per screen (subfolders for multi-file screens)
 ├── components/   small reusable UI pieces
-├── overlay/      overlay-only UI: status strip, pause pill, open cue
+├── overlay/      overlay-only UI: status strip, pause pill, run report card, open cue
 ├── permissions/  the permission catalogue and its toggle rows
 └── utils/        HapticUtils (vibration profiles)
 ```
@@ -82,6 +82,7 @@ presentation/
 | `screens/AskUserCard.kt` | The card shown when the agent calls `ask_user` (human in the loop) |
 | `overlay/AgentStatusOverlay.kt` | The status strip during a run; also driven by the Live voice controller |
 | `overlay/PausePillOverlay.kt` | Pause/stop controls for a running task. The browser window reads its geometry. |
+| `overlay/RunReportOverlay.kt` | The report card when a remote MCP run ends (done, partial, failed, stopped, went quiet) or the user presses Pause. Draws the client's `end_session` `report` markdown via `overlay/ReportMarkdown.kt`, else the last steps. State comes from `services/RemoteRun.kt`, which also puts remote runs on the status strip and run controls. |
 | `overlay/OverlayOpenCue.kt` | One-shot sound (`res/raw/overlay_open_chime.mp3`) + haptic when the overlay opens |
 
 ### `components/`

@@ -11,6 +11,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
  * Phase 10 — parse the opaque UI-tree JSON payload from [UiTreeBridge]
@@ -38,6 +39,10 @@ import kotlinx.serialization.json.jsonPrimitive
  * (x2 > x1 && y2 > y1). Empty or degenerate boxes from the accessibility
  * tree are filtered out — they happen when an element is partially
  * off-screen or has zero pixels rendered.
+ *
+ * Layers: when the payload carries paint order (`z`, `zEnd`), each element also gets the point
+ * a touch actually reaches it at and, when nothing of it is reachable, what covers it. See
+ * [Occlusion].
  */
 internal object UiTreeToElements {
 
@@ -73,6 +78,8 @@ internal object UiTreeToElements {
         val candidates = rawElements.mapNotNull { raw -> (raw as? JsonObject)?.let(::toCandidate) }
 
         val out = mutableListOf<DetectedElement>()
+        // Paint order of each element in [out], for [Occlusion] once the list is complete.
+        val paint = mutableListOf<Occlusion.Node>()
         var nextId = 1
         for (raw in rawElements) {
             val obj = raw as? JsonObject ?: continue
@@ -178,9 +185,30 @@ internal object UiTreeToElements {
                     focused = focused,
                 ),
             )
+            paint.add(
+                Occlusion.Node(
+                    box = BBox(left, top, right, bottom),
+                    z = obj["z"]?.jsonPrimitive?.longOrNull,
+                    zEnd = obj["zEnd"]?.jsonPrimitive?.longOrNull,
+                    catchesTouch = interactive,
+                ),
+            )
         }
 
-        return if (out.size < minElements) emptyList() else out
+        if (out.size < minElements) return emptyList()
+        val verdicts = Occlusion.resolve(paint)
+        return out.mapIndexed { i, e ->
+            val v = verdicts[i]
+            val centre = e.bbox.centerX to e.bbox.centerY
+            if (v.coveredBy == null && v.tap == centre) {
+                e
+            } else {
+                e.copy(
+                    tapPoint = v.tap.takeIf { v.coveredBy == null },
+                    coveredBy = v.coveredBy?.let { paint[it].box },
+                )
+            }
+        }
     }
 
     /**

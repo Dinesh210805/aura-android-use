@@ -162,9 +162,9 @@ fun ToolsScreen(
 }
 
 /**
- * Developer-only: let a screen recorder capture AURA's voice.
+ * Developer-only: let a screen recorder capture AURA's Gemini Live voice.
  *
- * AURA normally plays as `USAGE_VOICE_COMMUNICATION` so the hardware echo canceller has a far-end
+ * Gemini Live plays as `USAGE_VOICE_COMMUNICATION` so the hardware echo canceller has a far-end
  * reference for barge-in. Android's playback-capture API refuses that usage outright (it is call
  * audio), which is why demo recordings come out silent. This trades the AEC for a capturable
  * stream — see [RecordableVoiceStore]. Off by default, and not in normal Settings, because a user
@@ -183,18 +183,19 @@ private fun RecordableVoiceRow(scheme: MonoScheme) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Recordable voice",
+                    text = "Recordable Live voice",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = scheme.textPrimary,
                 )
                 Text(
                     text = if (recordable) {
-                        "Screen recorders can capture AURA's voice. Barge-in is degraded — it may " +
+                        "Screen recorders can capture the Gemini Live voice. Barge-in is degraded — it may " +
                             "interrupt itself, because it now hears its own speech. Turn this off " +
                             "when you are done recording."
                     } else {
-                        "AURA's voice plays as call audio, which Android never lets a screen " +
-                            "recorder capture. Turn this on to record a demo."
+                        "Gemini Live plays as call audio, which Android never lets a screen " +
+                            "recorder capture. Turn this on to record a demo. (The on-device voice " +
+                            "is always recordable.)"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (recordable) Mono.Blood else scheme.textSecondary,

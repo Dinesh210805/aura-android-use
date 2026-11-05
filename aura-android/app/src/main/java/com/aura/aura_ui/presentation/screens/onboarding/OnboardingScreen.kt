@@ -62,6 +62,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
@@ -1526,6 +1527,25 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = scheme.textSecondary,
         )
+        Spacer(modifier = Modifier.height(12.dp))
+        // Change together: GEMINI_PRESET_NOTE in ProviderSettingsScreen says the same thing.
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = scheme.chip,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Filled.Info, contentDescription = null, tint = scheme.chipContent, modifier = Modifier.size(18.dp))
+                Text(
+                    text = "Gemini is just the starting preset. How well AURA completes tasks depends on " +
+                        "the model you use, and you can switch to any provider later in Settings → Brain. " +
+                        "We start with Gemini because one free key also gives you Gemini Live, a natural " +
+                        "voice assistant at no cost.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.textPrimary,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(14.dp))
 
         Surface(

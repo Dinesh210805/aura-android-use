@@ -22,6 +22,7 @@ import { startDaemon } from "../src/daemon.js";
 
 const FAKE_INSTRUCTIONS = "FAKE PHONE INSTRUCTIONS — agents must see this at handshake.";
 let phoneConnects = 0;
+let phoneListsNoTools = false;
 let inFlightCalls = 0;
 let maxInFlightCalls = 0;
 
@@ -32,7 +33,7 @@ function makeFakePhoneTransport() {
     { capabilities: { tools: {} }, instructions: FAKE_INSTRUCTIONS },
   );
   phone.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
+    tools: phoneListsNoTools ? [] : [
       {
         name: "echo",
         description: "Echoes text back.",
@@ -121,6 +122,19 @@ try {
   assert.equal(health.phone, "connected");
   assert.equal(health.sessions, 2);
   assert.equal(health.adbToolEnabled, false, "adb tool must be off by default");
+
+  // ── A phone that lists no tools gets the last good list served ─────
+  // Claude Code reads an empty or failed tools/list as "no tools" for the
+  // whole session, so the daemon must not pass a bad answer through.
+  phoneListsNoTools = true;
+  const late = await connectHttpClient(daemon.port, "client-late");
+  assert.deepEqual(
+    (await late.client.listTools()).tools.map((t) => t.name),
+    ["echo"],
+    "an empty phone tools/list must fall back to the cached list",
+  );
+  phoneListsNoTools = false;
+  await late.client.close();
 
   // ── Non-loopback Host header is rejected ────────────────────────────
   // (fetch/undici silently strips a custom Host header, so use raw http.)

@@ -70,6 +70,17 @@ interface SessionLogSink {
      * shutdown.
      */
     fun endSession(reason: String)
+
+    /**
+     * Called by an accepted `end_session` with everything the client sent.
+     *
+     * - Contract: [outcome] is the raw `outcome` arg ("success" / "partial" / "failure" or null);
+     *   [report] is optional client-written markdown meant for the phone's report card.
+     *   Untrusted text: the caller does not validate or cap it.
+     * - Why a second method: the default forwards to [endSession], so sinks that only log the
+     *   boundary need no change.
+     */
+    fun endSession(reason: String, outcome: String?, report: String?) = endSession(reason)
 }
 
 /** No-op default — used in tests or when the host doesn't wire a sink. */

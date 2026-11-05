@@ -42,6 +42,8 @@ internal fun Server.registerEndSessionTool(bridge: DeviceBridge) {
 
             For goal_type send_message, send_email, purchase or post, success is refused unless you looked at the screen after your last action.
 
+            report: optional markdown shown on the phone's report card (## headings, - bullets, | tables |, **bold**). Use it for results worth reading, like a comparison table; `reason` is still what gets spoken.
+
             A verified success saves the route (structure only) as a hint for next time. For outside MCP clients this also closes the logged session; the server keeps listening.
             """.trimIndent(),
         inputSchema = ToolSchema(
@@ -61,6 +63,10 @@ internal fun Server.registerEndSessionTool(bridge: DeviceBridge) {
                     "goal_type" to stringSchema(
                         "Optional coarse goal bucket for the learned path: one of " +
                             "play_media|send_message|open_app|search|navigate|other.",
+                    ),
+                    "report" to stringSchema(
+                        "Optional markdown report for the user's phone screen: a short ## heading, " +
+                            "bullet points, and a table when comparing options.",
                     ),
                 ),
             ),
@@ -84,7 +90,7 @@ internal fun Server.registerEndSessionTool(bridge: DeviceBridge) {
             )
         }
 
-        session.endSession(reason)
+        session.endSession(reason, outcome, request.arguments?.stringArg("report"))
         // The next run must gather its own evidence. Without this, a look taken before this
         // boundary would still satisfy the gate for the next task whenever nothing moved the
         // screen in between.

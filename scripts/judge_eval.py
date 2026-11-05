@@ -7,7 +7,7 @@ asset the app reads, so the thing measured here IS the thing running on the phon
 
     # 1. pull traces + score them by hand as usual (scripts/agent_eval.py --pull --scores ...)
     # 2. replay the judge over those traces
-    python scripts/bench/judge_eval.py --dir traces/ --scores docs/agent-review/scores.md \
+    python scripts/judge_eval.py --dir traces/ --scores docs/agent-review/scores.md \
         --model gemini-3.5-flash-lite
 
 Agreement is the fraction of runs where the judge and the human said the same thing: a human
@@ -29,7 +29,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 PROMPT_ASSET = REPO_ROOT / "aura-android/app/src/main/assets/judge/completion_judge.md"
 
 # The same shape agent_eval.py parses out of the scores markdown: "| 3 | pass | ... |".

@@ -21,7 +21,7 @@ import java.net.URL
  * drives adb from a PC.
  *
  * None of that can move on-device. So the cockpit becomes the *trigger* and a small host process
- * (`scripts/bench/referee.py`) stays the *referee*. The phone asks it to set the world up, runs the
+ * (`benchmark/suite/referee.py`) stays the *referee*. The phone asks it to set the world up, runs the
  * goal the way a user would, then asks it for the verdict.
  *
  * ### Why the goal comes back from [prepare] rather than living in the catalog

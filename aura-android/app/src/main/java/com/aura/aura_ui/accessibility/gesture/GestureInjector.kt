@@ -1,7 +1,11 @@
 package com.aura.aura_ui.accessibility.gesture
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import com.aura.aura_ui.services.SelfActionWindow
 import com.aura.aura_ui.utils.AgentLogger
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,6 +28,43 @@ class GestureInjector(private val service: AccessibilityService) {
     }
 
     suspend fun executeAndAwait(command: GestureCommand): GestureResult = runInternal(command)
+
+    /**
+     * Traces one finger path exactly as given (no humanized curve), after an optional press.
+     *
+     * - Contract: points are pixels, clamped onto the screen; one point is a dot. Returns true
+     *   only when the whole stroke completed.
+     * - Why two dispatches for a hold: a press then a move is a continued stroke, and a
+     *   continued stroke must be its own dispatch. Packing both into one GestureDescription
+     *   strands the finger down (see [GestureBuilder.buildSwipe]).
+     * - Fails: if the move is not delivered after the press, a lift is sent at the press point
+     *   so the pointer is never left down.
+     */
+    suspend fun executeStroke(points: List<Pair<Int, Int>>, durationMs: Long, holdMs: Long): Boolean {
+        val maxX = (resolver.screenWidth - 1).toFloat()
+        val maxY = (resolver.screenHeight - 1).toFloat()
+        val pts = points.map { (x, y) -> x.toFloat().coerceIn(0f, maxX) to y.toFloat().coerceIn(0f, maxY) }
+        val (x0, y0) = pts.first()
+        val path = Path().apply {
+            moveTo(x0, y0)
+            pts.drop(1).forEach { (x, y) -> lineTo(x, y) }
+        }
+        if (holdMs <= 0) return send(GestureDescription.StrokeDescription(path, 0L, durationMs), durationMs)
+
+        val press = GestureDescription.StrokeDescription(Path().apply { moveTo(x0, y0) }, 0L, holdMs, true)
+        if (!send(press, holdMs)) return false
+        if (send(press.continueStroke(path, 0L, durationMs, false), durationMs)) return true
+        send(press.continueStroke(Path().apply { moveTo(x0, y0) }, 0L, 1L, false), 1L)
+        return false
+    }
+
+    private suspend fun send(stroke: GestureDescription.StrokeDescription, durationMs: Long): Boolean =
+        dispatcher.dispatch(
+            commandId = "stroke_${UUID.randomUUID()}",
+            gesture = GestureDescription.Builder().addStroke(stroke).build(),
+            timeoutMs = durationMs + STROKE_TIMEOUT_SLACK_MS,
+            kind = SelfActionWindow.ActionKind.SCROLL,
+        ) == DispatchResult.COMPLETED
 
     fun cancelAll() {
         dispatcher.cancelAll()
@@ -93,3 +134,6 @@ class GestureInjector(private val service: AccessibilityService) {
         return null
     }
 }
+
+/** Head-room past a stroke's own length before [GestureDispatcher] calls it timed out. */
+private const val STROKE_TIMEOUT_SLACK_MS = 2_000L

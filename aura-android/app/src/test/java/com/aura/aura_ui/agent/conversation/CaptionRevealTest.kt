@@ -143,4 +143,25 @@ class CaptionRevealTest {
         val full = "Hey there. This is AURA speaking"
         assertEquals("This is AURA", CaptionReveal.sentence(full, spoken = 27))
     }
+
+    // ── sentence ends ──────────────────────────────────────────────────────
+
+    @Test fun `a reply ending in a full stop shows its last word`() {
+        val full = "I use your phone."
+        assertEquals(full, CaptionReveal.sentence(full, spoken = full.length))
+    }
+
+    @Test fun `a sentence keeps its last word until the next one starts`() {
+        assertEquals("Hey there.", CaptionReveal.sentence("Hey there. This is AURA", spoken = 11))
+    }
+
+    @Test fun `a closing quote does not start a new sentence`() {
+        val full = "\"This is why people come to NASA.\" - @nasaadmin"
+        assertEquals(full, CaptionReveal.sentence(full, spoken = full.length))
+    }
+
+    @Test fun `dots inside a word or number do not start a new sentence`() {
+        val full = "Cruise at Mach .75, details at nasa.gov/aero now"
+        assertEquals(full, CaptionReveal.sentence(full, spoken = full.length))
+    }
 }

@@ -23,6 +23,15 @@ interface DeviceBridge {
     // ── Phase 2 surface ─────────────────────────────────────────────────────
 
     fun performTap(x: Int, y: Int): Boolean
+
+    /**
+     * How the last [performTap] reached the app: [TapVia.GESTURE] (the app reacted to the
+     * touch), [TapVia.SEMANTIC] (it ignored the touch and an accessibility click went to the
+     * node under the point), or [TapVia.UNVERIFIED] (the touch was delivered and nothing
+     * visibly reacted). Null when the host cannot tell.
+     */
+    fun lastTapVia(): TapVia? = null
+
     fun performHome(): Boolean
     fun performBack(): Boolean
     fun adjustVolume(direction: VolumeDirection): Boolean
@@ -38,6 +47,14 @@ interface DeviceBridge {
 
     /** Swipe from (x1, y1) to (x2, y2) over [durationMs] milliseconds. */
     fun performSwipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long): Boolean
+
+    /**
+     * Trace each stroke in turn, one finger, lifting between strokes: drawing, signatures, drags.
+     *
+     * - Contract: points are pixels; each stroke takes [durationMs] to trace after a [holdMs]
+     *   press at its first point (0 = start moving at once). True only if every stroke landed.
+     */
+    fun performStrokes(strokes: List<List<Pair<Int, Int>>>, durationMs: Long, holdMs: Long): Boolean = false
 
     /** Scroll in [direction] (UP/DOWN/LEFT/RIGHT) — a 50% screen-distance swipe. */
     fun performScroll(direction: ScrollDirection): Boolean
@@ -82,6 +99,15 @@ interface DeviceBridge {
 
     /** Resolve a human-readable [query] to an [AppLookupResult]. */
     fun lookupApp(query: String): AppLookupResult
+
+    /**
+     * The clipboard's text, or null when it is empty or Android refuses the read (Android 10+
+     * lets only the focused app and the default keyboard read it).
+     */
+    fun readClipboard(): String? = null
+
+    /** Puts [text] on the clipboard; false when the host cannot. */
+    fun writeClipboard(text: String): Boolean = false
 }
 
 enum class VolumeDirection { UP, DOWN, MUTE }
@@ -126,3 +152,10 @@ data class AppCandidate(
     val packageName: String,
     val appName: String,
 )
+
+/** See [DeviceBridge.lastTapVia]. [wire] is the value tool results carry. */
+enum class TapVia(val wire: String) {
+    GESTURE("gesture"),
+    SEMANTIC("accessibility_click"),
+    UNVERIFIED("no_visible_reaction"),
+}

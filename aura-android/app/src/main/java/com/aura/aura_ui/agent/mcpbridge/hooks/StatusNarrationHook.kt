@@ -116,6 +116,9 @@ class StatusNarrationHook(
             "tap_text" -> Beat(Kind.ACT, (stringArg(args, "text")?.let { "Tapped ${quoted(it, MAX_LABEL)}" } ?: "Tapped") + landed)
             "type_text" -> Beat(Kind.TYPE, stringArg(args, "text")?.let { "Typed ${quoted(it, MAX_TYPED)}" } ?: "Typed it in")
             "press_enter" -> Beat(Kind.ACT, "Pressed enter$landed")
+            "set_value" -> Beat(Kind.ACT, resultField(result, "value")?.let { "Set it to ${quoted(it, MAX_TYPED)}" } ?: "Set it")
+            "run_steps" -> Beat(Kind.ACT, resultField(result, "completed")?.let { "Did $it steps in one go" } ?: "Did a few steps")
+            "clipboard" -> Beat(Kind.ACT, if (stringArg(args, "action") == "write") "Copied it" else "Checked the clipboard")
             "press_key" -> when (stringArg(args, "key")) {
                 "back" -> Beat(Kind.NAV, app?.let { "Back to $it" } ?: "Went back")
                 "home" -> Beat(Kind.NAV, "Home screen")
