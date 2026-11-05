@@ -131,8 +131,8 @@
   var CLIENTS = [['Claude', 'claude'], ['Cursor', 'cursor'], ['VS Code', 'vscode'], ['any MCP app', 'mcp']];
   var CATS = [
     ['seeing', 'Reads the screen and numbers everything you can touch.', ['perceive_screen', 'read_screen', 'get_screenshot', 'request_screen_capture_permission', 'watch_device_events', 'wait_for']],
-    ['touching', 'Taps, swipes and scrolls like a finger.', ['tap', 'swipe', 'scroll']],
-    ['typing', 'Types into any field, even in React Native and Flutter apps.', ['type_text', 'press_enter']],
+    ['touching', 'Taps, swipes and scrolls like a finger, flips switches to a set state, and runs several steps in one call.', ['tap', 'swipe', 'scroll', 'set_value', 'run_steps']],
+    ['typing', 'Types into any field, even in React Native and Flutter apps, then reads back what landed.', ['type_text', 'press_enter', 'clipboard']],
     ['apps', 'Opens apps and moves between them.', ['launch_app', 'lookup_app', 'press_key']],
     ['browser', 'Drives its own browser, tab by tab.', ['browser_open', 'browser_read', 'browser_act', 'browser_find', 'browser_extract', 'browser_tabs', 'browser_wait', 'browser_screenshot', 'browser_upload', 'browser_handoff', 'browser_close', 'web_search']],
     ['notifications', 'Reads, replies to and clears notifications.', ['read_notifications', 'notification_action', 'dismiss_notification']],
@@ -142,6 +142,8 @@
     ['deep links', 'Jumps straight to the right screen.', ['list_app_deeplinks', 'resolve_deeplink', 'open_deeplink']],
     ['system', 'Alarms, calls, sharing, and checking its own work.', ['system_intent', 'get_device_status', 'verify_action', 'end_session']]
   ];
+
+  var TOOL_TOTAL = CATS.reduce(function (n, c) { return n + c[2].length; }, 0);
 
   function rr(w, h, r, step, cx, cy) {
     cx = cx || 0; cy = cy || 0;
@@ -892,7 +894,7 @@
         bCats.forEach(function (e, j) { e.style.color = j === k ? 'var(--ink)' : 'var(--ink2)'; e.style.opacity = j === k ? '1' : (j < k ? '.55' : '.32'); e.style.fontWeight = j === k ? '600' : '400'; });
         if (bName) { bName.textContent = c[0]; }
         if (bDesc) bDesc.textContent = c[1];
-        if (bCount) bCount.textContent = sum + ' / 56';
+        if (bCount) bCount.textContent = sum + ' / ' + TOOL_TOTAL;
         if (bTools) {
           bTools.innerHTML = '';
           c[2].forEach(function (tn, j) {
