@@ -72,7 +72,8 @@ object McpToolScopes {
         // a tool can take is the only safe direction.
         "browser_tabs" to McpScope.WRITE,
         // WRITE: it puts a window over the user's screen. Polling with check=true is
-        // read-only in spirit, but a tool is classified by the strongest thing it does.
+        // read-only in spirit, but a tool is classified by the strongest thing it does;
+        // the handoff gate lets that poll through itself (BrowserHandoff.evaluate).
         "browser_handoff" to McpScope.WRITE,
 
         // ── WRITE ──────────────────────────────────────────────
@@ -83,6 +84,12 @@ object McpToolScopes {
         "press_enter" to McpScope.WRITE,
         "swipe" to McpScope.WRITE,
         "type_text" to McpScope.WRITE,
+        "set_value" to McpScope.WRITE,
+        // Each step is scope-checked again by its own handler; the batch is WRITE because its
+        // strongest step is.
+        "run_steps" to McpScope.WRITE,
+        // WRITE: `write` replaces what the user copied. Classified by its strongest action.
+        "clipboard" to McpScope.WRITE,
         // E4 — taps a real element (resolved from the live tree at dispatch time).
         "launch_app" to McpScope.WRITE,
         // Phase 9 — composes perceive_screen + scroll until target found.

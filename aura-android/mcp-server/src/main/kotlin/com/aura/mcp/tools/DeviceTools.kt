@@ -73,6 +73,7 @@ private fun Server.registerTap(bridge: DeviceBridge, perceptionCache: Perception
                 put("y", y.toString())
                 if (style == "long") put("duration_ms", holdMs.toString())
                 if (label != null) put("label", label)
+                if (style == "single") bridge.lastTapVia()?.let { put("via", it.wire) }
             },
         )
     }

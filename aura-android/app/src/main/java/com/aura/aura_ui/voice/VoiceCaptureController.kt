@@ -53,6 +53,12 @@ class VoiceCaptureController(
     private val scope: CoroutineScope,
     private val onAmplitudeUpdate: ((Float) -> Unit)? = null,
     /**
+     * Receives the on-device SpeechRecognizer transcript. Null → [sendTextCommand].
+     * Why: that sends to the retired Python WebSocket, so without this hook a spoken
+     * command without the Moonshine model ends in "Server not connected".
+     */
+    private val onLocalTranscript: ((String) -> Unit)? = null,
+    /**
      * When true, this controller acts as a silent gesture-execution pipe only.
      * Microphone capture and TTS playback are completely disabled.
      * Set to true when GeminiLiveController is handling all voice I/O.
@@ -297,7 +303,10 @@ class VoiceCaptureController(
                 }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {
-                    onAmplitudeUpdate?.invoke((rmsdB.coerceIn(-2f, 10f) + 2f) / 12f)
+                    // Every other path reports linear RMS (fraction of full scale), which the
+                    // waveform maps through dB. Map the recognizer's -2..10 onto -50..-12 dBFS.
+                    val dbfs = -50f + (rmsdB.coerceIn(-2f, 10f) + 2f) * (38f / 12f)
+                    onAmplitudeUpdate?.invoke(Math.pow(10.0, dbfs / 20.0).toFloat())
                 }
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
@@ -329,7 +338,7 @@ class VoiceCaptureController(
 
                     Log.i(TAG, "🗣️ Offline transcript: $text")
                     viewModel.updatePartialTranscript("")
-                    sendTextCommand(text)
+                    onLocalTranscript?.invoke(text) ?: sendTextCommand(text)
                     listeningModeController.onCommandComplete()
                 }
                 override fun onError(error: Int) {

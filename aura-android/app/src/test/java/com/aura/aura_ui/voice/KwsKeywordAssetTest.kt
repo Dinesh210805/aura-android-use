@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * Guards the ONE hand-crafted artifact in the sherpa-onnx wake-word setup:
- * `assets/kws/keywords.txt`. Its BPE tokenization of "Hey AURA" was produced from
+ * `assets/kws/keywords.txt`. Its BPE tokenization of "Wake up AURA" was produced from
  * the GigaSpeech model's `bpe.model` and is easy to break with a well-meaning edit.
  *
  * A wrong token line does NOT crash — the spotter simply never fires, which is the
@@ -25,13 +25,12 @@ class KwsKeywordAssetTest {
     // Bare BPE tokens only — boost/threshold come from KeywordSpotterConfig, and a
     // trailing "@…" display phrase is FORBIDDEN: a space in it makes sherpa's native
     // encoder read the tail as an unknown token and abort() the process.
-    // Primary wake phrase is "Hello AURA" — the open-vocab model hears "hello" as a
-    // strong anchor and the "aura" tail via the ▁A/▁OR spellings (validated 4/4 on
-    // TTS voices; "Hey AURA" only scored ~1/5 on the user's real voice).
-    private val expectedLine = "▁HE LL O ▁A UR A"
+    // The only wake phrase is "Wake up AURA": "wake up" is a strong common-word anchor and the
+    // "aura" tail is caught by the ▁A/▁OR/▁OUR spellings.
+    private val expectedLine = "▁WA KE ▁UP ▁A UR A"
 
     @Test
-    fun `keywords file exists and the first variant is the literal Hey AURA tokenization`() {
+    fun `keywords file exists and the first variant is the literal Wake up AURA tokenization`() {
         assertTrue("keywords.txt missing at ${keywordsFile.absolutePath}", keywordsFile.exists())
         val line = keywordsFile.readLines().firstOrNull { it.isNotBlank() }?.trim()
         assertEquals(expectedLine, line)
@@ -48,6 +47,7 @@ class KwsKeywordAssetTest {
 
         val lines = keywordsFile.readLines().filter { it.isNotBlank() }
         assertTrue("expected multiple phonetic variants", lines.size >= 2)
+        assertTrue("only \"Wake up AURA\" may wake AURA", lines.all { it.startsWith("▁WA KE ▁UP ") })
 
         lines.forEach { raw ->
             // A space-bearing "@phrase" makes sherpa's native encoder abort() the

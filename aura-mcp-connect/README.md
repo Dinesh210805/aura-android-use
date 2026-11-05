@@ -72,25 +72,28 @@ keeps you inside your MCP client's startup timeout later.)
 
 3. **Clients — pick either:**
 
-   **By URL** (preferred): run `aura-mcp daemon` once, then:
+   **By command** (preferred: the client starts the daemon for you, so it
+   keeps working after a reboot):
 
    ```bash
-   claude mcp add --transport http aura http://127.0.0.1:4816/mcp
+   claude mcp add aura -- aura-mcp                 # macOS / Linux
+   claude mcp add aura -- cmd /c aura-mcp          # Windows
    ```
-
-   ```json
-   { "servers": { "aura": { "type": "http", "url": "http://127.0.0.1:4816/mcp" } } }
-   ```
-
-   **By command** (stdio clients — auto-starts the daemon):
 
    ```json
    { "mcpServers": { "aura": { "command": "aura-mcp", "args": [] } } }
    ```
 
-   > **Windows:** some clients can't launch npm `.cmd` shims directly. If the
-   > server never starts, use
-   > `{ "command": "cmd", "args": ["/c", "aura-mcp"] }` — or connect by URL.
+   > **Windows:** most clients can't launch npm `.cmd` shims directly. Use
+   > `{ "command": "cmd", "args": ["/c", "aura-mcp"] }`.
+
+   **By URL** (only for clients without stdio support): a URL never starts
+   the daemon, so `aura-mcp daemon` must already be running, again after
+   every reboot, or the client gets *connection refused*:
+
+   ```json
+   { "servers": { "aura": { "type": "http", "url": "http://127.0.0.1:4816/mcp" } } }
+   ```
 
 ## From another network (Tailscale)
 

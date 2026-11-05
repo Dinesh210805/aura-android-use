@@ -43,9 +43,19 @@ object BrowserHandoff {
         data class Block(val message: String) : Verdict
     }
 
-    fun evaluate(handedOff: Boolean, scope: McpScope): Verdict = when {
+    /**
+     * Whether a browser tool may run while the page is handed to the user.
+     *
+     * - Contract: [isHandoffPoll] is `browser_handoff` with `check=true`. It passes even though
+     *   the tool is WRITE.
+     * - Why: that poll is the only call that ends a handoff (Resume, the form going, the
+     *   window closing are all applied on it), so refusing it would make every handoff
+     *   permanent.
+     */
+    fun evaluate(handedOff: Boolean, scope: McpScope, isHandoffPoll: Boolean = false): Verdict = when {
         !handedOff -> Verdict.Allow
         scope == McpScope.READ -> Verdict.Allow
+        isHandoffPoll -> Verdict.Allow
         else -> Verdict.Block(HANDED_OFF_MESSAGE)
     }
 

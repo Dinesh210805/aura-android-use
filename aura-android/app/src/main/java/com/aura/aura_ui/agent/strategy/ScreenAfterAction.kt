@@ -28,8 +28,10 @@ internal object ScreenAfterAction {
      */
     val TRIGGERS: Set<String> = setOf(
         "tap", "swipe", "scroll",
-        "type_text", "press_key", "press_enter",
+        "type_text", "press_key", "press_enter", "set_value",
         "launch_app", "open_deeplink", "system_intent", "open_file",
+        // Not observed by the server (each step is), but the model still needs the screen after it.
+        "run_steps",
     )
 
     /**
@@ -41,6 +43,15 @@ internal object ScreenAfterAction {
     const val STALE_TAG = "is STALE:"
 
     fun isStaleRefusal(text: String): Boolean = STALE_TAG in text
+
+    /**
+     * A `run_steps` batch that stopped part-way still changed the screen: its earlier steps ran.
+     * Callers count it as a gesture to observe, so "fix that step from the screen" has a screen.
+     */
+    fun isPartialBatch(tool: String, text: String): Boolean =
+        tool == "run_steps" && BATCH_PROGRESS.find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { it > 0 } == true
+
+    private val BATCH_PROGRESS = Regex("\"completed\":(\\d+)")
 
     /**
      * Whether to look after this turn's tool calls, given each call's name and success, in order.

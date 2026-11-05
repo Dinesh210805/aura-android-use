@@ -61,8 +61,8 @@ internal object PostActionObservation {
      * Volume/mute change no pixels; end_session/perceive/verify are not writes.
      */
     val OBSERVED_TOOLS: Set<String> = setOf(
-        "tap", "swipe", "scroll",
-        "type_text", "press_key", "press_enter",
+        "tap", "swipe",
+        "type_text", "press_key", "press_enter", "set_value",
         "launch_app", "open_deeplink",
         // system_intent launches real activities (dialer/composer/share sheet/
         // maps) — the observation confirms the confirmation UI actually opened.
@@ -95,6 +95,14 @@ internal object PostActionObservation {
 
     val UNOBSERVED_WRITE_TOOLS: Set<String> = setOf(
         "volume",
+        // scroll: settles and looks for itself, returning what came into view with live som_ids;
+        // this summary would only repeat the settle and list the largest labels instead.
+        "scroll",
+        // run_steps: every step is observed by its own handler and the batch relays the last
+        // one; settling again after it would wait ~1.5 s to report the same screen.
+        "run_steps",
+        // clipboard: changes no pixels.
+        "clipboard",
         "media_control", "notification_action", "dismiss_notification",
         // Browser — these already return the page they produced, which IS the
         // post-action observation and a far better one. A device-screen settle

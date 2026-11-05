@@ -38,6 +38,14 @@ class BrowserHandoffTest {
     }
 
     @Test
+    fun `a handoff lets its own check poll through, or it could never end`() {
+        // browser_handoff is WRITE, but check=true is the only call that ends a handoff
+        // (Resume, the form disappearing, the window closing). Refuse it and every handoff
+        // is permanent — the bug this pins.
+        assertEquals(BrowserHandoff.Verdict.Allow, BrowserHandoff.evaluate(true, McpScope.WRITE, isHandoffPoll = true))
+    }
+
+    @Test
     fun `the refusal tells the agent what it may still do`() {
         val block = BrowserHandoff.evaluate(true, McpScope.WRITE) as BrowserHandoff.Verdict.Block
 

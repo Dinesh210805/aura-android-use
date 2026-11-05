@@ -6,7 +6,9 @@ import com.aura.mcp.tools.ScreenSignature
 import com.aura.mcp.tools.UiTreeToElements
 
 /**
- * Caches the latest perceive_screen detection results, mapping som_id → (center_x, center_y).
+ * Caches the latest perceive_screen detection results, mapping som_id → the point a touch
+ * reaches it at (its centre, or the centre of its visible part when something covers the
+ * centre; see [com.aura.mcp.tools.Occlusion]).
  *
  * This cache solves the coordinate-mismatch problem:
  * - perceive_screen returns elements at full-resolution device pixels (e.g. 1240×2772)
@@ -65,6 +67,11 @@ internal class PerceptionCache(
      */
     private class Capture(
         val coordinates: Map<Int, Pair<Int, Int>>,
+        /**
+         * som_id → som_id of what covers it completely ([UNNUMBERED_COVER] when the cover has
+         * no number). Absent means reachable.
+         */
+        val coveredBy: Map<Int, Int>,
         /** Diagnostic only — whether each som_id's element carried a non-blank label. */
         val hasLabel: Map<Int, Boolean>,
         /**
@@ -88,11 +95,15 @@ internal class PerceptionCache(
          * whose *other* pixels are moving; see [resolve].
          */
         val fingerprints: Map<Int, Long>,
+        /** The elements as numbered, and their app: what `read_screen changes_only` compares against. */
+        val elements: List<DetectedElement>,
+        val pkg: String?,
     )
 
     @Volatile
     private var capture: Capture = Capture(
         coordinates = emptyMap(),
+        coveredBy = emptyMap(),
         hasLabel = emptyMap(),
         labels = emptyMap(),
         bounds = emptyMap(),
@@ -100,6 +111,8 @@ internal class PerceptionCache(
         activity = Long.MIN_VALUE,
         signature = null,
         fingerprints = emptyMap(),
+        elements = emptyList(),
+        pkg = null,
     )
 
     /**
@@ -122,11 +135,19 @@ internal class PerceptionCache(
         elements: List<DetectedElement>,
         signature: ScreenSignature.Signature? = null,
         activityAtCapture: Long? = null,
+        pkg: String? = null,
     ) {
+        // Map each cover's bounds back to a som_id on THIS numbering; covers are recorded as
+        // bounds because som_ids are reassigned after occlusion runs.
+        // associateBy keeps the last duplicate, so interactive elements sort last to win.
+        val byBox = elements.sortedBy { it.interactive }.associateBy { it.bbox }
         capture = Capture(
             coordinates = elements.associate { element ->
-                element.somId to (element.bbox.centerX to element.bbox.centerY)
+                element.somId to (element.tapPoint ?: (element.bbox.centerX to element.bbox.centerY))
             },
+            coveredBy = elements.mapNotNull { e ->
+                e.coveredBy?.let { cover -> e.somId to (byBox[cover]?.somId ?: UNNUMBERED_COVER) }
+            }.toMap(),
             hasLabel = elements.associate { it.somId to it.label.isNotBlank() },
             labels = elements.filter { it.label.isNotBlank() }.associate { it.somId to it.label },
             bounds = elements.associate { it.somId to it.bbox },
@@ -134,8 +155,13 @@ internal class PerceptionCache(
             activity = activityAtCapture ?: activity(),
             signature = signature,
             fingerprints = elements.associate { it.somId to it.fingerprint() },
+            elements = elements,
+            pkg = pkg,
         )
     }
+
+    /** The last look's elements and app, with NO staleness check: for diffing, never for touching. */
+    fun previous(): Pair<List<DetectedElement>, String?> = capture.let { it.elements to it.pkg }
 
     /** The screen these som_ids describe, for callers that need to compare against it. */
     fun signature(): ScreenSignature.Signature? = capture.signature
@@ -194,8 +220,18 @@ internal class PerceptionCache(
         val mine = snap.fingerprints[somId]
         if (payload != null && mine != null) {
             val liveElements = UiTreeToElements.extract(payload, minElements = 1)
-            if (liveElements.any { it.fingerprint() == mine }) {
-                return Resolution.Fresh(coords.first, coords.second)
+            val live = liveElements.firstOrNull { it.fingerprint() == mine }
+            if (live != null) {
+                // The element itself is untouched, but something may now sit on it — a sheet
+                // or dialog that opened after the look. Its own fingerprint cannot see that.
+                if (live.coveredBy != null) {
+                    return Resolution.Stale(
+                        "something now covers that element (a sheet, dialog or popup opened " +
+                            "after the last look), so a tap there would land on it instead",
+                    )
+                }
+                val at = live.tapPoint ?: (live.bbox.centerX to live.bbox.centerY)
+                return Resolution.Fresh(at.first, at.second)
             }
         }
 
@@ -251,6 +287,12 @@ internal class PerceptionCache(
     fun boundsFor(somId: Int): BBox? = capture.bounds[somId]
 
     /**
+     * The som_id of what covers [somId] completely at the last look, [UNNUMBERED_COVER] when the
+     * cover has no number, or null when [somId] is reachable. No staleness check.
+     */
+    fun coveredBy(somId: Int): Int? = capture.coveredBy[somId]
+
+    /**
      * Check if a som_id is currently known in the cache.
      */
     fun contains(somId: Int): Boolean = capture.coordinates.containsKey(somId)
@@ -268,6 +310,7 @@ internal class PerceptionCache(
     fun clear() {
         capture = Capture(
             coordinates = emptyMap(),
+            coveredBy = emptyMap(),
             hasLabel = emptyMap(),
             labels = emptyMap(),
             bounds = emptyMap(),
@@ -275,10 +318,15 @@ internal class PerceptionCache(
             activity = Long.MIN_VALUE,
             signature = null,
             fingerprints = emptyMap(),
+            elements = emptyList(),
+            pkg = null,
         )
     }
 
     companion object {
+        /** [coveredBy] value for a cover that has no som_id on the current numbering. */
+        const val UNNUMBERED_COVER = -1
+
         /** Digit runs in a label — see [fingerprint]. */
         private val DIGITS = Regex("\\d+")
 
@@ -298,7 +346,7 @@ internal class PerceptionCache(
          * Ceiling: rows told apart only by numbers (a call log of unsaved numbers) re-sorting
          * in the gap between look and tap would match.
          */
-        private fun DetectedElement.fingerprint(): Long {
+        internal fun DetectedElement.fingerprint(): Long {
             val q = ScreenSignature.BOUNDS_QUANTUM
             return listOf(
                 bbox.x1 / q, bbox.y1 / q, bbox.x2 / q, bbox.y2 / q,

@@ -46,15 +46,22 @@ class AuraNotificationListenerService : NotificationListenerService() {
      * conversation with "Sarah's been trying to reach you" instead of a blank hello.
      *
      * **App and sender only — never the message body.** This state is sent to Google as part of the
-     * Live prompt, so the contents of a message must not travel with it. Ongoing notifications
-     * (music players, downloads, our own foreground-service notice) are dropped: they are not
-     * things a person is waiting on.
+     * Live prompt, so the contents of a message must not travel with it. Only notifications a
+     * person is waiting on are kept ([isWaitingOn]).
      */
     private fun feedState() {
         runCatching {
             val briefs = snapshots()
                 .asSequence()
-                .filterNot { it.isOngoing }
+                .filter { sbn ->
+                    val n = sbn.notification
+                    isWaitingOn(
+                        ongoing = sbn.isOngoing,
+                        flags = n.flags,
+                        category = n.category,
+                        hasMediaSession = n.extras?.containsKey(Notification.EXTRA_MEDIA_SESSION) == true,
+                    )
+                }
                 .filterNot { it.packageName == packageName }
                 .map { sbn ->
                     NotificationBrief(
@@ -131,6 +138,28 @@ class AuraNotificationListenerService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "AuraNotifListener"
+
+        /**
+         * Whether a notification is something a person is waiting on, as opposed to app chrome.
+         *
+         * - Why: a paused or stopped media player (Apple Music, Spotify) is no longer ongoing but
+         *   stays in the shade with the track name as its title, so it was greeted as an unread
+         *   message from the song. Media is recognised by its session or transport category.
+         * - Group summaries are dropped because their children are already counted.
+         */
+        fun isWaitingOn(ongoing: Boolean, flags: Int, category: String?, hasMediaSession: Boolean): Boolean =
+            !ongoing &&
+                !hasMediaSession &&
+                category !in NOT_WAITING_CATEGORIES &&
+                flags and (Notification.FLAG_FOREGROUND_SERVICE or Notification.FLAG_GROUP_SUMMARY) == 0
+
+        private val NOT_WAITING_CATEGORIES = setOf(
+            Notification.CATEGORY_TRANSPORT,
+            Notification.CATEGORY_SERVICE,
+            Notification.CATEGORY_PROGRESS,
+            Notification.CATEGORY_STATUS,
+            Notification.CATEGORY_SYSTEM,
+        )
 
         /** Set while the system has the listener bound; null otherwise. */
         @Volatile

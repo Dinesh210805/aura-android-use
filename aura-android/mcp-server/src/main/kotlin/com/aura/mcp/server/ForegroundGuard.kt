@@ -31,7 +31,7 @@ internal object ForegroundGuard {
 
     /** WRITE tools that act INSIDE the foreground app — denied while blocked. */
     val GATED_GESTURES: Set<String> = setOf(
-        "tap", "swipe", "scroll", "type_text", "press_enter",
+        "tap", "swipe", "scroll", "type_text", "press_enter", "set_value", "run_steps",
     )
 
     /** READ tools that OBSERVE the foreground screen — denied while blocked. */
@@ -43,6 +43,8 @@ internal object ForegroundGuard {
     /** WRITE tools deliberately NOT gated — reasons in the class KDoc; coverage-tested. */
     val UNGATED_WRITE_TOOLS: Set<String> = setOf(
         "press_key",
+        // The clipboard belongs to no app; a write or read touches nothing on screen.
+        "clipboard",
         "launch_app", "open_deeplink",
         "volume", "media_control",
         "notification_action", "dismiss_notification", "system_intent", "open_file",

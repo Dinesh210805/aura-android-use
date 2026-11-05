@@ -120,7 +120,7 @@ fun EvalRunPicker(
                 // without the host up would stop at task 1 with nothing measured.
                 Text(
                     "Google's benchmark. Setup and scoring run on the PC — start " +
-                        "scripts/bench/referee.py first, or every task will stop before it runs. " +
+                        "benchmark/suite/referee.py first, or every task will stop before it runs. " +
                         "Verdicts and screen recordings come back automatically; no scoring by hand.",
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.textSecondary,

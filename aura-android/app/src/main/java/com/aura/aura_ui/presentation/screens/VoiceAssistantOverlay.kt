@@ -10,6 +10,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -49,6 +50,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,6 +75,7 @@ import com.aura.aura_ui.presentation.utils.AuraHapticType
 import com.aura.aura_ui.presentation.utils.rememberHapticFeedback
 import com.aura.aura_ui.ui.theme.*
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.first
 
 // ============================================================================
 // AURA VOICE ASSISTANT OVERLAY UI
@@ -1344,9 +1347,8 @@ private fun InputBar(
                     verticalArrangement = Arrangement.Center
                 ) {
                     VoiceWaveformVisualizer(
-                        // Animate while AURA speaks too (playback amplitude), not
-                        // only while it listens — same wave, both directions.
-                        amplitude = if (state.isListening || state.isResponding) state.audioAmplitude else 0f,
+                        // The user's voice only: AURA's playback must not move it.
+                        amplitude = if (state.isListening) state.audioAmplitude else 0f,
                         colors = colors,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1492,7 +1494,14 @@ private fun InputBar(
 // ============================================================================
 
 /**
- * Voice Waveform Visualizer - Spectrogram-style with bars responding to speech amplitude
+ * The mic level as a voice-recorder trace: bars that scroll left, one new bar every
+ * [WAVE_SAMPLE_MS] from the live mic level. Flat and still when nobody is speaking.
+ *
+ * - Contract: [amplitude] is linear RMS as a fraction of full scale (0..1), the scale every
+ *   capture path reports. Pass 0 when not listening: the trace scrolls flat, then stops.
+ * - Why dB: speech RMS sits around 0.01..0.2 of full scale, so linear bars would barely move.
+ *   [waveLevel] maps [WAVE_FLOOR_DB]..[WAVE_CEIL_DB] onto the bar height, and the floor keeps
+ *   room noise flat.
  */
 @Composable
 private fun VoiceWaveformVisualizer(
@@ -1500,126 +1509,62 @@ private fun VoiceWaveformVisualizer(
     colors: OverlayColorScheme,
     modifier: Modifier = Modifier,
 ) {
-    val barCount = 24  // More bars for spectrogram look
-    val infiniteTransition = rememberInfiniteTransition(label = "waveform")
-    
-    // Simulated frequency band amplitudes - each bar gets a slightly different response
-    // This creates a spectrogram-like effect where different "frequencies" respond differently
-    val barHeights = remember { mutableStateListOf<Float>().apply { repeat(barCount) { add(0.1f) } } }
-    
-    // Update bar heights based on amplitude with frequency-band simulation
-    LaunchedEffect(amplitude) {
-        val normalizedAmp = amplitude.coerceIn(0f, 1f)
-        barHeights.forEachIndexed { index, _ ->
-            // Simulate different frequency bands responding to audio
-            // Middle frequencies (speech) are more prominent
-            val centerWeight = 1f - kotlin.math.abs(index - barCount / 2f) / (barCount / 2f)
-            val frequencyResponse = 0.3f + (centerWeight * 0.7f)
-            
-            // Add some randomness for natural look
-            val randomVariation = (Math.random() * 0.4 - 0.2).toFloat()
-            val targetHeight = (normalizedAmp * frequencyResponse + randomVariation).coerceIn(0.08f, 1f)
-            
-            // Smooth transition
-            barHeights[index] = barHeights[index] + (targetHeight - barHeights[index]) * 0.5f
+    val levels = remember { mutableStateListOf<Float>().apply { repeat(WAVE_BARS) { add(0f) } } }
+    val latest by rememberUpdatedState(amplitude)
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            // Silent and already flat: park until the voice comes back, so nothing redraws.
+            if (waveLevel(latest) == 0f && levels.all { it == 0f }) {
+                snapshotFlow { waveLevel(latest) }.first { it > 0f }
+            }
+            levels.removeAt(0)
+            levels.add(waveLevel(latest))
+            kotlinx.coroutines.delay(WAVE_SAMPLE_MS)
         }
     }
-    
-    // Continuous animation for when there's no amplitude input (idle state)
-    val idleWavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * kotlin.math.PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "idle_wave"
-    )
-    
-    // Outer glow pulse
-    val glowPulse by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow_pulse"
-    )
-    
-    Box(
+
+    val barColor = colors.textSecondary
+    Canvas(
         modifier = modifier
             .height(48.dp)
-            .fillMaxWidth(),
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
     ) {
-        // Background glow effect
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .height(44.dp)
-                .graphicsLayer { alpha = glowPulse * amplitude.coerceIn(0.3f, 1f) }
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            colors.textSecondary.copy(alpha = 0.15f),
-                            colors.textSecondary.copy(alpha = 0.25f),
-                            colors.textSecondary.copy(alpha = 0.15f),
-                            Color.Transparent
-                        )
-                    ),
-                    shape = RoundedCornerShape(22.dp)
-                )
-        )
-        
-        // Spectrogram-style animated bars
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(barCount) { index ->
-                // Calculate height based on amplitude or idle animation
-                val baseHeight = if (amplitude > 0.05f) {
-                    barHeights.getOrElse(index) { 0.1f }
-                } else {
-                    // Idle sine wave animation when no audio
-                    val phase = idleWavePhase + (index * 0.3f)
-                    0.15f + kotlin.math.sin(phase).toFloat() * 0.1f
-                }
-                
-                // Animate height changes smoothly
-                val animatedHeight by animateFloatAsState(
-                    targetValue = baseHeight,
-                    animationSpec = tween(50, easing = LinearEasing),
-                    label = "bar_height_$index"
-                )
-                
-                // Use textSecondary color (same as "Ask AURA" placeholder)
-                val barColor = colors.textSecondary
-                
-                // Intensity based on height for glow effect
-                val intensity = animatedHeight.coerceIn(0.3f, 1f)
-                
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .fillMaxHeight(animatedHeight.coerceIn(0.08f, 0.95f))
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    barColor.copy(alpha = intensity),
-                                    barColor.copy(alpha = intensity * 0.5f)
-                                )
-                            )
-                        )
-                )
-            }
+        val step = size.width / WAVE_BARS
+        val stroke = step * 0.55f
+        val minH = stroke
+        val maxH = size.height * 0.9f
+        val midY = size.height / 2f
+        levels.forEachIndexed { i, level ->
+            val h = minH + (maxH - minH) * level
+            val x = step * i + step / 2f
+            drawLine(
+                color = barColor.copy(alpha = 0.45f + 0.55f * level),
+                start = Offset(x, midY - h / 2f),
+                end = Offset(x, midY + h / 2f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
         }
     }
 }
+
+/** Linear RMS (0..1 of full scale) → bar height 0..1 on a dB scale; 0 below the noise floor. */
+private fun waveLevel(rms: Float): Float {
+    if (rms <= 0f) return 0f
+    val db = 20f * kotlin.math.log10(rms)
+    return ((db - WAVE_FLOOR_DB) / (WAVE_CEIL_DB - WAVE_FLOOR_DB)).coerceIn(0f, 1f)
+}
+
+private const val WAVE_BARS = 32
+private const val WAVE_SAMPLE_MS = 60L
+
+/** Below this the mic is treated as silence. Raise it if room noise wiggles the trace. */
+private const val WAVE_FLOOR_DB = -48f
+
+/** Full-height bar. Lower it if normal speech never reaches the top. */
+private const val WAVE_CEIL_DB = -12f
 
 // Color interpolation helper
 private fun lerp(start: Color, end: Color, fraction: Float): Color {

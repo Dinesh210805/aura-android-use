@@ -55,6 +55,7 @@ object CapabilityNarrative {
             id = "screen_control",
             tools = setOf(
                 "tap", "swipe", "type_text", "press_enter", "scroll", "press_key",
+                "set_value", "run_steps", "clipboard",
             ),
             sentence = "operate any app on the phone by looking at the screen and acting on " +
                 "it step by step, the same way a person would",

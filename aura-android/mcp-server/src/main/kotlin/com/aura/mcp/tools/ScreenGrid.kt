@@ -435,5 +435,6 @@ internal object ScreenGrid {
         if (el.scrollable) append('S')
         if (el.longClickable) append('l')
         if (el.interactive) append('*')
+        if (el.coveredBy != null) append('x')
     }.ifEmpty { "-" }
 }

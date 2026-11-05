@@ -88,7 +88,14 @@ internal suspend fun com.aura.mcp.cache.PerceptionCache.resolveForGesture(somId:
                 "target", somId.toString(), "info",
                 boundsFor(somId)?.let { "${it.x1},${it.y1},${it.x2},${it.y2}" } ?: "${r.x},${r.y},${r.x},${r.y}",
             )
-            SomResolveOutcome.Coords(r.x, r.y)
+            // Refused rather than dispatched: a touch on a covered element reaches its cover,
+            // and the tap would "succeed" on the wrong thing.
+            val cover = coveredBy(somId)
+            if (cover == null) {
+                SomResolveOutcome.Coords(r.x, r.y)
+            } else {
+                SomResolveOutcome.Error(errorResult(coveredMessage(somId, cover, labelFor(cover))))
+            }
         }
         // "is STALE:" is matched by the app's ScreenAfterAction.STALE_TAG, which re-reads the
         // screen for the agent after this refusal. Change both together.
@@ -106,3 +113,20 @@ internal suspend fun com.aura.mcp.cache.PerceptionCache.resolveForGesture(somId:
             ),
         )
     }
+
+/**
+ * The refusal for a som_id that something else covers completely.
+ *
+ * - Contract: always names the way out; [cover] is a som_id, or
+ *   [com.aura.mcp.cache.PerceptionCache.UNNUMBERED_COVER] when the cover has none.
+ */
+internal fun coveredMessage(somId: Int, cover: Int, coverLabel: String?): String {
+    val what = when {
+        cover == com.aura.mcp.cache.PerceptionCache.UNNUMBERED_COVER -> "another element"
+        coverLabel != null -> "som_id $cover (\"$coverLabel\")"
+        else -> "som_id $cover"
+    }
+    return "som_id $somId is covered by $what, so a touch there would reach that instead. " +
+        "Tap the cover if that is what you meant; otherwise close it or scroll som_id $somId " +
+        "out from under it, then read_screen again."
+}

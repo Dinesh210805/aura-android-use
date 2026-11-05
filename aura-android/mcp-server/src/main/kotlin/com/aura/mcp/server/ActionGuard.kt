@@ -1,8 +1,10 @@
 package com.aura.mcp.server
 
+import com.aura.mcp.tools.ScreenPayload
 import com.aura.mcp.tools.SystemIntentPlanner
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -83,7 +85,11 @@ class ActionGuard {
                     "another way or finish: $hint",
             )
         }
-        if (toolName in GESTURE_REQUIRES_GROUNDING && !groundedSinceLastChange) {
+        // Inside a run_steps batch that began on a seen screen, later steps act on that look: each
+        // step's som_id is still re-checked by PerceptionCache, which refuses an element that
+        // changed, moved or got covered. A batch that began unseen gets no such pass.
+        val batchSeen = currentCoroutineContext()[BatchStep]?.startedGrounded == true
+        if (toolName in GESTURE_REQUIRES_GROUNDING && !groundedSinceLastChange && !batchSeen) {
             blindBlocks++
             return Refusal("perceive_first", PERCEIVE_FIRST_MESSAGE)
         }
@@ -130,14 +136,33 @@ class ActionGuard {
                 in SCREEN_CHANGING_TOOLS -> {
                     // A settled observation that says nothing changed keeps the last look valid:
                     // re-reading an identical screen before the next tap is a wasted turn.
-                    if (!provedUnchanged(screenText)) groundedSinceLastChange = false
-                    observedSinceLastChange = screenText.contains(OBSERVATION_MARKER)
+                    if (ScreenPayload.looksLikePayload(screenText)) {
+                        // The tool looked for itself (scroll returns the screen it scrolled to,
+                        // and caches its som_ids): that is a read, so the next tap is grounded.
+                        groundedSinceLastChange = true
+                        lastScreenSignature = screenSignature(screenText)
+                        observedSinceLastChange = true
+                    } else {
+                        if (!provedUnchanged(screenText)) groundedSinceLastChange = false
+                        observedSinceLastChange = screenText.contains(OBSERVATION_MARKER)
+                    }
                     anyScreenChange = true
                     if (toolName in GESTURE_REQUIRES_GROUNDING) pushActionKey(loopKey(toolName, argsJson))
                 }
                 else -> Unit
             }
         }
+    }
+
+    /** Whether the current screen has been read since it last changed. */
+    suspend fun isGrounded(): Boolean = mutex.withLock { groundedSinceLastChange }
+
+    /**
+     * Marks calls made by `run_steps` on behalf of one batch.
+     * [startedGrounded] is [isGrounded] when the batch began.
+     */
+    class BatchStep(val startedGrounded: Boolean) : kotlin.coroutines.AbstractCoroutineContextElement(BatchStep) {
+        companion object Key : kotlin.coroutines.CoroutineContext.Key<BatchStep>
     }
 
     /** Forget everything; the next call starts a new task. */
@@ -255,11 +280,11 @@ class ActionGuard {
          * Why `type_text` is absent: it types into the field the prior (gated) tap focused, and
          * gating it forced a re-read between "tap search box" and "type query" on every search.
          */
-        val GESTURE_REQUIRES_GROUNDING = setOf("tap", "swipe")
+        val GESTURE_REQUIRES_GROUNDING = setOf("tap", "swipe", "set_value")
 
         /** Tools that change what is on screen, making the last read stale. */
         val SCREEN_CHANGING_TOOLS = setOf(
-            "tap", "swipe", "type_text", "scroll",
+            "tap", "swipe", "type_text", "scroll", "set_value", "run_steps",
             "launch_app", "open_deeplink", "open_file",
             "press_key", "press_enter",
             "wait_for", "request_screen_capture_permission",
@@ -271,7 +296,7 @@ class ActionGuard {
          * the browser (an offscreen WebView). Checked before [SCREEN_CHANGING_TOOLS].
          */
         val NON_VISUAL_TOOLS = setOf(
-            "volume", "media_control", "dismiss_notification",
+            "volume", "media_control", "dismiss_notification", "clipboard",
             "browser_open", "browser_read", "browser_act", "browser_close",
             "browser_find", "browser_wait", "browser_screenshot", "browser_extract",
             "browser_upload", "browser_tabs", "browser_handoff",

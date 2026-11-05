@@ -153,6 +153,20 @@ data class DetectedElement(
      * the model may legitimately want the whole region.
      */
     val wrapper: Boolean = false,
+    /**
+     * Where a touch reaches this element rather than something painted over it, in full-res
+     * pixels. Null means the [bbox] centre (no paint order known, or nothing covers it).
+     *
+     * - Contract: set by [com.aura.mcp.tools.Occlusion] from the tree's paint order; gesture
+     *   tools dispatch here instead of the centre (see `PerceptionCache.update`).
+     */
+    val tapPoint: Pair<Int, Int>? = null,
+    /**
+     * Bounds of the element that covers this one completely, so no touch can reach it. Null
+     * when any usable part of it is visible. Bounds rather than a som_id because som_ids are
+     * reassigned after this is computed; consumers map it back by bounds.
+     */
+    val coveredBy: BBox? = null,
 )
 
 data class BBox(

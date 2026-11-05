@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURA Tool Bench</title>
+<style>
+:root {
+  --bg: #f4f1ea; --panel: #fffdf8; --ink: #1d1b18; --mute: #6b665d; --line: #ddd6c8;
+  --pass: #2f7d4f; --fail: #c0392b; --gap: #b7791f; --closed: #2b6cb0;
+  --click: #2b6cb0; --edit: #7b3fa0; --scroll: #2f7d4f; --plain: #9a9282; --own: #c0392b;
+  --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141311; --panel: #1d1b18; --ink: #ece7dd; --mute: #9a9282; --line: #34302a;
+    --pass: #5cc48a; --fail: #f07060; --gap: #e0a840; --closed: #6aa8f0;
+    --click: #6aa8f0; --edit: #c18ae0; --scroll: #5cc48a; --plain: #6b665d;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141311; --panel: #1d1b18; --ink: #ece7dd; --mute: #9a9282; --line: #34302a;
+  --pass: #5cc48a; --fail: #f07060; --gap: #e0a840; --closed: #6aa8f0;
+  --click: #6aa8f0; --edit: #c18ae0; --scroll: #5cc48a; --plain: #6b665d;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, sans-serif; }
+header { padding: 28px 16px 12px; max-width: 1200px; margin: 0 auto; }
+h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+.sub { color: var(--mute); font-family: var(--mono); font-size: 12px; }
+.tally { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.tally button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.tally button[aria-pressed="true"] { border-color: var(--ink); }
+.tally b { font-family: var(--mono); }
+main { max-width: 1200px; margin: 0 auto; padding: 0 16px 48px; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 10px 0; }
+summary { cursor: pointer; padding: 12px 14px; display: flex; gap: 10px; align-items: baseline; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.badge { font: 600 11px var(--mono); text-transform: uppercase; padding: 2px 8px; border-radius: 4px; color: #fff; }
+.pass { background: var(--pass); } .fail { background: var(--fail); } .gap { background: var(--gap); } .closed { background: var(--closed); }
+.sid { font-family: var(--mono); color: var(--mute); min-width: 34px; }
+.gapnote { color: var(--gap); font-size: 13px; }
+.body { padding: 0 14px 14px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 760px) { .body { grid-template-columns: 1fr; } }
+.frames { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+figure { margin: 0; flex: 0 0 auto; }
+figcaption { font-size: 12px; color: var(--mute); text-align: center; }
+svg.phone { width: 150px; height: auto; background: var(--bg); border: 2px solid var(--ink); border-radius: 14px; }
+.checks { list-style: none; margin: 0 0 12px; padding: 0; }
+.checks li { padding: 3px 0; }
+.checks .d { display: block; font: 11px var(--mono); color: var(--mute); white-space: pre-wrap; word-break: break-word; }
+.ok::before { content: "✓ "; color: var(--pass); } .no::before { content: "✗ "; color: var(--fail); }
+pre { font: 11px/1.4 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px; margin: 6px 0; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
+pre.err { border-color: var(--fail); }
+.tool { font: 600 12px var(--mono); }
+.legend { font-size: 12px; color: var(--mute); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 10px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AURA Tool Bench</h1>
+  <div class="sub" id="gen"></div>
+  <div class="tally" id="tally"></div>
+  <div class="legend">
+    <i style="background:var(--click)"></i>clickable<i style="background:var(--edit)"></i>editable
+    <i style="background:var(--scroll)"></i>scrollable<i style="background:var(--plain)"></i>plain
+    <i style="background:var(--own)"></i>AURA overlay · dots are touches (★ = what received it)
+  </div>
+</header>
+<main id="list"></main>
+<script>
+const DATA = /*__DATA__*/null;
+const el = (t, a = {}, ...kids) => {
+  const n = document.createElement(t);
+  for (const [k, v] of Object.entries(a)) k === "class" ? n.className = v : n.setAttribute(k, v);
+  for (const c of kids) if (c != null) n.append(c);
+  return n;
+};
+const NS = "http://www.w3.org/2000/svg";
+const sv = (t, a) => { const n = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) n.setAttribute(k, v); return n; };
+const colour = b => b.own ? "var(--own)" : `var(--${{clickable: "click", editable: "edit", scrollable: "scroll"}[b.kind] || "plain"})`;
+
+function phone(f) {
+  const s = sv("svg", { viewBox: "0 0 1080 2400", class: "phone", role: "img", "aria-label": f.caption });
+  for (const b of f.boxes) {
+    const r = sv("rect", { x: b.x1, y: b.y1, width: b.x2 - b.x1, height: b.y2 - b.y1, fill: colour(b),
+      "fill-opacity": b.own ? 0.15 : 0.12 + b.layer * 0.06, stroke: colour(b), "stroke-width": 6,
+      "stroke-dasharray": b.enabled ? "" : "20 14" });
+    const t = sv("title", {}); t.textContent = `${b.id} ${b.label || ""} (layer ${b.layer})`; r.append(t);
+    s.append(r);
+    if (b.label && b.y2 - b.y1 > 60) {
+      const tx = sv("text", { x: b.x1 + 14, y: b.y1 + 52, "font-size": 44, fill: "currentColor" });
+      tx.textContent = b.label.slice(0, 18); s.append(tx);
+    }
+  }
+  for (const t of f.touches) {
+    s.append(sv("circle", { cx: t.x, cy: t.y, r: 34, fill: t.via === "gesture" ? "var(--pass)" : "var(--gap)", stroke: "#fff", "stroke-width": 6 }));
+    const hit = f.boxes.find(b => b.id === t.hit);
+    if (hit) { const st = sv("text", { x: hit.x2 - 70, y: hit.y1 + 60, "font-size": 60, fill: "var(--fail)" }); st.textContent = "★"; s.append(st); }
+  }
+  return el("figure", {}, s, el("figcaption", {}, f.caption));
+}
+
+function card(sc) {
+  const d = el("details", { "data-status": sc.status });
+  if (sc.status === "fail") d.open = true;
+  d.append(el("summary", {}, el("span", { class: `badge ${sc.status}` }, sc.status), el("span", { class: "sid" }, sc.id),
+    el("span", {}, sc.title), sc.gap ? el("span", { class: "gapnote" }, `waits on: ${sc.gap}`) : null,
+    el("span", { class: "sub", style: "margin-left:auto" }, `${sc.ms} ms`)));
+  const left = el("div");
+  const checks = el("ul", { class: "checks" });
+  for (const c of sc.checks) checks.append(el("li", { class: c.ok ? "ok" : "no" }, c.name, c.detail && !c.ok ? el("span", { class: "d" }, c.detail) : null));
+  if (!sc.checks.length) checks.append(el("li", { class: "no" }, "no checks ran"));
+  left.append(checks);
+  if (sc.error) left.append(el("pre", { class: "err" }, sc.error));
+  const frames = el("div", { class: "frames" });
+  sc.frames.forEach(f => frames.append(phone(f)));
+  left.append(frames);
+  const right = el("div");
+  for (const r of sc.transcript) right.append(el("div", { class: "tool" }, `→ ${r.tool}`), el("pre", { class: r.error ? "err" : "" }, r.text));
+  d.append(el("div", { class: "body" }, left, right));
+  return d;
+}
+
+if (DATA) {
+  document.getElementById("gen").textContent = `generated ${DATA.generated} · ${DATA.scenarios.length} scenarios`;
+  const list = document.getElementById("list");
+  DATA.scenarios.forEach(s => list.append(card(s)));
+  const counts = {};
+  DATA.scenarios.forEach(s => counts[s.status] = (counts[s.status] || 0) + 1);
+  const tally = document.getElementById("tally");
+  let active = null;
+  for (const st of ["all", "fail", "gap", "closed", "pass"]) {
+    const n = st === "all" ? DATA.scenarios.length : counts[st] || 0;
+    if (!n) continue;
+    const b = el("button", { "aria-pressed": st === "all" }, `${st} `, el("b", {}, String(n)));
+    b.onclick = () => {
+      active = st === "all" ? null : st;
+      tally.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      list.querySelectorAll("details").forEach(x => x.hidden = active && x.dataset.status !== active);
+    };
+    tally.append(b);
+  }
+}
+</script>
+</body>
+</html>

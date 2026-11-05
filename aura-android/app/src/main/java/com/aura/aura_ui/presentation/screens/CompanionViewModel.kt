@@ -44,9 +44,9 @@ class CompanionViewModel(context: Context) : ViewModel() {
             liveMode = liveMode,
             hasKey = hasKey,
             liveVoice = config.voice(),
-            classicVoice = classicVoiceName(
-                voicePrefs.getString("selected_voice_id", "en-US-AriaNeural") ?: "en-US-AriaNeural"
-            ),
+            classicVoice = com.aura.aura_ui.voice.LocalVoices.byId(
+                voicePrefs.getString("selected_voice_id", null),
+            ).name,
         )
     }
 
@@ -64,17 +64,5 @@ class CompanionViewModel(context: Context) : ViewModel() {
     fun saveKey(key: String) {
         if (key.isNotBlank()) keys.setKey(LlmEndpointCatalog.GEMINI_ID, key)
         refresh()
-    }
-
-    private fun classicVoiceName(voiceId: String): String = when (voiceId) {
-        "en-US-AriaNeural" -> "Aria"
-        "en-US-GuyNeural" -> "Guy"
-        "en-US-JennyNeural" -> "Jenny"
-        "en-US-ChristopherNeural" -> "Christopher"
-        "en-GB-SoniaNeural" -> "Sonia"
-        "en-GB-RyanNeural" -> "Ryan"
-        "en-AU-NatashaNeural" -> "Natasha"
-        "en-US-EmmaNeural" -> "Emma"
-        else -> voiceId.substringAfter("-").substringBefore("Neural")
     }
 }

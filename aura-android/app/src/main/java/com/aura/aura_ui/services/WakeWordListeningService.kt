@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
  * WakeWordListeningService - Background service for always-on wake word detection.
  * 
  * This foreground service runs continuously in the background, listening for the
- * "Hey AURA" wake word. When detected, it triggers the voice assistant overlay.
+ * "Wake up AURA" wake phrase. When detected, it triggers the voice assistant overlay.
  * 
  * Key features:
  * - Runs as foreground service with low-priority notification
@@ -214,31 +214,41 @@ class WakeWordListeningService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         
-        Log.i(TAG, "⚠️ Task removed (app swiped from recents) - wake word will restart")
-        
-        // Only restart if wake word was enabled
-        if (isWakeWordEnabled) {
-            // Restart the service after a short delay
-            val restartIntent = Intent(applicationContext, WakeWordListeningService::class.java).apply {
-                action = ACTION_START
-            }
-            
-            val pendingIntent = PendingIntent.getService(
-                this,
-                1,
-                restartIntent,
-                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-            )
-            
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            alarmManager.set(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                android.os.SystemClock.elapsedRealtime() + 1000, // Restart after 1 second
-                pendingIntent
-            )
-        }
-        
+        Log.i(TAG, "⚠️ Task removed (app swiped from recents) - scheduling wake word restart")
+        if (isWakeWordEnabled) scheduleRestart()
         // Don't call stopSelf() - let the system restart us
+    }
+
+    /**
+     * Re-start this service 1 s from now, for OEM skins that kill the process on a swipe.
+     *
+     * - Why foreground + exact: a plain `startService` from the background is refused on Android
+     *   8+, and an exact alarm is one of the documented exemptions for starting a foreground
+     *   service from the background. Without exact-alarm access it falls back to an inexact alarm.
+     * - Fails: Android 14+ may still refuse the microphone type from this state; [onCreate] then
+     *   stops cleanly and [com.aura.aura_ui.accessibility.AuraAccessibilityService] retries when the
+     *   system rebinds it.
+     */
+    private fun scheduleRestart() {
+        val restartIntent = Intent(applicationContext, WakeWordListeningService::class.java).apply {
+            action = ACTION_START
+        }
+        val flags = PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(this, 1, restartIntent, flags)
+        } else {
+            PendingIntent.getService(this, 1, restartIntent, flags)
+        }
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val at = android.os.SystemClock.elapsedRealtime() + 1000
+        val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        runCatching {
+            if (exactAllowed) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pendingIntent)
+            } else {
+                alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pendingIntent)
+            }
+        }.onFailure { Log.w(TAG, "restart alarm refused: ${it.message}") }
     }
 
     override fun onLowMemory() {
@@ -604,7 +614,7 @@ class WakeWordListeningService : Service() {
                 "Wake word (background)",
                 NotificationManager.IMPORTANCE_MIN,
             ).apply {
-                description = "Required by Android to keep listening for \"Hello AURA\" in the background"
+                description = "Required by Android to keep listening for \"Wake up AURA\" in the background"
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_SECRET
                 setSound(null, null)
@@ -636,7 +646,7 @@ class WakeWordListeningService : Service() {
         )
 
         val statusText = if (isListening) {
-            "Say \"Hello AURA\" or \"Wake up AURA\""
+            "Say \"Wake up AURA\""
         } else {
             "Wake word paused"
         }
@@ -674,7 +684,8 @@ class WakeWordListeningService : Service() {
                 setReferenceCounted(false)
             }
         }
-        wakeLock?.acquire(30 * 60 * 1000L) // 30 minutes max, reacquired on mode changes
+        // Timed and acquired only in enableWakeWord(), so it lapses 30 min after the wake word is turned on.
+        wakeLock?.acquire(30 * 60 * 1000L)
         Log.d(TAG, "Wake lock acquired")
     }
     

@@ -35,10 +35,10 @@ import kotlinx.coroutines.withTimeoutOrNull
  * - The engine is a tiny streaming zipformer transducer ("open-vocabulary KWS"),
  *   so the wake phrase is just lines of BPE tokens in `assets/kws/keywords.txt` — no
  *   cloud console, no per-device `.ppn`, no access key.
- * - Wake phrase is "Hello AURA", NOT "Hey AURA". Measured on a real recording: this
- *   GigaSpeech model cannot hear the rare word "aura" after "hey" (~1/5 recall), but
- *   "hello" is a strong common-word anchor and the "aura" tail is caught by the
- *   ▁OR spellings (`HELLO ORAH` = `▁HE LL O ▁OR A H`). See keywords.txt for variants.
+ * - The only wake phrase is "Wake up AURA". This GigaSpeech model cannot hear the rare
+ *   word "aura" after a short anchor like "hey" (~1/5 recall measured), so the phrase
+ *   leans on the common two-word anchor "wake up"; the "aura" tail is caught by the
+ *   ▁A/▁OR/▁OUR spellings (`WAKE UP ORAH` = `▁WA KE ▁UP ▁OR A H`). See keywords.txt.
  * - ONNX Runtime is statically linked inside `libsherpa-onnx-jni.so`, so this does
  *   NOT touch OmniParser's onnxruntime-android at runtime.
  *
@@ -65,7 +65,7 @@ class SherpaKwsWakeWordDetector(
     override val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
     // Display names only: getResult() returns the matched phrase itself (e.g. "WAKE UP ORAH").
-    override val availableKeywords: List<String> = listOf("Hello AURA", "Wake up AURA")
+    override val availableKeywords: List<String> = listOf("Wake up AURA")
 
     private var onWakeWordCallback: ((String) -> Unit)? = null
     private var initError: Exception? = null
@@ -87,7 +87,9 @@ class SherpaKwsWakeWordDetector(
                     joiner = "$ASSET_DIR/joiner.int8.onnx",
                 ),
                 tokens = "$ASSET_DIR/tokens.txt",
-                numThreads = 2,
+                // One thread: the 3.3M model decodes 100 ms of audio far faster than real time, and
+                // a second thread only adds ONNX Runtime's idle spin-wait between decodes.
+                numThreads = 1,
                 provider = "cpu",
                 modelType = "zipformer2",
             )
@@ -107,7 +109,7 @@ class SherpaKwsWakeWordDetector(
             // assetManager != null → model paths are resolved from APK assets.
             spotter = KeywordSpotter(assetManager = context.assets, config = config)
             initError = null
-            Log.i(TAG, "✅ sherpa-onnx keyword spotter initialized (listening phrases: \"Hello AURA\", \"Wake up AURA\")")
+            Log.i(TAG, "✅ sherpa-onnx keyword spotter initialized (listening for \"Wake up AURA\")")
         } catch (e: Exception) {
             initError = e
             Log.e(TAG, "❌ Failed to initialize sherpa-onnx keyword spotter: ${e.message}", e)
@@ -218,7 +220,7 @@ class SherpaKwsWakeWordDetector(
 
         try {
             audioRecord.startRecording()
-            Log.i(TAG, "✅ Wake word detection active — listening for \"Hello AURA\" or \"Wake up AURA\"…")
+            Log.i(TAG, "✅ Wake word detection active — listening for \"Wake up AURA\"…")
 
             while (coroutineContext.isActive && _isListening.value) {
                 val n = audioRecord.read(shortBuf, 0, CHUNK_SAMPLES)
@@ -232,6 +234,7 @@ class SherpaKwsWakeWordDetector(
 
                 // PCM16 → normalized float [-1, 1], which sherpa expects.
                 for (i in 0 until n) floatBuf[i] = shortBuf[i] / 32768.0f
+                if (com.aura.aura_ui.BuildConfig.DEBUG) logLevel(shortBuf, n)
                 stream.acceptWaveform(if (n == CHUNK_SAMPLES) floatBuf else floatBuf.copyOf(n), SAMPLE_RATE)
 
                 while (spotter.isReady(stream)) {
@@ -255,6 +258,24 @@ class SherpaKwsWakeWordDetector(
             audioRecord.release()
             Log.d(TAG, "AudioRecord + stream released")
         }
+    }
+
+    private var levelChunks = 0
+    private var levelPeak = 0
+    private var levelSumSq = 0.0
+    private var levelSamples = 0
+
+    /** Debug builds only: mic peak and RMS every ~2 s, to tell a silenced mic from a model miss. */
+    private fun logLevel(buf: ShortArray, n: Int) {
+        for (i in 0 until n) {
+            val v = buf[i].toInt()
+            levelPeak = maxOf(levelPeak, kotlin.math.abs(v))
+            levelSumSq += v.toDouble() * v
+        }
+        levelSamples += n
+        if (++levelChunks < 20) return
+        Log.d(TAG, "mic level: peak=$levelPeak rms=${kotlin.math.sqrt(levelSumSq / levelSamples).toInt()}")
+        levelChunks = 0; levelPeak = 0; levelSumSq = 0.0; levelSamples = 0
     }
 
     override fun stop() {

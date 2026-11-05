@@ -1,6 +1,6 @@
 """Regenerates `app/src/main/assets/eval/androidworld.json` from AndroidWorld's registry.
 
-    androidworld-venv/Scripts/python.exe scripts/bench/gen_androidworld_tasks.py
+    androidworld-venv/Scripts/python.exe benchmark/suite/gen_androidworld_tasks.py
 
 The registry is the only honest source for "which tasks are in the suite" -
 hand-maintaining that list means the cockpit and the host referee can disagree
@@ -25,15 +25,15 @@ OUT = os.path.join(ROOT, 'aura-android', 'app', 'src', 'main', 'assets',
                    'eval', 'androidworld.json')
 
 HEADER = [
-    'GENERATED - do not hand-edit. Rebuild with scripts/bench/gen_androidworld_tasks.py.',
+    'GENERATED - do not hand-edit. Rebuild with benchmark/suite/gen_androidworld_tasks.py.',
     '',
     "Google's AndroidWorld suite, minus the information-retrieval family (see",
-    'scripts/bench/README.md), exposed in the on-device eval cockpit.',
+    'benchmark/README.md), exposed in the on-device eval cockpit.',
     '',
     'What is different about these rows:',
     "  - 'goal' is a PLACEHOLDER, not the sentence the agent gets. AndroidWorld generates the",
     '    real goal from the run seed during setup, so it only exists at run time. The runner',
-    '    replaces it once scripts/bench/referee.py hands it back.',
+    '    replaces it once benchmark/suite/referee.py hands it back.',
     "  - 'truth_check' is informational. These tasks are scored by AndroidWorld's own validator",
     '    reading device state, never by a human tapping pass/fail.',
     "  - 'aw_task' is the join key to AndroidWorld's task class, and the flag that routes this row",
@@ -41,7 +41,7 @@ HEADER = [
     '  - numbers start at 1001 so they can never collide with tasks.json (the number is a',
     '    permanent join key AND the on-disk filename).',
     '',
-    'Running these needs the PC: androidworld-venv/Scripts/python.exe scripts/bench/referee.py',
+    'Running these needs the PC: androidworld-venv/Scripts/python.exe benchmark/suite/referee.py',
 ]
 
 TRUTH_CHECK = ('Scored automatically. AndroidWorld inspects device state after '
