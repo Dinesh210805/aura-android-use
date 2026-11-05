@@ -6,6 +6,18 @@ Scores AURA on Google's [AndroidWorld](https://github.com/google-research/androi
 benchmark, two ways: AURA's **on-device agent**, and AURA's **MCP server** driven by Claude
 Code from the PC.
 
+```
+benchmark/
+  README.md     this file
+  suite/        the harness: the browser suite, the runner, the report and publisher
+  agents/       command-line agent profiles (Claude Code + AURA MCP)
+  results/      every run, one folder per task              (git-ignored working data)
+  .runtime/     bench bridge home, emulator log, page preview (git-ignored)
+```
+
+Published runs are the copy that is committed: `aura-android-use-website/benchmarks/<run>/`,
+with the videos on a GitHub Release (see *Publishing*).
+
 ## How it works
 
 AndroidWorld grades a task by reading **device state** afterwards, through
@@ -22,14 +34,25 @@ So neither target is driven step by step like M3A. For each task:
 
 ## How this differs from a stock AndroidWorld run
 
-Publish these alongside any number. `report.py` prints them on the site.
+Publish these alongside any number. `report.py` prints them on the site, and the suite shows
+them under "How this run is scored". Change together: `TARGETS` in `suite.py`.
+
+**MCP target (Claude Code + AURA's MCP server): the stock suite.**
+
+| | |
+|---|---|
+| Tasks | All **116**, including the 25 information-retrieval tasks. Claude's final message is its typed answer (`env.interaction_cache`). |
+| Clock | AndroidWorld's own **2023-10-15**. The phone makes no model calls here, so it does not need today's TLS. AURA's `web_search` and browser tools cannot reach the internet on that clock; no AndroidWorld task needs them. |
+| Budget | AndroidWorld's step budget, **10 × complexity**, counted as actions on the phone (tap, type, swipe, open…). Looking (`read_screen`, `get_screenshot`, the profile's `step_budget_free` list) is free, as a stock agent's screenshot is, and so are Claude Code's own tools. The 20-minute wall clock only guards against a hung run. |
+| Seed | **30**, one instance per task: upstream `run.py`'s default. |
+
+**On-device target (AURA's own agent): three deviations.**
 
 | Deviation | Why |
 |---|---|
-| The **information-retrieval** family (25 of 116 tasks) is excluded, so the score is out of 91. | Those tasks are graded on a typed answer (`env.interaction_cache`); AURA's on-device agent has no channel to set it. Their seed data also uses literal 2023 dates that the clock shift cannot move. Run them anyway with `--include_information_retrieval` / `--include_ir`, but they fail for harness reasons. |
+| The **information-retrieval** family (25 of 116 tasks) is excluded, so the score is out of 91. | Those tasks are graded on a typed answer; AURA's on-device agent has no channel to give one. Their seed data also uses literal 2023 dates that the clock shift cannot move. |
 | The device clock is shifted from 2023-10-15 to **2026-10-15**. | AURA calls a cloud model from the device. TLS on a phone that thinks it is 2023 rejects today's certificates. Every date in the scored tasks derives from `device_constants.DT`, so each task stays internally consistent. Weekdays change. |
-| Agents get a **wall-clock budget** (on-device default 300 s, MCP 600 s) instead of AndroidWorld's step budget of 10 × complexity. | Both agents run their own loop, so AndroidWorld sees a single step. Command-line agents are also handed the stock step budget as `AW_MAX_STEPS`. |
-| Seed **30**, one instance per task. | 30 is upstream `run.py`'s default, so task parameters match other published runs. |
+| A **wall-clock budget** (300 s) instead of the step budget. | AURA's loop runs on the phone, so its steps cannot be counted from the PC. |
 
 ## One-time setup
 
@@ -54,19 +77,32 @@ own sign-in.
    ```
    Do not edit anything in `android_world/` or the venv. The one Windows fix that is
    needed is applied at runtime by `aura_androidworld._fix_apk_install_on_windows`.
-4. **Emulator settings.** Keep the AVD on host-GPU rendering (`hw.gpu.enabled=yes`,
-   `hw.gpu.mode=host` in its `config.ini`) and audio off. Software rendering burns CPU the
-   agent and the recorder need, and a starved run times out and looks like an agent failure.
-   Use the Windows High performance power plan, stay plugged in, and run `gradlew --stop`
-   first. If host GPU glitches on your driver, use `-gpu angle_indirect`. The suite starts the
-   emulator for you, headless:
-   `emulator -avd AndroidWorldAvd -no-snapshot -grpc 8554 -no-audio -no-window`. The page shows
-   its screen, so a window only costs CPU; and resizing a host-GPU emulator window can leave its
-   display blank until it restarts.
+4. **Emulator settings.** Keep rendering on the GPU and audio off. Software rendering burns
+   CPU the agent and the recorder need, and a starved run times out and looks like an agent
+   failure. The suite boots with **`-gpu angle_indirect`** (ANGLE over Direct3D,
+   `device.EMULATOR_GPU`): with `-gpu host`, the emulator here started failing
+   `glReadPixels` (error 0x506 in `emulator.log`) and every screenshot came back plain white,
+   which blinds the agent, the recorder and the live view at once. If screenshots turn white,
+   look for that error and restart the emulator. Use the Windows High performance power plan,
+   stay plugged in, and run `gradlew --stop` first. The suite starts the emulator for you,
+   with its window, which is where you use the phone by hand:
+   `emulator -avd AndroidWorldAvd -no-snapshot -grpc 8554 -no-audio -gpu angle_indirect`. The
+   page only mirrors its screen. Add `-no-window` yourself to save a little CPU when you never
+   need to touch the phone. Don't resize the window from a script: it can go blank until the
+   emulator restarts.
 5. **Install the benchmark apps.** This runs once per fresh AVD and takes several minutes:
    ```
-   androidworld-venv/Scripts/python scripts/bench/aura_androidworld.py --perform_emulator_setup
+   androidworld-venv/Scripts/python benchmark/suite/aura_androidworld.py --perform_emulator_setup
    ```
+   If it stops on `Failed to download and install APK for osmand`, `adb install` hit its
+   timeout on the 350 MB OsmAnd APK. Install that file by hand from
+   `%TEMP%/android_world/app_data/` with `adb install -r`, then run the command again: it
+   skips apps that are already installed. Read its `Failed to automatically setup app X`
+   warnings: such an app still opens on its first-run or permission screen, and every task in
+   it starts behind that screen. Run the command again (it redoes the setup steps), and open
+   the app by hand to check. To start over, boot the AVD once with
+   `-wipe-data`, then do steps 5 and 6 again; setup pairs the bench bridge again by itself
+   once you delete `benchmark/.runtime/bridge-home/`.
 6. **Install AURA.** It must be a debug build, because the debug receiver it is driven
    through only exists in debug builds:
    ```
@@ -81,13 +117,13 @@ own sign-in.
 `agent.log` contain everything on the screen and everything the agent read. A synced Google
 account puts its contacts, mail and photos into every one of them.
 
-Check the code with `external_agent.py --selfcheck`, `referee.py --selfcheck` and
-`report.py --demo`. None of them needs the emulator.
+Check the code with `external_agent.py --selfcheck`, `referee.py --selfcheck`,
+`report.py --demo` and `publish.py` (all in `suite/`). None of them needs the emulator.
 
 ## Running: the suite
 
 ```
-androidworld-venv/Scripts/python scripts/bench/suite.py      # opens http://localhost:8777
+androidworld-venv/Scripts/python benchmark/suite/suite.py      # opens http://localhost:8777
 ```
 
 1. **Pick a target:** *MCP server* (Claude Code drives the phone through AURA's MCP tools) or
@@ -95,13 +131,17 @@ androidworld-venv/Scripts/python scripts/bench/suite.py      # opens http://loca
 2. **Setup runs by itself** (`device.up`) and shows each step: boot the emulator, check AURA,
    start the phone's MCP server, reach it, pair the bench bridge, connect, build AndroidWorld's
    env. A step it cannot fix says what to do, with a Retry button.
-3. **Task list:** all 91 scored tasks with their last result, time and cost. Run one, a
-   selection, all, the failed ones again, or resume the ones not run yet. More than 3 tasks
-   asks first, with a time and cost estimate from past runs. Each finished task has its
-   video and log one click away. *Build report* writes the static site.
-4. **While running:** the run's task list on the left, the agent's live activity in the
-   middle (Claude's tool calls, results and words, or AURA's log), a time bar, and *Stop
-   after this task* / *Stop now*. A stopped task is recorded as stopped, never as a FAIL.
+3. **Task list:** every task of the target with its exact goal (AndroidWorld derives each
+   task's parameters from the seed and the task name, so the goal is known before it runs),
+   its last result, time, phone actions and cost. Run one, a selection, all, the failed ones
+   again, or resume the ones not run yet. More than 3 tasks asks first, with a time and cost
+   estimate from past runs. Each finished task has its video and logs one click away.
+   *Preview page* builds the run's public pages locally; *Publish to website* publishes them.
+4. **While running:** the run's task list on the left; in the middle a time bar, *Stop after
+   this task* / *Stop now*, and three tabs: **Steps** (AURA's own step log: every tool call
+   with its input, result and the screen, tap marked), the agent's activity (Claude's tool
+   calls, results and words, or AURA's log) and AURA's app log (logcat). A stopped task is
+   recorded as stopped, never as a FAIL.
 
 The **phone panel** on the right of every screen is the emulator's display, live: the suite
 reads it from the emulator's gRPC port (`streamScreenshot`, about 12 frames a second, only
@@ -117,16 +157,24 @@ Intel Quick Sync when the driver allows, else x264. *Phone only* uses the emulat
 
 | Target | Results | Agent |
 |---|---|---|
-| MCP server | `bench-results/claude-code-aura-mcp/<Task>/` | `agents/claude-code-aura-mcp.json` |
-| On-device agent | `bench-results/<Task>/` | `AuraAgent` over the debug broadcast |
+| MCP server | `benchmark/results/claude-code-aura-mcp/<model>/<Task>/` | `agents/claude-code-aura-mcp.json` |
+| On-device agent | `benchmark/results/aura-on-device/<Task>/` | `AuraAgent` over the debug broadcast |
 
-Each task folder holds `meta.json` (the verdict and what the agent reported), `run.mp4`,
-`live.log`, the agent's raw output, and AndroidWorld's own `checkpoint/`.
+Each task folder holds `meta.json` (the verdict, what the agent reported, AURA's version),
+`run.mp4`, `live.log` (written as the run goes, so it can be opened mid-task), `app.log`,
+the agent's raw output, `session/` and AndroidWorld's own `checkpoint/`.
+
+`session/<id>/` is **AURA's own step log**, the record its in-app session viewer shows:
+`metadata.json` (every tool call with its arguments, result, timing and tap coordinates) and
+`screenshots/<index>.<ext>`. The phone writes it to `files/mcp_logs/` for every MCP
+connection and agent run; the suite copies the sessions that started during the task off the
+phone every 4 s (`device.pull_sessions`, one `run-as tar` over adb, so AURA must be a debug
+build).
 
 ### How the MCP target reaches the emulator
 
 The bench runs its **own** bridge: `aura-mcp daemon` on port **4817** with its home in
-`bench-results/.bridge-home/`, so your everyday bridge on 4816 and its pairing with a real
+`benchmark/.runtime/bridge-home/`, so your everyday bridge on 4816 and its pairing with a real
 phone are never touched. The emulator sits behind its own NAT, so `device.py` forwards the
 phone's signalling ports (`47821`–`47825`) with `adb forward` and pairs with
 `--host=127.0.0.1:<port>`; WebRTC then connects on its own. The first pairing reads the PIN
@@ -134,8 +182,27 @@ from AURA's MCP tab and taps Approve only when the code on the phone equals the 
 AURA's MCP server is started with the debug broadcast `--es mode mcp_start`, because its
 service is not exported to the shell.
 
-`bench-results/.bridge-home/.aura/webrtc.json` is the bench's pairing token. It never leaves
+`benchmark/.runtime/bridge-home/.aura/webrtc.json` is the bench's pairing token. It never leaves
 this machine; delete it to pair again.
+
+### Publishing
+
+*Publish to website* (`suite/publish.py`) puts the current target's run on the website, at
+`/benchmarks/<run>/`, where `<run>` is `claude-code-aura-mcp-<model>` or `aura-on-device`.
+Publishing the same run again replaces its pages.
+
+1. Every video is uploaded to a new GitHub Release `bench-<run>-<stamp>`, created with
+   `--latest=false`: the website's download links use `releases/latest`, which must stay the
+   newest APK. Videos never enter git; the pages play them from the release.
+2. The pages are built in a temporary worktree of `origin/main`, never in your checkout:
+   index, one page per task (full goal, verdict, video, AURA's step log with screens, the
+   logs), `run.json`, and `benchmarks/index.html` listing every published run. Screenshots
+   are shrunk to 540 px JPEG, which keeps a full run to a few MB. Your home folder is
+   replaced with `~` in published logs.
+3. They are committed on `bench/publish-<run>-<stamp>`, pushed, and a pull request to main
+   is opened. Nothing is live until you merge it; Vercel deploys main.
+
+Needs `gh` signed in with push access. The page shows each stage and the PR link.
 
 ### Other entry points
 
@@ -158,8 +225,11 @@ down; `external_agent.run_one` only adds the camera and `meta.json`.
 - **`done` = exit 0 before the deadline** for command-line agents. A timeout or non-zero exit
   scores 0 even if the validator would pass, as in stock `suite_utils`. `meta.json` keeps the
   raw `validator_success` beside the gated `success`.
-- `AW_MAX_STEPS` carries the stock budget `int(10 * complexity)` for CLIs with a turn cap.
-  The hard limit is the wall clock: the suite's time limit, else the profile's `timeout_s`.
+- `AW_MAX_STEPS` carries the stock budget `int(10 * complexity)`. A profile with
+  `step_budget_free` has it enforced by the harness: every phone action outside that list is a
+  step, and the action after the last one stops the run, which scores 0 (`out_of_steps` in
+  `meta.json`), as a stock agent out of steps does. The wall clock (`timeout_s`, or the
+  suite's limit) is only a safety net.
 - An answer written to `AW_ANSWER_FILE`, or Claude's final message, lands in
   `env.interaction_cache`, where stock agents' `answer` action puts it.
 
@@ -174,21 +244,37 @@ tool calls). Without a parser, each stdout line is shown live as-is, and the age
 contract is in `external_agent.py`'s docstring. Literal braces in a command need doubling
 (`{{`, `}}`).
 
-`claude-code-aura-mcp` is Claude Code with `--setting-sources ""` (none of your own settings,
-hooks or CLAUDE.md), `--strict-mcp-config` with only the bench bridge, an allowlist of only
-`mcp__aura`, and shell, file and web tools disallowed. Its one fixed instruction
-(`{framing}`) tells it the requests are about the phone, the way every stock AndroidWorld agent
-is told it operates a phone. It is the same for every task.
+`claude-code-aura-mcp` is **stock Claude Code, set up the way a user would**: AURA added as
+an MCP server (`--strict-mcp-config`, the bench bridge only) and AURA's own `aura-phone` skill,
+the file `aura-mcp-connect` ships, placed in the run's folder as `.claude/skills/aura-phone/`.
+Claude Code keeps its default system prompt and tools, with two kinds taken away
+(`--disallowedTools`): shell access (`Bash`, `PowerShell`, `Monitor`), because this PC has `adb`
+to the emulator and a shell would let it skip AURA; and tools that act outside the run
+(scheduling, remote triggers, notifications, publishing). `--setting-sources project` leaves
+out your own settings, hooks, plugins and CLAUDE.md, which other users do not have. Its one
+fixed instruction (`{framing}`) says the requests are about the phone, as every stock
+AndroidWorld agent is told it operates a phone. Each run's `meta.json` records the tools and
+permission mode Claude Code itself reported (`agent.usage.tools_available`,
+`permission_mode`).
+
+**Models are full IDs** (`claude-sonnet-5-5`, `claude-opus-5-5`, `claude-haiku-5-5`), never
+aliases that move to a newer model. Results are kept per model
+(`benchmark/results/claude-code-aura-mcp/<model>/`): switching the model in the suite switches the
+task list, the pass rate and the report to that model's runs.
+
+**Cost** is Claude Code's own `total_cost_usd`: the tokens used, cache writes and reads
+included, priced at Anthropic's API list prices, including its small background calls. On a
+Pro or Max subscription it is what the run would cost on the API, not what you are billed.
 
 ### Limits to know about
 
 - **The harness cannot confine an agent to its tools.** The host has `adb`. Confinement lives in
-  the profile. Check it before trusting a number.
+  the profile; check `tools_available` in `meta.json` before trusting a number.
 - **MCP and on-device numbers differ in one rule.** `AuraAgent` reports `done=True` even after a
   timeout, so an on-device run that times out can still score. A command-line agent cannot.
-- **Tool calls are counted from the agent's own stream**, not on the device: the MCP server
-  does not log them.
-- **Claude Code takes about 15 s to start** on every task. It counts toward the time limit.
+- **Steps are counted from the agent's own stream**, live, so the budget can stop it. The
+  phone's session log records the same calls, with screens, for reading afterwards.
+- **Claude Code takes about 15 s to start** on every task. It does not use steps.
 
 ## Gotchas the code handles
 
@@ -212,17 +298,19 @@ Each of these looks like an agent failure if it breaks:
 
 ## Files
 
+All in `suite/`.
+
 | File | What it is |
 |---|---|
-| `suite.py`, `suite.html` | The browser suite: target, setup, task list, live run view. |
-| `device.py` | The machine: emulator, adb, AURA's MCP server, the bench bridge and its pairing, the live display (`PhoneScreen`), the phone recorder. |
+| `suite.py`, `suite.html` | The browser suite: target, setup, task list, live run view with AURA's step log, the agent's activity and AURA's app log. |
+| `device.py` | The machine: emulator, adb, AURA's MCP server, the bench bridge and its pairing, the live display (`PhoneScreen`), AURA's app log (`AppLog`) and step log (`pull_sessions`), the phone recorder. |
 | `desktop.py` | Page recording: finds the suite's browser window and films it with ffmpeg. |
-| `external_agent.py`, `agents/` | The runner (`run_one`) and the command-line agent contract. |
-| `aura_androidworld.py` | The on-device adapter (`AuraAgent`) and the shared pieces: `RESULTS`, `SEED`, `scored_tasks`, `restore_aura_a11y`, `shift_device_year`, `find_adb`. |
+| `external_agent.py`, `../agents/` | The runner (`run_one`) and the command-line agent contract. |
+| `aura_androidworld.py` | The on-device adapter (`AuraAgent`) and the shared pieces: `RESULTS`, `RUNTIME`, `SEED`, `scored_tasks`, `restore_aura_a11y`, `shift_device_year`, `find_adb`. |
 | `referee.py` | Host side of the on-device cockpit: `/prepare` seeds a task, `/score` grades it. Binds to loopback only. |
 | `gen_androidworld_tasks.py` | Regenerates `app/src/main/assets/eval/androidworld.json`, which is the cockpit's task list and `report.py`'s denominator. Run it after bumping the pinned commit. |
-| `report.py`, `theme.py` | Build the static results site from a results folder; `theme.py` is shared with the suite page. |
-| `judge_eval.py` | Unrelated to AndroidWorld. It replays AURA's completion judge against human verdicts. |
+| `report.py`, `theme.py` | Build a run's pages (index, task pages, step log) from a results folder, in the website's look; `theme.py` is shared with the suite page. |
+| `publish.py` | The Publish button: videos to a release, pages by pull request. |
 
 To bump AndroidWorld: check out the new commit, reinstall it into the venv, run
 `gen_androidworld_tasks.py`, then update the commit hash above and in the setup steps.

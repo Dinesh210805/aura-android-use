@@ -1,6 +1,6 @@
 """Host referee for running AndroidWorld from AURA's on-device eval cockpit.
 
-    androidworld-venv/Scripts/python.exe scripts/bench/referee.py
+    androidworld-venv/Scripts/python.exe benchmark/suite/referee.py
 
 The phone is the trigger; this is the referee. It has no web page - you start
 tasks from Settings -> Eval on the device, and this process does the two things
@@ -14,7 +14,7 @@ the phone cannot:
     POST /score {"task": "MarkorCreateNote"}
         stops recording, pulls the video and AURA's log, asks
         `task.is_successful(env)` for the verdict, tears the task down, and
-        writes bench-results/<Task>/.  ->  {"ok": true, "success": false}
+        writes benchmark/results/aura-on-device/<Task>/.  ->  {"ok": true, "success": false}
 
 ### Why the phone cannot do this itself
 
@@ -26,8 +26,8 @@ referee is not.
 
 ### It writes what report.py already reads
 
-bench-results/<Task>/{meta.json, run.mp4, agent.log, referee.log, ...} - the
-same layout suite.py's on-device target produces, so `python scripts/bench/report.py`
+benchmark/results/aura-on-device/<Task>/{meta.json, run.mp4, agent.log, referee.log, ...} - the
+same layout suite.py's on-device target produces, so `python benchmark/suite/report.py`
 builds the public site from these runs with no changes.
 
 Port 8778, not 8777, so suite.py can stay open alongside this. Do not run tasks
@@ -51,7 +51,7 @@ sys.path.insert(
 )
 
 import aura_androidworld  # noqa: E402
-from aura_androidworld import RESULTS, SEED, write_text as _write  # noqa: E402
+from aura_androidworld import ONDEVICE_RESULTS as RESULTS, SEED, write_text as _write  # noqa: E402
 from device import ADB, SERIAL, Recorder, adb  # noqa: E402
 
 PORT = 8778

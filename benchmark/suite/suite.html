@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <!-- Change together: desktop.PAGE_TITLE finds this window by its title to film it. -->
 <title>AURA Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Doto:wght@500..900&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/theme.css">
+<script>try{var t=localStorage.getItem('aura-theme');if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}function auraTheme(){var t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('aura-theme',t);}catch(e){}}</script>
 <style>
 body { background: var(--canvas); }
 .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px;
        padding: 14px 24px; background: var(--ink); color: var(--on-ink); }
-.top b { font-size: 17px; letter-spacing: -0.02em; font-weight: 640; }
+.top b { font-family: var(--display); font-size: 22px; font-weight: 850; letter-spacing: 0; }
 .top .chip { border: 1px solid var(--outline-ink); border-radius: 999px; padding: 3px 12px;
              font-size: 13px; color: var(--on-ink-dim); background: none; cursor: pointer; }
 .top .chip:hover:not(:disabled) { color: var(--on-ink); border-color: var(--on-ink-dim); }
@@ -30,7 +32,8 @@ main { padding: 24px; min-width: 0; }
 .note { border: 1px solid var(--blood); background: var(--blood-soft); color: var(--blood);
         border-radius: var(--r-small); padding: 12px 16px; margin-bottom: 16px; white-space: pre-wrap;
         font-size: 14px; }
-h2 { font-size: 28px; letter-spacing: -0.03em; margin: 8px 0 4px; font-weight: 640; }
+h2 { font-family: var(--display); font-size: 40px; font-weight: 850; letter-spacing: -0.01em; line-height: 1;
+     margin: 8px 0 8px; color: var(--text); text-transform: none; }
 .dim { color: var(--text-dim); }
 button { font: inherit; font-size: 14px; border-radius: 999px; padding: 7px 16px; cursor: pointer;
          border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink);
@@ -48,16 +51,26 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
         border-radius: var(--r-card); padding: 28px; display: block; width: 100%; }
 .card:hover { border-color: var(--ink); }
 .card .k { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
-.card .t { font-size: 24px; font-weight: 640; letter-spacing: -0.02em; margin: 6px 0; }
+.card .t { font-family: var(--display); font-size: 34px; font-weight: 850; margin: 8px 0; }
 
 /* setup */
-.steps { margin-top: 20px; background: var(--canvas-high); border: 1px solid var(--outline);
+.setup { margin-top: 20px; background: var(--canvas-high); border: 1px solid var(--outline);
          border-radius: var(--r-card); overflow: hidden; }
-.step { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 14px 20px;
+.srow { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 14px 20px;
         border-top: 1px solid var(--outline); }
-.step:first-child { border-top: 0; }
-.step .d { font-size: 13px; color: var(--text-dim); white-space: pre-wrap; }
-.step.failed .d { color: var(--blood); }
+.srow:first-child { border-top: 0; }
+.srow .d { font-size: 13px; color: var(--text-dim); white-space: pre-wrap; }
+.srow.failed .d { color: var(--blood); }
+.stopping { color: #f3e3b1; font-size: 14px; align-self: center; }
+.duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 12px; margin-top: 14px; }
+.duo > .ev { margin-top: 0; }
+.duo .step .body, dialog .duo .step .body { grid-template-columns: 96px minmax(0, 1fr); gap: 10px; }
+.duo .colh { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+             color: var(--on-ink-dim); margin: 0 0 6px; }
+dialog .duo { padding: 0 12px 12px; margin: 0; }
+dialog .duo pre { max-height: 74vh; }
+dialog .duo .stepsview { max-height: 74vh; }
+.q.done { cursor: pointer; } .q.done:hover { background: var(--canvas); }
 .ic { font-family: var(--mono); }
 .ic.ok { color: var(--pass); } .ic.failed { color: var(--blood); }
 .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--outline);
@@ -122,10 +135,42 @@ td.act button { padding: 4px 11px; font-size: 12.5px; }
 .live .ctl button { background: transparent; border-color: var(--outline-ink); color: var(--on-ink); }
 .live .ctl button.danger { background: var(--blood); border-color: var(--blood); }
 
-dialog { border: 0; border-radius: var(--r-card); padding: 0; width: min(1100px, 94vw); background: var(--ink); color: var(--on-ink); }
+/* stats + scoring card */
+.stats { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)); gap: 0;
+         background: var(--ink); color: var(--on-ink); border-radius: var(--r-card);
+         padding: 20px 26px; margin: 14px 0 12px; align-items: end; }
+.stats .big { font-family: var(--display); font-size: 64px; font-weight: 900; line-height: .85; padding-right: 28px; }
+.stats .big small { font-size: 18px; color: var(--on-ink-dim); font-weight: 500; }
+.stats dl { margin: 0; padding-left: 18px; border-left: 1px solid var(--outline-ink); }
+.stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--on-ink-dim); }
+.stats dd { margin: 2px 0 0; font-size: 19px; font-variant-numeric: tabular-nums; }
+.scoring { border: 1px solid var(--outline); background: var(--canvas-high); border-radius: var(--r-small);
+           padding: 12px 16px; font-size: 13px; color: var(--text-dim); }
+.scoring summary { cursor: pointer; color: var(--text); font-weight: 560; }
+.scoring ul { margin: 8px 0 2px; padding-left: 18px; }
+.ctx { display: inline-flex; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--on-ink-dim); }
+.ctx span { border: 1px solid var(--outline-ink); border-radius: 999px; padding: 2px 10px; }
+td .steps { display: block; font-size: 11px; color: var(--text-dim); }
+.tabs { display: flex; gap: 4px; margin-top: 14px; }
+.tabs button { background: transparent; border: 1px solid var(--outline-ink); color: var(--on-ink-dim);
+               padding: 4px 12px; font-size: 12.5px; }
+.tabs button.on { background: var(--on-ink); color: var(--ink); border-color: var(--on-ink); }
+.live .h .stepc { font-family: var(--mono); font-size: 12px; border: 1px solid var(--outline-ink);
+                  border-radius: 999px; padding: 2px 10px; color: var(--on-ink); }
+.e.meta .x { color: var(--on-ink-dim); font-style: italic; }
+.e.app .x { color: var(--on-ink-dim); font-size: 12px; white-space: pre-wrap; }
+.e.app.E .x { color: #ff8b93; } .e.app.W .x { color: #f3e3b1; }
+@media (max-width: 760px) { .stats { grid-template-columns: 1fr 1fr; gap: 12px; } .stats dl { border: 0; padding: 0; } }
+dialog { border: 0; border-radius: var(--r-card); padding: 0; width: min(1500px, 96vw); background: var(--ink); color: var(--on-ink); }
 dialog::backdrop { background: rgba(0,0,0,.6); }
 dialog .dh { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; }
 dialog video { width: 100%; max-height: 78vh; display: block; background: #000; }
+.stepsview { background: var(--canvas); color: var(--text); border-radius: var(--r-small); padding: 12px;
+             font-family: var(--sans); font-size: 14px; }
+dialog .stepsview { max-height: 76vh; overflow: auto; border-radius: 0; }
+.pub { border: 1px solid var(--outline); background: var(--canvas-high); border-radius: var(--r-small);
+       padding: 10px 14px; font-size: 13.5px; margin: 8px 0; white-space: pre-wrap; }
+.pub.failed { border-color: var(--red); }
 dialog pre { margin: 0; padding: 18px; max-height: 76vh; overflow: auto; font-size: 12.5px; white-space: pre-wrap; }
 @media (max-width: 760px) { .run { grid-template-columns: 1fr; } .queue { position: static; max-height: 30vh; } }
 </style>
@@ -134,6 +179,7 @@ dialog pre { margin: 0; padding: 18px; max-height: 76vh; overflow: auto; font-si
 <div class="top">
   <b>AURA Bench</b>
   <button class="chip" id="target" title="Change what you are benchmarking">choose a target</button>
+  <span class="ctx" id="ctx"></span>
   <span class="tally" id="tally"></span>
 </div>
 <div class="shell">
@@ -146,7 +192,13 @@ dialog pre { margin: 0; padding: 18px; max-height: 76vh; overflow: auto; font-si
 <dialog id="viewer"><div class="dh"><span id="vt"></span><button class="ghost" onclick="viewer.close()" style="color:var(--on-ink)">Close</button></div><div id="vb"></div></dialog>
 <script>
 'use strict';
-let S = null, lastKey = '', filter = '', picking = false;
+let S = null, lastKey = '', filter = '', picking = false, liveTab = 'both', stepsHtml = '', stepsTask = '';
+// The step list is one element kept across renders: rebuilding it every second reloaded every
+// screenshot and lost the scroll position. newSteps asks the next render to scroll to the end.
+const stepsBox = (() => { const d = document.createElement('div'); d.className = 'ev stepsview'; d.id = 'ev'; return d; })();
+let newSteps = false, holdRender = false;
+const MODEL_NAMES = {'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-opus-5-5': 'Opus 5.5', 'claude-haiku-5-5': 'Haiku 5.5'};
+const modelLabel = m => (MODEL_NAMES[m] ? MODEL_NAMES[m] + ' · ' : '') + m;
 const selected = new Set();
 const $ = id => document.getElementById(id);
 
@@ -174,7 +226,10 @@ const fmt$ = c => c == null ? '–' : '$' + c.toFixed(c < 1 ? 3 : 2);
 function verdict(t) {
   if (t.stopped) return el('span', {class: 'pill warn'}, 'stopped');
   if (t.success === true) return el('span', {class: 'pill pass'}, 'pass');
-  if (t.success === false) return el('span', {class: 'pill fail', title: t.timed_out ? 'ran out of time' : (t.validator ? 'validator passed, but the agent did not finish' : '')}, t.timed_out ? 'timeout' : 'fail');
+  if (t.success === false) return el('span', {class: 'pill fail',
+    title: t.out_of_steps ? 'used up AndroidWorld\'s step budget' : t.timed_out ? 'hit the safety time limit'
+      : (t.validator ? 'the phone was right, but the agent did not finish' : 'AndroidWorld\'s check of the phone failed')},
+    t.out_of_steps ? 'out of steps' : t.timed_out ? 'timeout' : 'fail');
   return el('span', {class: 'pill none'}, 'not run');
 }
 
@@ -192,7 +247,7 @@ function viewSetup() {
   const failed = S.setup.some(s => s.state === 'failed');
   return [el('h2', {}, 'Getting ready'),
     el('p', {class: 'dim'}, failed ? 'One step needs you. Fix it, then retry.' : 'Fixing what it can by itself. Pairing happens on its own too.'),
-    el('div', {class: 'steps'}, S.setup.map(s => el('div', {class: 'step ' + s.state},
+    el('div', {class: 'setup'}, S.setup.map(s => el('div', {class: 'srow ' + s.state},
       s.state === 'running' ? el('span', {class: 'spin'}) : el('span', {class: 'ic ' + s.state}, s.state === 'ok' ? '✔' : '✖'),
       el('div', {}, el('div', {}, s.step), s.detail ? el('div', {class: 'd'}, s.detail) : null)))),
     failed && !S.setup_busy ? el('div', {class: 'bar'}, el('button', {onclick: () => post('/api/setup')}, 'Retry setup')) : null];
@@ -224,13 +279,13 @@ function options() {
   const o = S.opts, kids = [];
   if (S.target === 'mcp') kids.push(el('label', {class: 'opt'}, 'Model',
     el('select', {onchange: e => post('/api/options', {model: e.target.value})},
-      S.models.map(m => el('option', {value: m, selected: m === o.model}, m)))));
+      S.models.map(m => el('option', {value: m, selected: m === o.model}, modelLabel(m))))));
   kids.push(el('label', {class: 'opt'}, 'Recording',
     el('select', {onchange: e => post('/api/options', {record: e.target.value})},
       [['page', 'This page (with phone)'], ['phone', 'Phone only'], ['off', 'Off']]
         .filter(([v]) => v !== 'page' || S.desktop_ok)
         .map(([v, l]) => el('option', {value: v, selected: v === o.record}, l)))));
-  kids.push(el('label', {class: 'opt'}, 'Time limit',
+  kids.push(el('label', {class: 'opt', title: S.target === 'mcp' ? 'A safety net against a hung run. The real budget is AndroidWorld\'s step limit.' : 'AURA\'s budget: its steps happen on the phone and cannot be counted from here.'}, S.target === 'mcp' ? 'Safety limit' : 'Time limit',
     el('input', {type: 'number', min: 30, max: 3600, step: 30, style: 'width:90px', value: S.timeout,
                  onchange: e => post('/api/options', {timeout: e.target.value})}), 's'));
   return kids;
@@ -242,10 +297,17 @@ function viewTasks() {
   const q = filter.toLowerCase();
   const rows = S.tasks.filter(t => !q || t.task.toLowerCase().includes(q) || t.goal.toLowerCase().includes(q));
   const allShown = rows.length && rows.every(t => selected.has(t.task));
+  const cost = S.tasks.reduce((a, t) => a + (t.cost || 0), 0);
+  const stat = (k, v) => el('dl', {}, el('dt', {}, k), el('dd', {}, v));
   return [
     el('h2', {}, S.tasks.length + ' tasks'),
-    el('p', {class: 'dim'}, done.length + ' run · ' + pass + ' passed' + (done.length ? ' (' + Math.round(100 * pass / done.length) + '%)' : '') +
-      ' · seed 30 · each verdict is AndroidWorld\'s own check of the phone'),
+    el('p', {class: 'dim'}, 'Each verdict is AndroidWorld\'s own check of the phone afterwards, not a judgement of what the agent did.'),
+    el('div', {class: 'stats'},
+      el('div', {class: 'big'}, done.length ? (100 * pass / done.length).toFixed(1) : '–', el('small', {}, done.length ? '%' : '')),
+      stat('Passed', pass), stat('Failed', done.length - pass), stat('Not run', S.tasks.length - done.length),
+      S.target === 'mcp' ? stat('Spent', fmt$(cost)) : stat('Ran blind', S.tasks.filter(t => t.blind).length)),
+    el('details', {class: 'scoring'}, el('summary', {}, 'How this run is scored'),
+      el('ul', {}, S.deviations.map(d => el('li', {}, d)))),
     el('div', {class: 'bar'},
       el('input', {class: 'filter', id: 'filter', placeholder: 'Filter tasks or goals', value: filter,
                    oninput: e => { filter = e.target.value; lastKey = ''; render(true); }}),
@@ -256,7 +318,9 @@ function viewTasks() {
       el('button', {class: 'ghost', onclick: () => start('failed')}, 'Run failed again'),
       el('button', {class: 'ghost', onclick: () => start('resume')}, 'Resume (not run yet)'),
       el('span', {class: 'grow'}),
-      el('button', {class: 'ghost', onclick: async () => { const d = await post('/api/report'); if (d.path) alert('Report written to\n' + d.path); }}, 'Build report')),
+      el('button', {class: 'ghost', onclick: preview}, 'Preview page'),
+      el('button', {onclick: publishRun, disabled: S.publishing.state === 'running' || !done.length}, 'Publish to website')),
+    publishNote(),
     el('table', {},
       el('thead', {}, el('tr', {},
         el('th', {}, el('input', {type: 'checkbox', checked: allShown, 'aria-label': 'Select all shown',
@@ -269,11 +333,12 @@ function viewTasks() {
         el('td', {class: 'n'}, String(t.n).padStart(2, '0')),
         el('td', {}, el('span', {class: 'name'}, t.task), t.goal ? el('span', {class: 'goal'}, t.goal) : null),
         el('td', {}, verdict(t), t.blind ? el('span', {class: 'pill warn', title: 'no screenshots: the agent worked from the accessibility tree alone'}, ' blind') : null),
-        el('td', {class: 'num'}, fmtS(t.run_time)),
+        el('td', {class: 'num'}, fmtS(t.run_time),
+          t.steps_used != null ? el('span', {class: 'steps'}, t.steps_used + '/' + t.step_budget + ' steps') : null),
         el('td', {class: 'num'}, S.target === 'mcp' ? fmt$(t.cost) : ''),
         el('td', {class: 'act'},
           t.videos.length ? el('button', {class: 'ghost', onclick: () => showVideo(t)}, 'Video') : null, ' ',
-          t.run_time != null ? el('button', {class: 'ghost', onclick: () => showLog(t)}, 'Log') : null, ' ',
+          t.run_time != null ? el('button', {class: 'ghost', onclick: () => showLog(t, 'both')}, 'Log') : null, ' ',
           el('button', {onclick: () => post('/api/run', {tasks: [t.task]})}, t.success == null ? 'Run' : 'Re-run'))))))];
 }
 
@@ -284,26 +349,50 @@ function viewRun() {
   const queue = el('div', {class: 'queue'}, runList.map(name => {
     const t = byName[name] || {}, now = c && c.task === name, waiting = S.queue.includes(name) && !now;
     const mark = now ? '▶' : waiting ? '·' : t.stopped ? '■' : t.success ? '✔' : t.success === false ? '✖' : '·';
-    return el('div', {class: 'q' + (now ? ' now' : '')},
+    const finished = !now && !waiting && t.run_time != null;
+    return el('div', {class: 'q' + (now ? ' now' : '') + (finished ? ' done' : ''),
+                      title: finished ? 'Open this task\'s logs' : name,
+                      onclick: finished ? () => showLog(t, 'both') : null},
       el('span', {class: 's ' + (now || waiting ? '' : t.success ? 'pass' : t.success === false ? 'fail' : '')}, mark),
       el('span', {class: 'nm', title: name}, name));
   }));
   if (!c) return el('div', {class: 'run'}, queue, el('div', {class: 'live'}, el('div', {class: 'goalx'}, 'Preparing the next task…')));
   const pct = Math.min(100, 100 * c.elapsed / c.timeout);
-  const ev = el('div', {class: 'ev', id: 'ev'}, c.events.map(e => el('div', {class: 'e ' + e.kind},
-    el('span', {class: 't'}, fmtS(e.t)),
-    el('span', {}, {tool: '→', ok: '✔', err: '✖', say: '💭', done: '■', log: '·', out: '·', info: 'ℹ'}[e.kind] || '·'),
-    el('span', {class: 'x'}, e.text))));
+  const agentName = S.target === 'mcp' ? 'Claude Code' : 'AURA agent';
+  if (stepsTask !== c.task) {
+    stepsTask = c.task; stepsHtml = '';
+    stepsBox.innerHTML = '<p class="dim">AURA\'s step log appears here after the first tool call.</p>';
+  }
+  const activity = id => el('div', {class: 'ev', id}, c.events.map(e => el('div', {class: 'e ' + e.kind},
+        el('span', {class: 't'}, fmtS(e.t)),
+        el('span', {}, {tool: '→', meta: '⚙', ok: '✔', err: '✖', say: '💭', done: '■', log: '·', out: '·', info: 'ℹ'}[e.kind] || '·'),
+        el('span', {class: 'x'}, e.text))));
+  const ev = liveTab === 'both'
+    ? el('div', {class: 'duo'},
+        el('div', {}, el('p', {class: 'colh'}, agentName), activity('evA')),
+        el('div', {}, el('p', {class: 'colh'}, 'AURA steps, with screens'), stepsBox))
+    : liveTab === 'steps' ? stepsBox : liveTab === 'agent' ? activity('ev')
+    : el('div', {class: 'ev', id: 'ev'}, c.applog.map(line => {
+        const lvl = (line.match(/^\S+ \S+ ([VDIWEF])\//) || [])[1] || '';
+        return el('div', {class: 'e app ' + lvl, style: 'grid-template-columns: 1fr'}, el('span', {class: 'x'}, line));
+      }));
+  const tabs = el('div', {class: 'tabs', role: 'tablist'},
+    [['both', 'Side by side'], ['steps', 'Steps'], ['agent', agentName], ['app', 'AURA app log (' + c.applog.length + ')']].map(([k, l]) =>
+      el('button', {class: liveTab === k ? 'on' : '', role: 'tab', 'aria-selected': liveTab === k,
+                    onclick: () => { liveTab = k; render(true); }}, l)));
   return el('div', {class: 'run'}, queue, el('div', {class: 'live'},
     el('div', {class: 'h'}, el('span', {class: 'tn'}, c.task),
       el('span', {class: 'dim', style: 'color:var(--on-ink-dim)'}, 'task ' + (doneCount + 1) + ' of ' + runList.length),
-      el('span', {class: 'tm'}, fmtS(c.elapsed) + ' / ' + fmtS(c.timeout))),
+      c.steps ? el('span', {class: 'stepc', title: 'Actions on the phone, out of AndroidWorld\'s step budget'}, c.steps + ' steps') : null,
+      el('span', {class: 'tm', id: 'tm'}, fmtS(c.elapsed) + ' / ' + fmtS(c.timeout))),
     el('div', {class: 'goalx'}, c.goal || ''),
-    el('div', {class: 'track' + (pct > 85 ? ' late' : '')}, el('i', {style: 'width:' + pct + '%'})),
-    ev,
+    el('div', {class: 'track' + (pct > 85 ? ' late' : ''), id: 'track'}, el('i', {style: 'width:' + pct + '%'})),
+    tabs, ev,
     el('div', {class: 'ctl'},
-      el('button', {onclick: () => post('/api/stop', {now: false})}, 'Stop after this task'),
-      el('button', {class: 'danger', onclick: () => confirm('Stop this task now? It is recorded as stopped, not failed.') && post('/api/stop', {now: true})}, 'Stop now'))));
+      S.stopping === 'now' ? el('span', {class: 'stopping'}, 'Stopping now: the agent is killed and AndroidWorld is tidying the phone…')
+        : [S.stopping === 'after' ? el('span', {class: 'stopping'}, 'Stops when this task ends.')
+             : el('button', {onclick: () => post('/api/stop', {now: false})}, 'Stop after this task'),
+           el('button', {class: 'danger', onclick: () => confirm('Stop this task now? It is recorded as stopped, not failed.') && post('/api/stop', {now: true})}, 'Stop now')])));
 }
 
 /* ---- viewer --------------------------------------------------------- */
@@ -312,21 +401,97 @@ function showVideo(t) {
   $('vb').replaceChildren(el('video', {src: '/results/' + encodeURIComponent(t.task) + '/' + t.videos[0], controls: true, autoplay: true}));
   viewer.showModal();
 }
-async function showLog(t) {
-  $('vt').textContent = t.task + ' · log';
-  const r = await fetch('/results/' + encodeURIComponent(t.task) + '/live.log');
-  const text = r.ok ? await r.text() : 'No log for this run.';
-  $('vb').replaceChildren(el('pre', {}, (t.error ? 'ERROR\n' + t.error + '\n\n' : '') + text));
-  viewer.showModal();
+async function showLog(t, which = 'live.log') {
+  $('vt').replaceChildren(t.task + ' · ',
+    ...[['both', 'Side by side'], ['steps', 'Steps'], ['live.log', S.target === 'mcp' ? 'Claude Code' : 'Agent activity'],
+        ['app.log', 'AURA app log']].map(([f, l]) =>
+      el('button', {class: 'ghost', style: 'color:var(--on-ink);margin-left:6px' + (f === which ? ';border-color:var(--on-ink)' : ''),
+                    onclick: () => showLog(t, f)}, l)));
+  const stepsOf = async () => {
+    const box = el('div', {class: 'stepsview'});
+    box.innerHTML = (await (await fetch('/api/steps?task=' + encodeURIComponent(t.task))).text())
+      || '<p class="dim">No step log was copied for this run.</p>';
+    return box;
+  };
+  const textOf = async f => {
+    const r = await fetch('/results/' + encodeURIComponent(t.task) + '/' + f);
+    return r.ok ? await r.text() : 'No such log for this run.';
+  };
+  if (which === 'both') {
+    const [log, box] = await Promise.all([textOf('live.log'), stepsOf()]);
+    $('vb').replaceChildren(el('div', {class: 'duo'},
+      el('div', {}, el('p', {class: 'colh'}, S.target === 'mcp' ? 'Claude Code' : 'Agent activity'),
+        el('pre', {}, (t.error ? 'ERROR\n' + t.error + '\n\n' : '') + log)),
+      el('div', {}, el('p', {class: 'colh'}, 'AURA steps, with screens'), box)));
+  } else if (which === 'steps') {
+    $('vb').replaceChildren(await stepsOf());
+  } else {
+    const r = await fetch('/results/' + encodeURIComponent(t.task) + '/' + which);
+    const text = r.ok ? await r.text() : 'No such log for this run.';
+    $('vb').replaceChildren(el('pre', {}, (t.error && which === 'live.log' ? 'ERROR\n' + t.error + '\n\n' : '') + text));
+  }
+  if (!viewer.open) viewer.showModal();
 }
 viewer.addEventListener('close', () => $('vb').replaceChildren());
 
+/* ---- preview and publish -------------------------------------------- */
+async function preview() {
+  const d = await post('/api/preview');
+  if (d.url) window.open(d.url, '_blank');
+}
+function publishRun() {
+  const done = S.tasks.filter(t => t.success === true || t.success === false).length;
+  if (!confirm('Publish ' + done + ' scored tasks of ' + S.tasks.length + ' to the website?\n\n' +
+      'Videos go to a new GitHub Release; the pages go into a pull request against main. ' +
+      'Nothing is live until you merge that pull request.')) return;
+  post('/api/publish');
+}
+function publishNote() {
+  const p = S.publishing || {};
+  if (!p.state) return null;
+  return el('div', {class: 'pub ' + p.state},
+    p.state === 'running' ? el('span', {class: 'spin'}) : null, ' ',
+    p.state === 'running' ? 'Publishing: ' : p.state === 'done' ? 'Published. ' : 'Publishing failed: ',
+    p.detail || '', p.url ? el('a', {href: p.url, target: '_blank'}, ' ' + p.url) : null);
+}
+async function pullSteps() {
+  const c = S && S.current;
+  if (!c || (liveTab !== 'steps' && liveTab !== 'both')) return;
+  const html = await (await fetch('/api/steps?task=' + encodeURIComponent(c.task))).text();
+  if (stepsTask !== c.task || !html || html === stepsHtml) return;
+  stepsHtml = html;
+  stepsBox.innerHTML = html;
+  stepsBox.scrollTop = stepsBox.scrollHeight;  // newest step into view (and the video)
+  newSteps = true;
+}
+setInterval(() => pullSteps().catch(() => {}), 3000);
+// A click is a press and a release on the same element. Re-rendering in between swallows the
+// click, so renders wait while a button is held or a dropdown is open.
+document.addEventListener('pointerdown', () => { holdRender = true; }, true);
+document.addEventListener('pointerup', () => setTimeout(() => { holdRender = false; }, 250), true);
+document.addEventListener('pointercancel', () => { holdRender = false; }, true);
+
 /* ---- loop ----------------------------------------------------------- */
+function liveClock() {
+  const c = S && S.current, tm = $('tm'), tr = $('track');
+  if (!c || !tm || !tr) return;
+  const pct = Math.min(100, 100 * c.elapsed / c.timeout);
+  tm.textContent = fmtS(c.elapsed) + ' / ' + fmtS(c.timeout);
+  tr.className = 'track' + (pct > 85 ? ' late' : '');
+  tr.firstChild.style.width = pct + '%';
+}
 function render(force) {
-  const key = JSON.stringify(S);
-  if (!force && key === lastKey) return;
+  // The elapsed clock changes every second; it is updated in place, never by a rebuild.
+  const key = JSON.stringify(S, (k, v) => k === 'elapsed' ? undefined : v);
+  if (!force && (key === lastKey || holdRender || (document.activeElement || {}).tagName === 'SELECT')) {
+    liveClock();
+    return;
+  }
   lastKey = key;
   const ev = $('ev'), stick = !ev || ev.scrollTop + ev.clientHeight >= ev.scrollHeight - 30;
+  const evA = $('evA'), stickA = !evA || evA.scrollTop + evA.clientHeight >= evA.scrollHeight - 30;
+  const topA = evA ? evA.scrollTop : 0;
+  const prevTop = ev ? ev.scrollTop : 0, prevWasSteps = ev === stepsBox;
   const focusFilter = document.activeElement && document.activeElement.id === 'filter';
   const caret = focusFilter ? document.activeElement.selectionStart : 0;
 
@@ -334,6 +499,10 @@ function render(force) {
   t.textContent = S.target ? S.targets[S.target].label + ' ▾' : 'choose a target';
   t.disabled = !!(S.current || S.queue.length || S.setup_busy);
   t.onclick = () => { picking = true; render(true); };
+  $('ctx').replaceChildren(...(S.target && S.ready ? [
+    S.target === 'mcp' ? el('span', {}, modelLabel(S.opts.model)) : null,
+    el('span', {}, S.target === 'mcp' ? 'clock 2023 (stock)' : 'clock 2026 (shifted)'),
+    el('span', {}, 'seed 30')] : []).filter(Boolean));
   const s = S.session, ran = s.passed + s.failed;
   $('tally').replaceChildren(...(ran || s.stopped ? [el('span', {class: 'p'}, '✔' + s.passed), ' ',
     el('span', {class: 'f'}, '✖' + s.failed), ' · this session', S.target === 'mcp' ? ' · ' + fmt$(s.cost) : ''] : []));
@@ -343,7 +512,11 @@ function render(force) {
   $('app').replaceChildren(...[S.message ? el('div', {class: 'note'}, S.message) : null, view]
     .flat().filter(n => n != null));
   const ev2 = $('ev');
-  if (ev2 && stick) ev2.scrollTop = ev2.scrollHeight;
+  if (ev2 && (stick || (ev2 === stepsBox && newSteps))) ev2.scrollTop = ev2.scrollHeight;
+  else if (ev2 && ev2 === stepsBox && prevWasSteps) ev2.scrollTop = prevTop;  // re-attached nodes reset to 0
+  if (ev2 === stepsBox) newSteps = false;
+  const evA2 = $('evA');
+  if (evA2) evA2.scrollTop = stickA ? evA2.scrollHeight : topA;
   if (focusFilter) { const f = $('filter'); f.focus(); f.setSelectionRange(caret, caret); }
 }
 async function tick() {

@@ -1,6 +1,6 @@
 """Run AndroidWorld against ANY agent that can be started as a command.
 
-    androidworld-venv/Scripts/python.exe scripts/bench/external_agent.py \
+    androidworld-venv/Scripts/python.exe benchmark/suite/external_agent.py \
         --profile claude-code-aura-mcp --tasks=MarkorCreateNote --set model=sonnet
 
 `suite.py` is the usual way in; this CLI is the same runner without a page.
@@ -72,8 +72,7 @@ if hasattr(sys.stdout, 'reconfigure'):
   sys.stdout.reconfigure(encoding='utf-8', errors='replace')
   sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-PROFILE_DIR = os.path.join(HERE, 'agents')
-DEVICE_YEAR = 2026
+PROFILE_DIR = os.path.join(os.path.dirname(HERE), 'agents')
 DEFAULT_TIMEOUT_S = 600
 
 
@@ -102,6 +101,7 @@ def load_profile(ref, overrides):
   spec['vars'] = _Vars(spec.get('defaults', {}))
   spec['vars'].update(overrides)
   spec['vars']['profile_dir'] = os.path.dirname(os.path.abspath(path)).replace('\\', '/')
+  spec['vars']['repo'] = aura_androidworld.ROOT.replace('\\', '/')
   return spec
 
 
@@ -192,7 +192,9 @@ def _short(value, n=140):
 def claude_events(line):
   """One line of `claude -p --output-format stream-json` -> [(kind, text)] for the live view.
 
-  kinds: 'tool' (a call), 'ok'/'err' (its result), 'say' (Claude's text), 'done'.
+  kinds: 'tool' (a call to the phone, name without the mcp__aura__ prefix),
+  'meta' (Claude Code's own tools: loading tools, reading a skill), 'ok'/'err'
+  (a result), 'say' (Claude's text), 'done'.
   """
   try:
     d = json.loads(line)
@@ -210,8 +212,10 @@ def claude_events(line):
     if c.get('type') == 'text' and c.get('text', '').strip():
       events.append(('say', _short(c['text'], 400)))
     elif c.get('type') == 'tool_use':
-      name = c.get('name', '').replace('mcp__aura__', '')
-      events.append(('tool', '%s(%s)' % (name, _short(c.get('input') or {}, 120))))
+      name = c.get('name', '')
+      kind = 'tool' if name.startswith('mcp__aura__') else 'meta'
+      events.append((kind, '%s(%s)' % (name.replace('mcp__aura__', ''),
+                                       _short(c.get('input') or {}, 120))))
     elif c.get('type') == 'tool_result':
       body = c.get('content')
       if isinstance(body, list):
@@ -222,12 +226,14 @@ def claude_events(line):
 
 def parse_claude_stream(stdout):
   """Whole `stream-json` output -> (usage, answer). Fails open: ({}, '')."""
-  result, tool_calls = None, 0
+  result, tool_calls, init = None, 0, {}
   for line in stdout.splitlines():
     try:
       d = json.loads(line)
     except ValueError:
       continue
+    if d.get('type') == 'system' and d.get('subtype') == 'init':
+      init = d
     if d.get('type') == 'result':
       result = d
     for c in ((d.get('message') or {}).get('content') or []) if d.get('type') == 'assistant' else []:
@@ -244,6 +250,10 @@ def parse_claude_stream(stdout):
           'input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens')) or None,
       'output_tokens': u.get('output_tokens'),
       'model': ','.join(sorted((result.get('modelUsage') or {}).keys())) or None,
+      # What the agent could do in this run, as Claude Code itself reported it:
+      # the evidence that it was confined to the MCP tools.
+      'tools_available': init.get('tools'),
+      'permission_mode': init.get('permissionMode'),
   }
   return {k: v for k, v in usage.items() if v is not None}, str(result.get('result') or '')
 
@@ -292,6 +302,8 @@ class ExternalAgent(base_agent.EnvironmentInteractingAgent):
     self._on_event = on_event or (lambda kind, text: None)
     self._cancel = cancel
     self._spent = False
+    self._free = set(spec.get('step_budget_free') or ())
+    self._counts_steps = 'step_budget_free' in spec
     self.report = {}
 
   def reset(self, go_home=False):
@@ -311,6 +323,7 @@ class ExternalAgent(base_agent.EnvironmentInteractingAgent):
     # AndroidWorld's `svc wifi enable` gives the emulator an IPv6 address with no
     # route; anything on the phone that calls out then fails before trying IPv4.
     device.adb('shell', 'sysctl -w net.ipv6.conf.all.disable_ipv6=1')
+    device.resume_control_lock()
 
     answer_file = os.path.join(self._out_dir, 'answer.txt')
     usage_file = os.path.join(self._out_dir, 'usage.json')
@@ -328,16 +341,43 @@ class ExternalAgent(base_agent.EnvironmentInteractingAgent):
     })
     stdin_text = goal if self._spec.get('stdin') == 'goal' else None
     live, final = PARSERS.get(self._spec.get('parser'), _RAW)
+    # AndroidWorld's step budget, counted the way stock agents spend it: one step
+    # per action on the phone. Looking (the profile's step_budget_free tools) is
+    # free, as a stock agent's screenshot is; so are the agent's own tools.
+    budget = self._max_steps or 0
+    steps = {'used': 0}
+    out_of_steps = threading.Event()
 
     def on_line(line):
       for kind, text in live(line):
         self._on_event(kind, text)
+        if out_of_steps.is_set():
+          continue  # already stopping; lines still in the pipe are not more steps
+        if kind == 'tool' and self._counts_steps and text.split('(', 1)[0] not in self._free:
+          steps['used'] += 1
+          self._on_event('steps', '%d/%d' % (steps['used'], budget))
+          if budget and steps['used'] > budget:
+            self._on_event('info', 'out of steps: the stock budget is %d actions' % budget)
+            out_of_steps.set()
+
+    class _Either:  # stop on the user's Stop now, or on running out of steps
+      def is_set(inner):  # noqa: N805
+        return out_of_steps.is_set() or bool(self._cancel and self._cancel.is_set())
+
+    if self._counts_steps:
+      self._on_event('steps', '0/%d' % budget)
 
     workdir = tempfile.mkdtemp(prefix='aw_agent_')
+    # Files the profile puts in front of the agent, such as a skill in
+    # .claude/skills/. Copied fresh per task, so no run sees another's leftovers.
+    for dest, src in (self._spec.get('workdir_files') or {}).items():
+      target = os.path.join(workdir, dest)
+      os.makedirs(os.path.dirname(target), exist_ok=True)
+      shutil.copyfile(render([src], values)[0], target)
     rec = self._recorder(self._out_dir)
     rec.start()
     try:
-      result = run_command(argv, env, workdir, stdin_text, self._timeout, on_line, self._cancel)
+      result = run_command(argv, env, workdir, stdin_text, self._timeout, on_line, _Either())
     finally:
       videos = rec.stop()
       shutil.rmtree(workdir, ignore_errors=True)
@@ -351,11 +391,15 @@ class ExternalAgent(base_agent.EnvironmentInteractingAgent):
 
     write_text(os.path.join(self._out_dir, 'agent.stdout.log'), result['stdout'])
     write_text(os.path.join(self._out_dir, 'agent.stderr.log'), result['stderr'])
-    done = result['exit_code'] == 0 and not result['timed_out'] and not result['cancelled']
+    ran_out = out_of_steps.is_set()
+    stopped = result['cancelled'] and not ran_out
+    done = (result['exit_code'] == 0 and not result['timed_out'] and not result['cancelled'])
     self.report = {
-        'done': done, 'timed_out': result['timed_out'], 'stopped': result['cancelled'],
-        'exit_code': result['exit_code'], 'agent_seconds': result['seconds'], 'usage': usage,
-        'answer': answer, 'videos': videos, 'command': argv, 'max_steps': self._max_steps,
+        'done': done, 'timed_out': result['timed_out'], 'stopped': stopped,
+        'out_of_steps': ran_out, 'steps_used': steps['used'] if self._counts_steps else None,
+        'step_budget': budget, 'exit_code': result['exit_code'],
+        'agent_seconds': result['seconds'], 'usage': usage, 'answer': answer,
+        'videos': videos, 'command': argv,
     }
     return base_agent.AgentInteractionResult(
         done=done, data={'exit_code': result['exit_code'], 'timed_out': result['timed_out']})
@@ -363,16 +407,19 @@ class ExternalAgent(base_agent.EnvironmentInteractingAgent):
 
 # --- one task --------------------------------------------------------------
 
-def run_one(env, make_agent, name, tasks, seed, out_root, profile):
+def run_one(env, make_agent, name, tasks, seed, out_root, profile, model=None, device_year=None,
+            extra=None):
   """Runs one task through AndroidWorld's runner and writes <out_root>/<name>/meta.json.
 
   Contract: make_agent(out_dir) returns an agent with a `report` dict after step().
-  A run the user stopped is written with success None, so it counts as "not run",
-  never as a FAIL.
+  `device_year` None keeps AndroidWorld's stock 2023 clock; a year shifts it (see
+  aura_androidworld.shift_device_year). A run the user stopped is written with
+  success None, so it counts as "not run", never as a FAIL.
   """
   out = os.path.join(out_root, name)
   shutil.rmtree(out, ignore_errors=True)  # cleared, not merged: one run's video per verdict
   os.makedirs(out)
+  aura_androidworld.set_device_year(device_year)  # before the suite: params derive from it
   suite = suite_utils.create_suite(
       tasks, n_task_combinations=1, seed=seed, tasks=[name], use_identical_params=False)
   suite.suite_family = registry.TaskRegistry.ANDROID_WORLD_FAMILY
@@ -405,27 +452,28 @@ def run_one(env, make_agent, name, tasks, seed, out_root, profile):
       'validator_success': None if 'value' not in raw else bool(raw['value'] > 0.5),
       'blind': bool(rep.get('blind')), 'episode_length': 1,
       'error': str(episode.get(constants.EpisodeConstants.EXCEPTION_INFO) or ''),
-      'trigger': 'harness', 'profile': profile, 'agent': rep,
+      'trigger': 'harness', 'profile': profile, 'model': model, 'agent': rep,
+      'device_year': device_year or aura_androidworld._STOCK_DT.year,
       'videos': rep.get('videos', []),
+      **(extra or {}),  # e.g. the suite's aura_version
   }
   write_text(os.path.join(out, 'meta.json'), json.dumps(meta, indent=2))
   return meta
 
 
 def boot_env():
-  """Builds AndroidWorld's env once, with the shifted clock. Slow: do it once per session."""
-  aura_androidworld.shift_device_year(DEVICE_YEAR)
+  """Builds AndroidWorld's env once. Slow: do it once per session. The clock is set per task."""
   return env_launcher.load_and_setup_env(
       console_port=int(device.SERIAL.rsplit('-', 1)[1]), emulator_setup=False,
       adb_path=device.ADB)
 
 
-def sweep(spec, task_names, include_ir, seed, out_root, timeout, resume):
-  tasks = aura_androidworld.scored_tasks(include_ir)
+def sweep(spec, task_names, seed, out_root, timeout, resume):
+  """Runs the stock suite: all 116 tasks on AndroidWorld's own 2023 clock."""
+  tasks = aura_androidworld.scored_tasks(include_ir=True)
   unknown = [t for t in task_names if t not in tasks]
   if unknown:
-    raise SystemExit('Not in the scored suite: %s (information-retrieval tasks need '
-                     '--include_ir)' % ', '.join(unknown))
+    raise SystemExit('Not an AndroidWorld task: %s' % ', '.join(unknown))
   if shutil.which(spec['command'][0]) is None:
     raise SystemExit('Agent command not found on PATH: %s' % spec['command'][0])
   names = task_names or sorted(tasks)
@@ -442,7 +490,7 @@ def sweep(spec, task_names, include_ir, seed, out_root, timeout, resume):
     if resume and prior.get('success') in (True, False):
       continue
     meta = run_one(env, lambda out: ExternalAgent(env, spec, out, timeout), name, tasks,
-                   seed, out_root, spec['name'])
+                   seed, out_root, spec['name'], spec['vars'].get('model'))
     ran += 1
     passed += bool(meta['success'])
     print('[%d/%d] %-40s %s  (%ss, validator=%s, done=%s)' % (
@@ -491,7 +539,8 @@ def _selfcheck():
   tmp = tempfile.mkdtemp(prefix='aw_selfcheck_')
 
   def agent_for(code, timeout=20, **extra):
-    spec = {'name': 'fake', 'command': [py, '-I', '-c', code], 'vars': _Vars(), **extra}
+    literal = code.replace('{', '{{').replace('}', '}}')  # a command's literal braces are doubled
+    spec = {'name': 'fake', 'command': [py, '-I', '-c', literal], 'vars': _Vars(), **extra}
     seen = []
     a = ExternalAgent(FakeEnv(), spec, tmp, timeout, recorder=FakeRec,
                       on_event=lambda k, t: seen.append((k, t)), cancel=extra.get('_cancel'))
@@ -537,6 +586,7 @@ def _selfcheck():
   assert time.time() - began < 10, 'a stop must end the agent promptly, not at the deadline'
 
   stream = '\n'.join(json.dumps(x) for x in [
+      {'type': 'system', 'subtype': 'init', 'tools': ['mcp__aura__tap'], 'permissionMode': 'default'},
       {'type': 'assistant', 'message': {'content': [
           {'type': 'tool_use', 'name': 'mcp__aura__tap', 'input': {'x': 1}},
           {'type': 'tool_use', 'name': 'ToolSearch', 'input': {}}]}},
@@ -545,11 +595,26 @@ def _selfcheck():
       {'type': 'result', 'subtype': 'success', 'result': 'ok', 'num_turns': 3,
        'total_cost_usd': 0.5,
        'usage': {'input_tokens': 2, 'cache_read_input_tokens': 8, 'output_tokens': 4}}])
+  tool_line = json.dumps({'type': 'assistant', 'message': {'content': [
+      {'type': 'tool_use', 'name': 'mcp__aura__%s', 'input': {}}]}})
+  emit = ('import sys,time\n'
+          'for n in ["read_screen","tap","ToolSearch","tap","read_screen","tap","tap"]:\n'
+          '  print(%r.replace("mcp__aura__%%s","mcp__aura__"+n) if n!="ToolSearch" else '
+          '%r, flush=True); time.sleep(0.3)\n'
+          'time.sleep(30)\n') % (tool_line, tool_line.replace('mcp__aura__%s', 'ToolSearch'))
+  a, seen = agent_for(emit, parser='claude-stream', step_budget_free=['read_screen'])
+  a.set_max_steps(2)
+  r = a.step('g')
+  assert a.report['out_of_steps'] and not r.done, 'a third action on a budget of 2 must stop the run'
+  assert a.report['steps_used'] == 3, 'only phone actions count: not looking, not ToolSearch'
+  assert not a.report['stopped'], 'running out of steps is a FAIL, not a user stop'
+
   usage, answer = parse_claude_stream(stream)
   assert usage['input_tokens'] == 10 and usage['turns'] == 3 and answer == 'ok', \
       'stream usage must total cached and uncached input and take the final result'
   assert usage['tool_calls'] == 1, 'only MCP tool calls count, not Claude Code built-ins'
-  assert claude_events(stream.splitlines()[0])[0] == ('tool', 'tap({"x": 1})'), \
+  assert usage['tools_available'] == ['mcp__aura__tap'], 'the session tool list must be kept as evidence'
+  assert claude_events(stream.splitlines()[1])[0] == ('tool', 'tap({"x": 1})'), \
       'a tool call must read as name(args) without the mcp__aura__ prefix'
   assert parse_claude_stream('not json') == ({}, ''), 'an unreadable report must fail open'
 
@@ -568,8 +633,6 @@ def main():
   p.add_argument('--selfcheck', action='store_true')
   p.add_argument('--profile', help='agents/<name>.json, or a path')
   p.add_argument('--tasks', default='', help='comma-separated; default: every scored task')
-  p.add_argument('--include_ir', action='store_true',
-                 help='also run information-retrieval tasks (see README: they fail for harness reasons)')
   p.add_argument('--seed', type=int, default=SEED)
   p.add_argument('--timeout', type=int, help='seconds per task; default: the profile, else 600')
   p.add_argument('--set', action='append', default=[], metavar='KEY=VALUE',
@@ -582,8 +645,9 @@ def main():
     p.error('--profile is required')
   spec = load_profile(args.profile, dict(kv.split('=', 1) for kv in args.set))
   timeout = args.timeout or spec.get('timeout_s') or DEFAULT_TIMEOUT_S
-  sweep(spec, [t for t in args.tasks.split(',') if t], args.include_ir, args.seed,
-        os.path.join(RESULTS, spec['name']), timeout, args.resume)
+  # One folder per model: a pass rate must never mix runs of different models.
+  out_root = os.path.join(RESULTS, spec['name'], spec['vars'].get('model', 'default'))
+  sweep(spec, [t for t in args.tasks.split(',') if t], args.seed, out_root, timeout, args.resume)
 
 
 if __name__ == '__main__':
