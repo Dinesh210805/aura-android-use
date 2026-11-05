@@ -250,7 +250,10 @@ private fun visionAwareSendToolResults(
             ?.takeIf {
                 ScreenAfterAction.shouldObserve(
                     toolResults.toolResults.map {
-                        it.tool to (it.succeeded() || ScreenAfterAction.isStaleRefusal(it.text()))
+                        it.tool to (
+                            it.succeeded() || ScreenAfterAction.isStaleRefusal(it.text()) ||
+                                ScreenAfterAction.isPartialBatch(it.tool, it.text())
+                            )
                     },
                 )
             }

@@ -319,7 +319,7 @@ fun AuraAppShell(
                 )
             }
             composable(AuraRoutes.AGENT_VOICE) {
-                VoiceSettingsScreen(onNavigateBack = { navController.navigateUp() })
+                VoiceSettingsScreen()
             }
 
             // ── Settings sub-screens ──────────────────────────────────

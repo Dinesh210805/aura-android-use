@@ -1,6 +1,8 @@
 package com.aura.aura_ui.presentation.screens.settings
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.runtime.rememberCoroutineScope
 import com.aura.aura_ui.agent.conversation.PersonaOwner
@@ -248,7 +252,7 @@ fun MonoSettingsScreen(
         MonoCardGroup(scheme) {
             MonoRow(
                 icon = Icons.Outlined.Hearing,
-                title = "\"Hello AURA\" / \"Wake up AURA\" wake word",
+                title = "\"Wake up AURA\" wake word",
                 trailing = {
                     AuraSwitch(
                         checked = wakeWordEnabled,
@@ -349,6 +353,32 @@ fun MonoSettingsScreen(
             }
         }
 
+        // ── Community ────────────────────────────────────────────────────────
+        MonoSectionLabel("Community", scheme)
+        MonoCardGroup(scheme) {
+            MonoRow(
+                icon = Icons.Outlined.Forum,
+                title = "Join the AURA Discord",
+                subtitle = "Chat with us, leave a review, report bugs",
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(DISCORD_INVITE))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                },
+                trailing = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = null,
+                        tint = scheme.textSecondary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+            )
+        }
+
         // ── About ────────────────────────────────────────────────────────────
         MonoSectionLabel("About", scheme)
         MonoCardGroup(scheme) {
@@ -441,6 +471,9 @@ private fun ProfileHeaderCard(
         }
     }
 }
+
+/** The AURA community server: chat, reviews and bug reports. */
+private const val DISCORD_INVITE = "https://discord.com/invite/H66ws9zMPF"
 
 private fun appVersion(context: Context): Pair<String, String> = try {
     val info = context.packageManager.getPackageInfo(context.packageName, 0)

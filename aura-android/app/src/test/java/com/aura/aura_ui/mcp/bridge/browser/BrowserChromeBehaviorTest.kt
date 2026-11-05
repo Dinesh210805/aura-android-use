@@ -195,6 +195,25 @@ class BrowserChromeBehaviorTest {
         assertEquals(0, padding.bottom)
     }
 
+    @Test
+    fun `full card is inset on every side and ends above the run controls`() {
+        val f = BrowserChromeBehavior.cardFrame(
+            screenW = 1240, screenH = 2772, statusBarPx = 139, bottomReservePx = 500, marginPx = 56,
+        )
+        assertEquals(56, f.x)
+        assertEquals(139 + 56, f.y)
+        assertEquals(1240 - 2 * 56, f.width)
+        assertEquals(2772 - 500, f.y + f.height)
+    }
+
+    @Test
+    fun `card never collapses below one pixel on an absurdly small screen`() {
+        val f = BrowserChromeBehavior.cardFrame(
+            screenW = 50, screenH = 100, statusBarPx = 80, bottomReservePx = 90, marginPx = 40,
+        )
+        assertTrue(f.width >= 1 && f.height >= 1)
+    }
+
     // ── which tab is in front after a close ────────────────────────────
     //
     // Extracted here after the chrome grew its own copy of this arithmetic and dropped a

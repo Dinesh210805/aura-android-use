@@ -2,20 +2,20 @@ package com.aura.aura_ui.presentation.screens.home
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,13 +26,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.BubbleChart
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import com.aura.aura_ui.agent.conversation.PersonaOwner
@@ -190,78 +187,77 @@ fun AuraHomeScreen(
                 }
             }
 
-            Column(
-                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-            ) {
-                Spacer(Modifier.height(16.dp))
+            // The body fills the screen on every phone: three groups pinned top / middle / bottom,
+            // with the marquee and hero scaled to the height available. It still scrolls when the
+            // content is taller than the screen (small phones, large font scale).
+            BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                val fit = homeScale(bodyHeightDp = maxHeight.value, widthDp = maxWidth.value)
+                val viewport = maxHeight
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = viewport),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(16.dp))
+                            // ── THE HERO — one grainy-peach card carrying the voice moment.
+                            HeroCard(
+                                cs = cs,
+                                greeting = if (name.isNullOrBlank()) greeting else "$greeting, $name",
+                                runActive = runActive,
+                                fit = fit,
+                            )
+                            if (health.broken) {
+                                Spacer(Modifier.height(12.dp))
+                                HealthBanner(cs = cs, issue = health.firstIssue, onFix = onFixHealth)
+                            }
+                        }
 
-                // ── THE HERO — one grainy-peach card carrying the voice moment.
-                HeroCard(
-                    cs = cs,
-                    greeting = if (name.isNullOrBlank()) greeting else "$greeting, $name",
-                    runActive = runActive,
-                )
+                        // ── The curved app marquee: the user's own apps arcing across the
+                        // screen, one example prompt at a time.
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                "TRY SAYING",
+                                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
+                                color = cs.sub,
+                            )
+                            Spacer(Modifier.height(10.dp * fit))
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                AppPromptMarquee(cs = cs, scale = fit)
+                                Icon(
+                                    imageVector = Icons.Default.BubbleChart,
+                                    contentDescription = null,
+                                    tint = cs.sub.copy(alpha = 0.24f),
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .offset(x = 6.dp, y = 30.dp * fit)
+                                        .rotate(-10f)
+                                        .size(18.dp),
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = null,
+                                    tint = cs.accent.copy(alpha = 0.32f),
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(x = (-10).dp, y = (-16).dp)
+                                        .rotate(10f)
+                                        .size(17.dp),
+                                )
+                            }
+                        }
 
-                if (health.broken) {
-                    Spacer(Modifier.height(12.dp))
-                    HealthBanner(cs = cs, issue = health.firstIssue, onFix = onFixHealth)
-                }
-
-                // ── Community invite: shown until the user joins or closes it, then never again.
-                val communityPrefs = remember { context.getSharedPreferences(COMMUNITY_PREFS, Context.MODE_PRIVATE) }
-                var showCommunity by remember { mutableStateOf(!communityPrefs.getBoolean(KEY_COMMUNITY_DONE, false)) }
-                if (showCommunity) {
-                    val hide = {
-                        communityPrefs.edit().putBoolean(KEY_COMMUNITY_DONE, true).apply()
-                        showCommunity = false
+                        Column {
+                            TalkPill(cs = cs, fit = fit, onClick = { onStartChat(null) })
+                            Spacer(Modifier.height(14.dp))
+                            AiDisclaimer(smallText = true)
+                            Spacer(Modifier.height(14.dp))
+                        }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    CommunityCard(
-                        cs = cs,
-                        onJoin = {
-                            openUrl(context, DISCORD_INVITE)
-                            hide()
-                        },
-                        onWatch = { openUrl(context, LAUNCH_VIDEO) },
-                        onDismiss = hide,
-                    )
                 }
-
-                Spacer(Modifier.height(18.dp))
-
-                // ── The curved app marquee: the user's own apps arcing across the
-                // screen, one example prompt at a time. Seeds a chat, exactly as
-                // the capability cards it replaced did.
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    AppPromptMarquee(cs = cs)
-                    Icon(
-                        imageVector = Icons.Default.BubbleChart,
-                        contentDescription = null,
-                        tint = cs.sub.copy(alpha = 0.24f),
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset(x = 6.dp, y = 30.dp)
-                            .rotate(-10f)
-                            .size(18.dp),
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Bolt,
-                        contentDescription = null,
-                        tint = cs.accent.copy(alpha = 0.32f),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .offset(x = (-10).dp, y = (-16).dp)
-                            .rotate(10f)
-                            .size(17.dp),
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
-                TalkPill(cs = cs, onClick = { onStartChat(null) })
-
-                Spacer(Modifier.height(18.dp))
-                AiDisclaimer(smallText = true)
-                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -318,12 +314,13 @@ private fun HeroCard(
     cs: CapsuleScheme,
     greeting: String,
     runActive: Boolean,
+    fit: Float,
 ) {
     Surface(shape = Capsule.ShapeHero, color = androidx.compose.ui.graphics.Color.Transparent, modifier = Modifier.fillMaxWidth()) {
         Box(modifier = Modifier.background(cs.heroBrush())) {
             HeroDoodles(cs)
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 22.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 22.dp * fit),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -334,7 +331,7 @@ private fun HeroCard(
                     )
                     if (runActive) BloodDot(size = 6.dp)
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(14.dp * fit))
                 Text(
                     text = "Tell me\nwhat's next.",
                     style = MaterialTheme.typography.displaySmall,
@@ -384,7 +381,7 @@ private fun HeroDoodles(cs: CapsuleScheme) {
 
 /** The charcoal talk pill — the dark object inside the light hero. */
 @Composable
-private fun TalkPill(cs: CapsuleScheme, onClick: () -> Unit) {
+private fun TalkPill(cs: CapsuleScheme, fit: Float, onClick: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Surface(
             onClick = onClick,
@@ -393,7 +390,7 @@ private fun TalkPill(cs: CapsuleScheme, onClick: () -> Unit) {
             modifier = Modifier.wrapContentWidth(),
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 15.dp),
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 15.dp * fit),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -438,64 +435,16 @@ private fun HealthBanner(cs: CapsuleScheme, issue: String, onFix: () -> Unit) {
     }
 }
 
-private const val COMMUNITY_PREFS = "aura_home"
-private const val KEY_COMMUNITY_DONE = "community_invite_done"
-private const val DISCORD_INVITE = "https://discord.com/invite/H66ws9zMPF"
-private const val LAUNCH_VIDEO = "https://youtu.be/u2PS767kdMI"
+/**
+ * How much to grow or shrink the home body so it fills [bodyHeightDp] instead of leaving a gap
+ * below the disclaimer on tall phones.
+ * - Contract: 1.0 at the [HOME_DESIGN_HEIGHT_DP] the layout was drawn for; clamped to 0.8..1.3.
+ * - Why the width cap: the marquee spaces its apps by screen width, so a large scale on a narrow
+ *   phone would push neighbouring icons into each other.
+ */
+internal fun homeScale(bodyHeightDp: Float, widthDp: Float): Float =
+    minOf(bodyHeightDp / HOME_DESIGN_HEIGHT_DP, widthDp / HOME_MIN_WIDTH_PER_SCALE_DP).coerceIn(0.8f, 1.3f)
 
-/** Opens a link in whatever app handles it (Discord, YouTube, or the browser). */
-private fun openUrl(context: Context, url: String) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
-}
-
-/** Invite to the AURA Discord — the one place users can talk back to us. */
-@Composable
-private fun CommunityCard(
-    cs: CapsuleScheme,
-    onJoin: () -> Unit,
-    onWatch: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Surface(shape = Capsule.ShapeCard, color = cs.card, modifier = Modifier.fillMaxWidth()) {
-        Box {
-            Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 16.dp)) {
-                Text(
-                    "Join the AURA Discord",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = cs.ink,
-                    modifier = Modifier.padding(end = 28.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Mess around with it, build something with it, tell us what breaks.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.sub,
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(onClick = onJoin, shape = Capsule.ShapePill, color = cs.capsule) {
-                        Text(
-                            "Join Discord",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = cs.onCapsule,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
-                        )
-                    }
-                    Surface(onClick = onWatch, shape = Capsule.ShapePill, color = Color.Transparent) {
-                        Text(
-                            "Watch the launch video",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = cs.ink,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                        )
-                    }
-                }
-            }
-            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = cs.sub, modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}
+/** Natural height of the home body (hero, marquee, talk pill, disclaimer) at scale 1. */
+private const val HOME_DESIGN_HEIGHT_DP = 620f
+private const val HOME_MIN_WIDTH_PER_SCALE_DP = 250f

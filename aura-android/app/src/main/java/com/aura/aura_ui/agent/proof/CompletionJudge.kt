@@ -29,7 +29,7 @@ import org.json.JSONObject
  * ### Shadow mode
  *
  * While [ENFORCE] is false the verdict is recorded and spoken but cannot refuse `end_session`.
- * It flips once `scripts/bench/judge_eval.py` shows the judge agreeing with the hand-scored eval
+ * It flips once `scripts/judge_eval.py` shows the judge agreeing with the hand-scored eval
  * runs; trusting a model to block completion before measuring it against human verdicts would be
  * exactly the unverified-claim problem this whole feature exists to fix.
  */
@@ -88,7 +88,7 @@ class CompletionJudge(
         /** Off until the judge has been measured against the hand-scored runs. */
         const val ENFORCE = false
 
-        /** Shared with `scripts/bench/judge_eval.py`, so app and offline checker judge alike. */
+        /** Shared with `scripts/judge_eval.py`, so app and offline checker judge alike. */
         const val PROMPT_ASSET = "judge/completion_judge.md"
 
         /** One verdict per end attempt, and a run may attempt twice (gate refusal then retry). */
@@ -105,7 +105,7 @@ class CompletionJudge(
 /**
  * Prompt filling and verdict parsing, kept pure so both are unit-tested without a device, a
  * network or an asset manager. The template itself lives in `assets/judge/completion_judge.md`
- * so the app and `scripts/bench/judge_eval.py` read the same words and cannot drift apart.
+ * so the app and `scripts/judge_eval.py` read the same words and cannot drift apart.
  */
 object JudgePrompt {
 

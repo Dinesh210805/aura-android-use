@@ -302,11 +302,16 @@ fun AppPromptMarquee(
     modifier: Modifier = Modifier,
     dwellMillis: Long = 2200,
     travelMillis: Int = 700,
+    scale: Float = 1f,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val view = LocalView.current
-    val iconPx = with(density) { LOGO_SIZE.roundToPx() }
+    // Every size scales together, so a taller phone gets a bigger arc rather than empty space.
+    val logoSize = LOGO_SIZE * scale
+    val curveAmplitude = CURVE_AMPLITUDE * scale
+    val bandHeight = logoSize + curveAmplitude * MarqueeGeometry.CURVE_K + 8.dp
+    val iconPx = with(density) { logoSize.roundToPx() }
 
     // Package resolution is fast enough to reveal the band early. Icons are
     // then painted into those already-visible slots one by one, preventing the
@@ -327,7 +332,7 @@ fun AppPromptMarquee(
     if (items.isEmpty()) {
         // First composition, before the IO load lands. Reserve the height so the
         // rest of the screen doesn't jump when the band appears.
-        Box(modifier.fillMaxWidth().height(BAND_HEIGHT + CAPTION_HEIGHT))
+        Box(modifier.fillMaxWidth().height(bandHeight + CAPTION_HEIGHT))
         return
     }
 
@@ -358,7 +363,7 @@ fun AppPromptMarquee(
     // A slot is approximately this far from its neighbour on this phone-sized
     // layout. It also makes the manual gesture feel deliberate rather than
     // requiring a long swipe to move one app.
-    val slotDistancePx = with(density) { SLOT_DISTANCE.toPx() }
+    val slotDistancePx = with(density) { (SLOT_DISTANCE * scale).toPx() }
 
     // User dragging owns the animation until it snaps to the nearest app. Keying
     // the loop by isDragging cancels an automatic travel as soon as a finger
@@ -400,7 +405,7 @@ fun AppPromptMarquee(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(BAND_HEIGHT)
+                .height(bandHeight)
                 .pointerInput(items.size) {
                     val velocityTracker = VelocityTracker()
                     detectHorizontalDragGestures(
@@ -470,12 +475,13 @@ fun AppPromptMarquee(
             // custom negative placement widened only the child layout, which is
             // why the left side could disappear while the right side remained.
             val halfSpanPx = constraints.maxWidth / 2f
-            val amplitudePx = with(density) { CURVE_AMPLITUDE.toPx() }
+            val amplitudePx = with(density) { curveAmplitude.toPx() }
 
             items.forEachIndexed { index, item ->
                 MarqueeLogo(
                     item = item,
                     cs = cs,
+                    size = logoSize,
                     modifier = Modifier.graphicsLayer {
                         val delta = MarqueeGeometry.signedDelta(index, visualPosition, items.size)
                         val x = MarqueeGeometry.normalizedX(delta)
@@ -513,11 +519,11 @@ fun AppPromptMarquee(
 
 /** One logo well. Real app icons draw as-is; the fallback rows draw a neutral glyph. */
 @Composable
-private fun MarqueeLogo(item: MarqueeItem, cs: CapsuleScheme, modifier: Modifier = Modifier) {
+private fun MarqueeLogo(item: MarqueeItem, cs: CapsuleScheme, size: Dp, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .size(LOGO_SIZE)
-            .clip(RoundedCornerShape(20.dp))
+            .size(size)
+            .clip(RoundedCornerShape(size / 3))
             .background(cs.card),
         contentAlignment = Alignment.Center,
     ) {
@@ -526,14 +532,14 @@ private fun MarqueeLogo(item: MarqueeItem, cs: CapsuleScheme, modifier: Modifier
                 androidx.compose.foundation.Image(
                     bitmap = icon,
                     contentDescription = item.label,
-                    modifier = Modifier.size(LOGO_SIZE),
+                    modifier = Modifier.size(size),
                 )
             } else {
                 Icon(
                     Icons.Outlined.Apps,
                     contentDescription = item.label,
                     tint = cs.ink,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(size * 0.47f),
                 )
             }
         }
@@ -547,9 +553,8 @@ private val SLOT_DISTANCE = 96.dp
 private const val MAX_FLING_SLOTS_PER_SECOND = 7.5f
 private const val FLING_FRICTION = 1.15f
 
-/** Peak-to-edge drop of the parabola; the band reserves 0.3× of it. */
+/** Peak-to-edge drop of the parabola at scale 1; the band reserves 0.3× of it. */
 private val CURVE_AMPLITUDE = 150.dp
-private val BAND_HEIGHT = LOGO_SIZE + CURVE_AMPLITUDE * MarqueeGeometry.CURVE_K + 8.dp
 private val CAPTION_HEIGHT = 46.dp
 
 /** Slots beyond this distance from the centre are past the screen edge. */

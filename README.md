@@ -88,7 +88,7 @@ hear from you. See [Come build it with me](#come-build-it-with-me).
 
 ## What it is
 
-**🗣️ An assistant on your phone.** Say "Hello AURA", press both volume keys, or just type. Ask
+**🗣️ An assistant on your phone.** Say "Wake up AURA", press both volume keys, or just type. Ask
 for something ("message Mum that I'm running late", "turn on dark mode in Instagram") and the
 agent does it in your real apps, step by step, while you watch. You can stop it at any point.
 
@@ -107,7 +107,7 @@ OpenAI-compatible endpoint, with your own API key. Switch whenever you like.
 </p>
 
 1. **You ask**, by voice or text. There are two ways to talk:
-   - **Voice commands** ("Hello AURA"): speech goes to Groq Whisper with your key and comes back as text.
+   - **Voice commands** ("Wake up AURA"): speech goes to Groq Whisper with your key and comes back as text.
    - **Conversation mode**: a real-time back-and-forth with Gemini Live, using your Gemini key. When you
      ask it to *do* something, it hands the task to the agent through one tool, `ask_aura`.
 2. **The agent runs on the phone.** It sends your goal and what's on screen to the LLM you
@@ -129,7 +129,7 @@ OpenAI-compatible endpoint, with your own API key. Switch whenever you like.
 | 👁️ **Sees the screen properly** | Every look combines the accessibility tree (exact and fast) with an on-device vision model (YOLOv8 + OCR) that finds what the tree misses: WebViews, games, maps, custom views. The agent picks numbered elements, never guessed coordinates. |
 | ✅ **Acts, then checks** | Look, act, verify. A guard refuses to act without looking first, catches loops, and won't let the agent say "done" before checking. |
 | ⚡ **Takes shortcuts** | Deep links jump straight to an app's screen, system intents handle calls, SMS, alarms and navigation, and a built-in browser works on the page, not on pixels. |
-| 🎙️ **Voice** | Offline wake word ("Hello AURA", via sherpa-onnx), a volume-key shortcut, the Android assistant gesture, speech-to-text, spoken replies, and a Gemini Live conversation mode. |
+| 🎙️ **Voice** | Offline wake word ("Wake up AURA", via sherpa-onnx), a volume-key shortcut, the Android assistant gesture, speech-to-text, spoken replies, and a Gemini Live conversation mode. |
 | 🧠 **Remembers how apps work** | Encrypted per-app learnings, reusable skills, runs that survive the app being killed, and an `ask_user` tool so the agent asks instead of guessing. |
 | 🔐 **Your computer, paired once** | Pair with a PIN; after that every MCP client on the computer shares one encrypted connection to the phone. |
 
@@ -147,7 +147,7 @@ display over other apps, microphone, notifications, keyboard) and choosing an AI
 
 | To... | Do this |
 |---|---|
-| Talk to it | Say **"Hello AURA"** (turn on the wake word in Settings) |
+| Talk to it | Say **"Wake up AURA"** (turn on the wake word in Settings) |
 | Open it anywhere | Press **both volume keys** together, or use the assistant gesture after picking AURA as your digital assistant app |
 | Type instead | Open the assistant and type |
 | Stop a task | Say **"stop"** (then "continue" or "drop it"), or tap the pause pill |
@@ -166,7 +166,7 @@ Both screens show a 6-digit code. Approve on the phone only if they match. Then 
 client:
 
 ```bash
-claude mcp add --transport http aura http://127.0.0.1:4816/mcp     # Claude Code
+claude mcp add aura -- aura-mcp            # Claude Code (Windows: -- cmd /c aura-mcp)
 ```
 
 ```json
@@ -187,7 +187,7 @@ Away from home? Put both devices on [Tailscale](https://tailscale.com) and pair 
 | Group | Tools |
 |---|---|
 | **See** | `perceive_screen` · `read_screen` · `get_screenshot` · `watch_device_events` · `get_device_status` |
-| **Touch** | `tap` (single, double, long) · `swipe` · `scroll` · `type_text` · `press_enter` |
+| **Touch** | `tap` (single, double, long) · `swipe` · `scroll` · `type_text` · `press_enter` · `set_value` · `run_steps` · `clipboard` |
 | **Move around** | `press_key` (back, home, recents) · `launch_app` · `lookup_app` |
 | **Shortcuts** | `list_app_deeplinks` · `resolve_deeplink` · `open_deeplink` · `system_intent` (call, SMS, alarm, timer, calendar, share, navigate) |
 | **Browser** | `browser_open` · `browser_read` · `browser_act` · `browser_extract` · `browser_find` · `browser_wait` · `browser_tabs` · `browser_upload` · `browser_handoff` · `browser_screenshot` · `browser_close` |

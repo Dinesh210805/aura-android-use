@@ -21,6 +21,8 @@ import androidx.core.view.WindowInsetsCompat
 import com.aura.aura_ui.R
 import com.aura.aura_ui.accessibility.ScreenGeometry
 import com.aura.aura_ui.mcp.bridge.browser.ChromeStyle.dp
+import com.aura.aura_ui.presentation.overlay.PausePillOverlay
+import com.aura.aura_ui.services.PausePillBehavior
 
 /**
  * Spec 2026-07-31 — *the window: one overlay, three sizes*.
@@ -44,14 +46,11 @@ import com.aura.aura_ui.mcp.bridge.browser.ChromeStyle.dp
  * must never do. Re-parenting a `WebView` keeps the instance and its renderer alive; the
  * page does not reload.
  *
- * **The chrome insets itself; the page does not.** This is a `FLAG_LAYOUT_IN_SCREEN`
- * window sized to the display's *real* pixels, so it genuinely owns the area behind the
- * status and navigation bars. Nothing consumed those insets before 2026-08-06, which is
- * why the banner rendered underneath the clock and the "I'm done" bar lost its lower half
- * to the gesture pill — measured on the test device, 139px at the top and 56px at the
- * bottom, ~7% of the screen. Note that raising `FULL_HEIGHT_FRACTION` to 1.0 the day
- * before *caused* the clipping while fixing a gap; a fraction was never the right control.
- * See [BrowserChromeBehavior.chromePadding].
+ * **[Size.FULL] is a card, not the whole screen.** It is inset on every side and ends
+ * above the run controls (`PausePillOverlay`), which are an app overlay added before this
+ * one and would otherwise sit underneath it. See [BrowserChromeBehavior.cardFrame]. The
+ * keyboard can still cover the card's lower part; [BrowserChromeBehavior.chromePadding]
+ * handles that.
  *
  * **The container intercepts touches; the WebView cannot report them.** A WebView consumes
  * its own touch events, so the parent's [FrameLayout.dispatchTouchEvent] is the only place
@@ -265,9 +264,15 @@ internal class BrowserWindow(
     // ── construction ───────────────────────────────────────────────────
 
     private fun buildContainer(isHandoff: Boolean, handoffPrompt: String?): FrameLayout {
+        // Rounded and clipped on the column, not the root: the root also holds the ball,
+        // and a rounded ink square behind the ball would show at Size.BALL.
         val stack = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(ChromeStyle.INK)
+            background = GradientDrawable().apply {
+                cornerRadius = context.dp(CARD_CORNER_DP).toFloat()
+                setColor(ChromeStyle.INK)
+            }
+            clipToOutline = true
         }
         column = stack
 
@@ -352,22 +357,14 @@ internal class BrowserWindow(
     }
 
     /**
-     * Keep the chrome out from under the system bars.
+     * Keep the chrome out from under the system bars and the keyboard.
      *
-     * Seeded from the platform's own `status_bar_height` / `navigation_bar_height`
-     * dimensions before the first inset dispatch arrives, because an overlay window may
-     * lay out one frame before it is told anything — and one frame of chrome under the
-     * clock is exactly the bug being fixed. The listener then corrects the seed, which
-     * matters on gesture navigation where the resource still reports the old 48dp bar
-     * while the real inset is 16dp.
+     * No seed padding: [fullCardFrame] already places the card below the status bar and
+     * above the navigation bar, so the insets it overlaps start at 0. The listener still
+     * matters for the keyboard, which can rise over the card's lower part, and for an OEM
+     * whose real bars are taller than the `status_bar_height` resource says.
      */
     private fun applyInsets(target: View) {
-        fun barHeight(name: String): Int {
-            val id = context.resources.getIdentifier(name, "dimen", "android")
-            return if (id > 0) context.resources.getDimensionPixelSize(id) else 0
-        }
-        setChromePadding(barHeight("status_bar_height"), barHeight("navigation_bar_height"), 0)
-
         ViewCompat.setOnApplyWindowInsetsListener(target) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
@@ -519,8 +516,9 @@ internal class BrowserWindow(
             }
 
         val (screenWidth, screenHeight) = ScreenGeometry.realSizePx(context)
+        val card = fullCardFrame(screenWidth, screenHeight)
         val (w, h) = when (size) {
-            Size.FULL -> screenWidth to screenHeight
+            Size.FULL -> card.width to card.height
             Size.BALL -> context.dp(BALL_DP) to context.dp(BALL_DP)
             Size.HIDDEN -> 1 to 1
         }
@@ -534,29 +532,52 @@ internal class BrowserWindow(
             flags = flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         }
 
-        // TRANSLUCENT at BALL, OPAQUE at FULL. The ball is a circle inside a square
-        // window: with an opaque format the corners outside the circle paint solid black,
-        // so the "bubble" renders as a black box with a circle drawn on it (observed on
-        // device). FULL stays opaque because a full-screen window that the compositor
-        // knows is opaque skips everything behind it.
-        val format = if (size == Size.BALL) PixelFormat.TRANSLUCENT else PixelFormat.OPAQUE
-
-        return WindowManager.LayoutParams(w, h, type, flags, format).apply {
+        // TRANSLUCENT at both sizes: the ball is a circle in a square window and the card
+        // has rounded corners, and an opaque format paints whatever lies outside those
+        // shapes solid black (observed on device for the ball).
+        return WindowManager.LayoutParams(w, h, type, flags, PixelFormat.TRANSLUCENT).apply {
             // ADJUST_RESIZE so the page shrinks above the keyboard instead of hiding the
             // field being typed into.
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            // TOP|START with absolute coordinates at both sizes: a draggable ball needs a
+            // plain (x, y) it can move freely, and the card is placed by [fullCardFrame].
+            gravity = Gravity.TOP or Gravity.START
             if (size == Size.BALL) {
-                // TOP|START with absolute coordinates, not TOP|END with a fixed margin: a
-                // draggable ball needs a plain (x, y) it can move freely, and defaulting to
-                // the top-right corner (this class's original resting spot) only on the
-                // very first show keeps existing behaviour unless the user has moved it.
-                gravity = Gravity.TOP or Gravity.START
+                // Default on the right edge, part-way down. Not the top-right corner: the
+                // status strip (`AgentStatusOverlay`) is an accessibility overlay across the
+                // top, which draws above app overlays and hid the ball completely.
                 x = lastBallX ?: clampX(screenWidth - context.dp(BALL_DP) - context.dp(BALL_MARGIN_DP))
-                y = lastBallY ?: clampY(context.dp(BALL_MARGIN_DP))
+                y = lastBallY ?: clampY((screenHeight * BALL_DEFAULT_Y_FRACTION).toInt())
             } else {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                x = card.x
+                y = card.y
             }
         }
+    }
+
+    /**
+     * The full-size window as a card: [CARD_MARGIN_DP] in from every edge, below the status
+     * bar, and ending above the run controls so Pause stays reachable.
+     *
+     * Change together: `PausePillOverlay.layoutParams`, whose bottom margin this mirrors.
+     */
+    private fun fullCardFrame(screenWidth: Int, screenHeight: Int): BrowserChromeBehavior.Frame {
+        val runControlsTop = PausePillBehavior.bottomMarginPx(
+            navBarInsetPx = systemDimenPx("navigation_bar_height"),
+            minimumPx = context.dp(PausePillOverlay.MIN_BOTTOM_MARGIN_DP),
+        ) + context.dp(PausePillOverlay.BUTTON_DP)
+        return BrowserChromeBehavior.cardFrame(
+            screenW = screenWidth,
+            screenH = screenHeight,
+            statusBarPx = systemDimenPx("status_bar_height"),
+            bottomReservePx = runControlsTop + context.dp(CARD_MARGIN_DP),
+            marginPx = context.dp(CARD_MARGIN_DP),
+        )
+    }
+
+    private fun systemDimenPx(name: String): Int {
+        val id = context.resources.getIdentifier(name, "dimen", "android")
+        return if (id > 0) context.resources.getDimensionPixelSize(id) else 0
     }
 
     private fun clampX(x: Int): Int {
@@ -629,6 +650,9 @@ internal class BrowserWindow(
 
         const val BALL_DP = 60
         const val BALL_MARGIN_DP = 24
+        const val BALL_DEFAULT_Y_FRACTION = 0.4f
+        const val CARD_MARGIN_DP = 16
+        const val CARD_CORNER_DP = 20
         const val CLOSE_BADGE_DP = 22
         const val TOUCH_SLOP_DP = 8
 

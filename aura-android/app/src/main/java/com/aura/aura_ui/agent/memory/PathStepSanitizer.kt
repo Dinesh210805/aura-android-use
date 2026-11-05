@@ -1,6 +1,8 @@
 package com.aura.aura_ui.agent.memory
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -33,7 +35,11 @@ object PathStepSanitizer {
         "lookup_app", "list_app_deeplinks", "resolve_deeplink",
         "web_search", "watch_device_events", "request_screen_capture_permission",
     )
-    private val TYPED = setOf("type_text", "input_text", "set_text", "enter_text")
+    // set_value's value is a field's text as often as on/off; it is never safe to keep.
+    private val TYPED = setOf("type_text", "input_text", "set_text", "enter_text", "set_value")
+
+    /** `run_steps`: its steps are sanitized one by one, so typed text inside a batch is redacted too. */
+    private const val BATCH = "run_steps"
 
     /**
      * Assistant-plane action tools: the cross-run signal is WHICH verb ran
@@ -47,9 +53,14 @@ object PathStepSanitizer {
         "media_control" to "command",
         "dismiss_notification" to null, // key is run-local noise — bare tool name suffices
         "open_file" to null, // uri/display name is the user's file — bare tool name only
+        "clipboard" to "action", // read | write; the copied text is never kept
     )
 
     fun sanitize(toolName: String, args: JsonObject): String? {
+        if (toolName == BATCH) {
+            return batchSteps(args).mapNotNull { (t, a) -> sanitize(t, a) }
+                .takeIf { it.isNotEmpty() }?.joinToString("; ", "$BATCH[", "]")
+        }
         if (toolName in READ_ONLY) return null
         if (toolName in TYPED) return "$toolName(<redacted>)"
         val neutral = labelOf(toolName, args) ?: return toolName
@@ -62,6 +73,9 @@ object PathStepSanitizer {
      * which stores tool and label as separate fields.
      */
     fun labelOf(toolName: String, args: JsonObject): String? {
+        if (toolName == BATCH) {
+            return batchSteps(args).mapNotNull { (t, a) -> labelOf(t, a) }.takeIf { it.isNotEmpty() }?.joinToString("; ")
+        }
         if (toolName in READ_ONLY) return null
         if (toolName in TYPED) return "<redacted>"
         if (toolName in VERB_ARG) {
@@ -96,6 +110,15 @@ object PathStepSanitizer {
 
     private fun str(args: JsonObject, key: String): String? =
         args[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+    /** A batch's `steps[]` as (tool, args); malformed steps are dropped, never passed through raw. */
+    private fun batchSteps(args: JsonObject): List<Pair<String, JsonObject>> =
+        (args["steps"] as? JsonArray).orEmpty().mapNotNull { s ->
+            val o = s as? JsonObject ?: return@mapNotNull null
+            val tool = (o["tool"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            if (tool == BATCH) return@mapNotNull null
+            tool to (o["args"] as? JsonObject ?: JsonObject(emptyMap()))
+        }
 
     private const val MAX_LABEL_CHARS = 40
     private val WHITESPACE = Regex("""\s+""")

@@ -49,27 +49,3 @@ data class ConfigurationDto(
     @SerializedName("environment") val environment: String,
     @SerializedName("enable_provider_fallback") val enableProviderFallback: Boolean,
 )
-
-data class TTSVoiceDto(
-    @SerializedName("id") val id: String,
-    @SerializedName("name") val name: String,
-    @SerializedName("description") val description: String,
-    @SerializedName("gender") val gender: String,
-    @SerializedName("accent") val accent: String,
-    @SerializedName("preview_text") val previewText: String,
-)
-
-data class TTSVoicesResponseDto(
-    @SerializedName("voices") val voices: List<TTSVoiceDto>,
-    @SerializedName("current_voice") val currentVoice: String,
-)
-
-data class TTSVoiceUpdateRequestDto(
-    @SerializedName("voice_id") val voiceId: String,
-)
-
-data class TTSPreviewResponseDto(
-    @SerializedName("voice_id") val voiceId: String,
-    @SerializedName("audio_base64") val audioBase64: String,
-    @SerializedName("audio_format") val audioFormat: String = "wav",
-)

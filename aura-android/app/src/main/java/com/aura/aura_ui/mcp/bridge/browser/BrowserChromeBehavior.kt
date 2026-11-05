@@ -151,12 +151,8 @@ internal object BrowserChromeBehavior {
     /**
      * How far the chrome rows must inset themselves from the window's own edges.
      *
-     * The window is `FLAG_LAYOUT_IN_SCREEN` at the display's real size, so it genuinely
-     * owns the pixels behind the status and navigation bars — measured on the test device
-     * (1240×2772 @ 560dpi) that is 139px at the top and 56px at the bottom, ~7% of the
-     * screen. Nothing consumed those insets before this, which is why the banner rendered
-     * 83% underneath the clock and the "I'm done" bar lost its lower half to the gesture
-     * pill. The page still bleeds edge to edge; only the chrome steps aside.
+     * The inputs are the insets the window actually overlaps. [cardFrame] keeps the window
+     * clear of both bars, so in practice these are 0 until the keyboard rises over it.
      *
      * [imeHeightPx] **replaces** the nav bar rather than stacking with it: the IME inset
      * already spans everything behind the keyboard, so adding both would float the bottom
@@ -167,6 +163,36 @@ internal object BrowserChromeBehavior {
             top = statusBarPx.coerceAtLeast(0),
             bottom = maxOf(navBarPx, imeHeightPx).coerceAtLeast(0),
         )
+
+    /** A window rectangle in absolute screen pixels, top-left origin. */
+    data class Frame(val x: Int, val y: Int, val width: Int, val height: Int)
+
+    /**
+     * Where the full-size browser window sits: a card inset by [marginPx] on every side,
+     * starting below the status bar and ending [bottomReservePx] above the screen bottom.
+     *
+     * - Contract: width and height are always at least 1, however small the screen.
+     * - Why: the run controls (`PausePillOverlay`) are an app overlay added *before* the
+     *   browser, so a full-screen browser window covers them and the user loses Pause.
+     *   Ending the card above them keeps both visible, and the margin keeps the browser from
+     *   reading as a separate full-screen app the user has been dropped into.
+     */
+    fun cardFrame(
+        screenW: Int,
+        screenH: Int,
+        statusBarPx: Int,
+        bottomReservePx: Int,
+        marginPx: Int,
+    ): Frame {
+        val top = statusBarPx.coerceAtLeast(0) + marginPx
+        val bottom = (screenH - bottomReservePx.coerceAtLeast(0)).coerceAtLeast(top + 1)
+        return Frame(
+            x = marginPx,
+            y = top,
+            width = (screenW - 2 * marginPx).coerceAtLeast(1),
+            height = bottom - top,
+        )
+    }
 
     /**
      * Which tab should be in front after [closed] is removed.

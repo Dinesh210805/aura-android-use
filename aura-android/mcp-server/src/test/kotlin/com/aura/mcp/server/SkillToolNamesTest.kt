@@ -13,7 +13,7 @@ class SkillToolNamesTest {
     /** Identifiers the skill quotes that are fields or error codes, not tools. */
     private val notTools = setOf(
         "policy_blocked", "som_id", "el_id", "post_action_observation", "screen_changed",
-        "seen_before", "app_name",
+        "seen_before", "app_name", "hold_ms", "changes_only", "field_text",
     )
 
     @Test

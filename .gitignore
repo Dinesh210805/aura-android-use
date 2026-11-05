@@ -64,9 +64,10 @@ graphify-out/
 # assets such as assets/kws/*.txt, which the wake word needs.
 /*.txt
 
-# Benchmark and scratch output
-bench-results/
-bench-site/
+# Benchmark working data. Published runs are committed under aura-android-use-website/benchmarks/.
+benchmark/results/
+benchmark/.runtime/
+benchmark/**/__pycache__/
 runs/
 android_world/
 androidworld-venv/
@@ -74,3 +75,9 @@ _gtmp/
 
 # On-device logcat dumps carry live BYOK API keys and other apps' logs.
 *.logcat
+
+# Social media videos and their render projects (local only)
+social-media/
+
+# Local video recordings (reels, demos)
+/*.mp4

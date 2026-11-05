@@ -2,6 +2,7 @@ package com.aura.mcp.tools
 
 import com.aura.mcp.bridge.DeepLinkBridge
 import com.aura.mcp.bridge.DeviceBridge
+import com.aura.mcp.bridge.UiTreeBridge
 import com.aura.mcp.cache.PerceptionCache
 import com.aura.mcp.server.ResourceRequired
 import com.aura.mcp.server.scopedTool
@@ -24,10 +25,11 @@ internal fun Server.registerAppTools(
     bridge: DeviceBridge,
     perceptionCache: PerceptionCache,
     deepLinks: DeepLinkBridge? = null,
+    uiTreeBridge: UiTreeBridge? = null,
 ) {
     registerLaunchApp(bridge, deepLinks)
     registerLookupApp(bridge)
-    registerTypeText(bridge, perceptionCache)
+    registerTypeText(bridge, perceptionCache, uiTreeBridge)
 }
 
 private fun Server.registerLaunchApp(bridge: DeviceBridge, deepLinks: DeepLinkBridge?) {
@@ -179,7 +181,7 @@ private fun Server.registerLookupApp(bridge: DeviceBridge) {
     }
 }
 
-private fun Server.registerTypeText(bridge: DeviceBridge, perceptionCache: PerceptionCache) {
+private fun Server.registerTypeText(bridge: DeviceBridge, perceptionCache: PerceptionCache, uiTreeBridge: UiTreeBridge?) {
     scopedTool(
         name = "type_text",
         // Cut: the works-in-every-app / keyboard_not_enabled paragraph (Doctrine typing_anywhere)
@@ -225,6 +227,23 @@ private fun Server.registerTypeText(bridge: DeviceBridge, perceptionCache: Perce
             // Success and failure get DIFFERENT guidance — the old code shipped the
             // "press_enter NOW" hint on failure too, steering the agent to commit
             // text that was never typed.
+            // Read back what the field holds: a PIN box that keeps 4 digits, a phone field that
+            // reformats, or a keyboard that appended to old text all "typed fine" otherwise.
+            val now = if (ok && uiTreeBridge != null) {
+                LiveScreen.fieldText(uiTreeBridge, somId?.let { perceptionCache.boundsFor(it) }, text)
+            } else {
+                null
+            }
+            val readBack = buildMap {
+                if (now != null && now.isNotEmpty() && !LiveScreen.masked(now)) {
+                    put("field_text", now.take(MAX_READ_BACK))
+                    if (now != text) {
+                        put("mismatch", "true")
+                        put("hint", "The field now holds \"${now.take(MAX_READ_BACK)}\", not exactly what you typed: " +
+                            "it may cut, format or add to input. Check that this is acceptable before continuing.")
+                    }
+                }
+            }
             jsonOk(
                 ok,
                 if (ok) {
@@ -236,7 +255,7 @@ private fun Server.registerTypeText(bridge: DeviceBridge, perceptionCache: Perce
                         "hint" to "If a suggestion list appeared, commit the entry that matches what " +
                             "the user asked: tap it, or press_enter when the top one is that match. " +
                             "Do not re-tap the field.",
-                    )
+                    ) + readBack
                 } else if (!bridge.isTextInjectionKeyboardEnabled()) {
                     // The app has no editable accessibility node (React Native / Flutter /
                     // canvas) so typing needs AURA's own keyboard — which the user hasn't
@@ -271,3 +290,6 @@ private fun Server.registerTypeText(bridge: DeviceBridge, perceptionCache: Perce
         }
     }
 }
+
+/** Longest field text echoed back to the model; a pasted essay need not come back whole. */
+private const val MAX_READ_BACK = 120

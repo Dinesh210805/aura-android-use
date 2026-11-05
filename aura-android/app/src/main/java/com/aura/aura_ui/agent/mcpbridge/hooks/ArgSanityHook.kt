@@ -38,12 +38,19 @@ class ArgSanityHook : PreToolHook {
             "swipe" -> {
                 val bySom = !args["som_id"]?.jsonPrimitive?.contentOrNull.isNullOrBlank() &&
                     !args["direction"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()
-                if (bySom || missingOrNegative("x1", "y1", "x2", "y2") == null) {
+                // `strokes` is validated by the tool itself (Strokes.parse), with a precise message.
+                if (bySom || "strokes" in args || missingOrNegative("x1", "y1", "x2", "y2") == null) {
                     PreToolDecision.Proceed
                 } else {
                     PreToolDecision.Deny("swipe needs a som_id and a direction.")
                 }
             }
+            "set_value" ->
+                if (args["value"]?.jsonPrimitive?.contentOrNull == null || args["som_id"] == null) {
+                    PreToolDecision.Deny("set_value needs the som_id and the value.")
+                } else {
+                    PreToolDecision.Proceed
+                }
             "type_text" ->
                 if (args["text"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()) {
                     PreToolDecision.Deny("type_text needs the text to type.")

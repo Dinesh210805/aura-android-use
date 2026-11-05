@@ -61,7 +61,7 @@ object EvalTaskCatalog {
     /** AURA's own suite — the balanced 30 that gate a change. */
     fun auraSuite(tasks: List<EvalTask>): List<EvalTask> = tasks.filter { it.awTask == null }
 
-    /** The AndroidWorld tasks AURA is scored on (see `scripts/bench/README.md`). Needs `scripts/bench/referee.py` running on the PC. */
+    /** The AndroidWorld tasks AURA is scored on (see `benchmark/README.md`). Needs `benchmark/suite/referee.py` running on the PC. */
     fun androidWorldSuite(tasks: List<EvalTask>): List<EvalTask> = tasks.filter { it.awTask != null }
 
     private fun readSuite(context: Context, path: String): List<EvalTask> =

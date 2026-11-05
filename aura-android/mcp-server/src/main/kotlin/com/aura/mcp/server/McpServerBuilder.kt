@@ -32,6 +32,7 @@ import com.aura.mcp.tools.registerFileTools
 import com.aura.mcp.tools.registerPerceiveScreenTool
 import com.aura.mcp.tools.registerPerceptionTools
 import com.aura.mcp.tools.registerReadScreenTool
+import com.aura.mcp.tools.registerStepTools
 import com.aura.mcp.tools.registerSystemIntentTool
 import com.aura.mcp.tools.registerVerifyActionTool
 import com.aura.mcp.tools.registerWaitForTool
@@ -209,9 +210,15 @@ internal object McpServerBuilder {
         server.registerDeviceTools(deviceBridge, perceptionCache)
 
         // Gestures, apps and keys
-        server.registerGestureTools(deviceBridge, perceptionCache)
-        server.registerAppTools(deviceBridge, perceptionCache, deepLinkBridge)
+        server.registerGestureTools(
+            deviceBridge, perceptionCache, uiTreeBridge,
+            settleConfig = ScreenSettle.Config(ignoredPackages = setOfNotNull(ownPackageName)),
+            lastSeen = lastSeenScreen,
+        )
+        server.registerAppTools(deviceBridge, perceptionCache, deepLinkBridge, uiTreeBridge)
         server.registerKeyTools(deviceBridge)
+        // set_value, run_steps (dispatches through the handlers registered here), clipboard.
+        server.registerStepTools(deviceBridge, perceptionCache, uiTreeBridge)
 
         // Phase 4 — screenshot, events
         server.registerPerceptionTools(screenshotBridge, uiTreeBridge)

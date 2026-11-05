@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Visibility
@@ -203,6 +204,7 @@ fun ProviderSettingsScreen(
                 onSelect = ::switchEndpoint,
                 onAddCustom = { showEditor = true },
             )
+            InfoNote(GEMINI_PRESET_NOTE, cs)
 
             if (!endpoint.isBuiltIn) {
                 DestructivePill(
@@ -862,6 +864,34 @@ private fun StatusBanner(cs: CapsuleScheme, providerName: String, isConfigured: 
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
+        }
+    }
+}
+
+/**
+ * Why Gemini is the default, and that it is not a requirement.
+ * Change together: the same note in `OnboardingScreen.GeminiKeyStep`.
+ */
+private const val GEMINI_PRESET_NOTE =
+    "Gemini is just the starting preset. How well AURA completes tasks depends on the model you " +
+        "pick here, and any provider works. We default to Gemini because the same free key also " +
+        "unlocks Gemini Live, a natural voice assistant at no cost."
+
+/** Neutral explanatory note: card sheet, info icon, no accent (it is not a problem). */
+@Composable
+private fun InfoNote(message: String, cs: CapsuleScheme) {
+    Surface(
+        shape = Capsule.ShapeChipWell,
+        color = cs.card,
+        border = BorderStroke(1.dp, cs.line),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(Icons.Default.Info, contentDescription = null, tint = cs.sub, modifier = Modifier.size(18.dp))
+            Text(message, color = cs.ink, fontSize = 13.sp, lineHeight = 18.sp)
         }
     }
 }
