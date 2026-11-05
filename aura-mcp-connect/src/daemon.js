@@ -231,6 +231,8 @@ export async function startDaemon({
 
   /** sessionId → { transport, server } */
   const sessions = new Map();
+  /** Last good phone tools/list, shared by every session. See buildProxyServer. */
+  const toolsCache = {};
 
   phoneManager.onNotification = (notification) =>
     broadcastNotification(
@@ -300,6 +302,8 @@ export async function startDaemon({
               // Unarmed → not registered at all, so it never even appears in
               // tools/list; a client can't call what it can't discover.
               localTools: enableAdbTool ? [auraAdbTool] : [],
+              toolsCache,
+              log,
             });
           } catch (e) {
             log(`Session init failed: ${e.message}`);

@@ -61,6 +61,13 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  *   An optional `instructions` string on a local tool is appended to the
  *   backend's handshake instructions, since the backend cannot describe a tool
  *   it never sees.
+ * @param {{last?: object}} [options.toolsCache]
+ *   Holds the last good backend tools/list. Share one object across every
+ *   proxy server on the same phone. If tools/list fails or comes back empty
+ *   twice, the cached list is served instead. Why: Claude Code reads a failed
+ *   tools/list as "this server has no tools" and never asks again, so one
+ *   slow answer from the phone leaves the whole session without its tools.
+ * @param {(msg: string) => void} [options.log]
  */
 export async function buildProxyServer({
   getClient,
@@ -69,6 +76,8 @@ export async function buildProxyServer({
   name,
   version,
   localTools = [],
+  toolsCache = {},
+  log = () => {},
 }) {
   const backend = await getClient();
   const backendCaps = backend.getServerCapabilities() ?? {};
@@ -131,19 +140,32 @@ export async function buildProxyServer({
   };
 
   if (backendCaps.tools || localToolsByName.size > 0) {
+    const fetchBackendTools = async (request) => {
+      const client = await getClient();
+      const result = await client.request(
+        { method: request.method, params: request.params },
+        ListToolsResultSchema,
+        { timeout: DEFAULT_TIMEOUT_MS, resetTimeoutOnProgress: true },
+      );
+      // The phone always registers its core tools, so an empty list is a
+      // phone that wasn't ready, not a real answer.
+      if (!result.tools?.length) throw new Error("phone listed no tools");
+      onBackendAlive();
+      return result;
+    };
+
     server.setRequestHandler(ListToolsRequestSchema, async (request) => {
-      const backendResult = backendCaps.tools
-        ? await (async () => {
-            const client = await getClient();
-            const result = await client.request(
-              { method: request.method, params: request.params },
-              ListToolsResultSchema,
-              { timeout: DEFAULT_TIMEOUT_MS, resetTimeoutOnProgress: true },
-            );
-            onBackendAlive();
-            return result;
-          })()
-        : { tools: [] };
+      let backendResult = { tools: [] };
+      if (backendCaps.tools) {
+        try {
+          backendResult = await fetchBackendTools(request).catch(() => fetchBackendTools(request));
+          toolsCache.last = backendResult;
+        } catch (e) {
+          if (!toolsCache.last) throw e;
+          log(`tools/list failed (${e.message}); serving the last good list`);
+          backendResult = toolsCache.last;
+        }
+      }
       return {
         ...backendResult,
         tools: [
