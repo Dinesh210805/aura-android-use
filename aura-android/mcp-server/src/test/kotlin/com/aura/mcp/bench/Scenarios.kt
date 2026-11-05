@@ -624,6 +624,13 @@ internal object Scenarios {
             check("blocked", r.isError, r.text.take(200))
             check("clipboard untouched", phone.clipboard == null, "${phone.clipboard}")
         },
+        Scenario("C4", "clipboard", "Reading a copied card number or code is blocked") {
+            phone.show(screen(APP, label("t", "Hi", 0, 100, 1080, 200)))
+            phone.clipboard = "4111 1111 1111 1111"
+            val r = call("clipboard", mapOf("action" to "read"))
+            check("blocked", r.isError, r.text.take(200))
+            check("the number is not returned", "4111" !in r.text, r.text.take(200))
+        },
 
         // ── read ──
         Scenario("R1", "read", "Rows scrolled out of a list are still named") {

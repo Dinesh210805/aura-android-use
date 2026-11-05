@@ -224,7 +224,9 @@ class AppDeviceBridge(
      */
     override fun readClipboard(): String? = runCatching {
         runBlocking(Dispatchers.Main) {
-            clipboard()?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(appContext)?.toString()
+            clipboard()?.primaryClip
+                ?.takeIf { it.itemCount > 0 && !it.description.extras.isSensitiveClip() }
+                ?.getItemAt(0)?.coerceToText(appContext)?.toString()
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
 
@@ -235,6 +237,14 @@ class AppDeviceBridge(
     }.getOrDefault(false)
 
     private fun clipboard(): ClipboardManager? = appContext.getSystemService(ClipboardManager::class.java)
+
+    /**
+     * True for a clip its source marked sensitive (password managers, OTP autofill).
+     *
+     * - Why the raw key: `ClipDescription.EXTRA_IS_SENSITIVE` is API 33, but apps set this key on older versions too.
+     */
+    private fun android.os.PersistableBundle?.isSensitiveClip(): Boolean =
+        this?.getBoolean("android.content.extra.IS_SENSITIVE") == true
 
     override fun isTextInjectionKeyboardEnabled(): Boolean =
         service?.isAuraImeEnabled() ?: false
