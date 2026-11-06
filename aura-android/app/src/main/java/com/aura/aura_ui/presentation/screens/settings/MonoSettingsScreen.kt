@@ -324,8 +324,8 @@ fun MonoSettingsScreen(
             // user can act on outranks documents they can only read.
             MonoRow(
                 icon = Icons.Outlined.Insights,
-                title = "Share anonymous diagnostics",
-                subtitle = "Phone model, Android and AURA version, crash reports. " +
+                title = "Share diagnostics",
+                subtitle = "Your Google email, phone model, app version, usage counts, crash reports. " +
                     "Never your tasks, screen or messages.",
                 trailing = {
                     AuraSwitch(
