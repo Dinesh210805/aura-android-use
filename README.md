@@ -214,8 +214,9 @@ The server also teaches clients how to use it: MCP **instructions** at connect t
 - **Some things are always off-limits.** Banking, payment and authenticator apps can't be opened,
   and card numbers, PINs and passwords can't be typed. You can add your own restricted apps.
   Destructive actions ask first, and every tool call is logged on the phone.
-- **Anonymous diagnostics are optional.** Crash reports and usage counts, never content. The
-  full list is in the in-app privacy policy, and one switch in Settings turns it off.
+- **Diagnostics are on by default, and one switch in Settings turns them off.** Crash reports,
+  usage counts and an install record tied to your Google sign-in, never content. The full list is
+  in the in-app privacy policy.
 
 ## Known rough edges
 
