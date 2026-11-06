@@ -10,6 +10,19 @@ Static site, no build step. Hosted on Vercel.
   `scripts/capture_mcp_tools.mjs` (needs adb, ffmpeg and scrcpy); do not edit them by hand. The
   tap, swipe and scroll markers come from coordinates in the tool's own reply; the
   "what changed" outline is computed in the browser from the two screenshots.
+- `install-stats.json` — installs and per-country counts on the download page. Generated; do not
+  edit by hand. The public site can't read Firestore, so this is a snapshot and the page shows its
+  date. Shape: `asOf` (YYYY-MM-DD), `installs`, `countryCount`, `countries` (`{ "IN": 30, ... }`,
+  ISO alpha-2 to count). Totals and country counts only, never a per-device field, because this
+  file is public. Counting rules: release builds only, one handset per `deviceHash` in Firestore
+  `devices/{uid}`, country from `timeZone`, else the `locale` region. The owner dashboard (not in
+  this repo) produces it: Audience → **Export public stats**, then replace this file and ship it.
+  The Downloads figure is not in this file: the page sums `.apk` download counts from the GitHub
+  releases API at runtime.
+- `world-dots.json` — land dots for that map. Generated; do not edit by hand. Shape:
+  `{ cols, rows, codes, runs }`. `runs[row]` is a flat list of (startCol, length, codeIndex)
+  triplets, where codeIndex 0 is land with no country and n is `codes[n - 1]`. The grid is Natural
+  Earth 1:50m (public domain) rasterised at 1.8°, 200 × 78.
 - `support.js` — page runtime (renders the `<x-dc>` markup; don't edit by hand)
 - `aura-film.js` — the scroll animation on the home page
 - `media/`, `logos/` — videos, posters, icons
