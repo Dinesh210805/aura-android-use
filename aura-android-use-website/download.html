@@ -190,7 +190,9 @@ class Component extends DCLogic {
       const downloads = list.reduce((n, x) => n + apks(x).reduce((m, y) => m + y.download_count, 0), 0);
       this.setState({ rel: { version: (j.tag_name || '').replace(/^v/, '') || null, size: a ? (a.size / 1048576).toFixed(1) : null, apk: a ? a.browser_download_url : null, date: j.published_at || null, downloads } });
     }).catch(() => {});
-    Promise.all(['/install-stats.json', '/world-dots.json'].map(u => fetch(u).then(r => r.ok ? r.json() : Promise.reject(new Error(u)))))
+    // Live totals first. The committed snapshot covers the endpoint being down, and local previews.
+    const getJson = u => fetch(u).then(r => r.ok ? r.json() : Promise.reject(new Error(u)));
+    Promise.all([getJson('/api/install-stats').catch(() => getJson('/install-stats.json')), getJson('/world-dots.json')])
       .then(([s, w]) => this.setState({ stats: this.buildStats(s, w) }))
       .catch(() => {});
   }
