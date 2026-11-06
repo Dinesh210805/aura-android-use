@@ -56,7 +56,7 @@ const page = `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Privacy and Terms · AURA</title>
-<meta name="description" content="AURA's privacy policy and terms of service: the same text the app shows.">
+<meta name="description" content="AURA's privacy policy and terms of service, which the app also shows.">
 <link rel="canonical" href="https://aura-android-use.vercel.app/privacy">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -100,7 +100,7 @@ footer{border-top:1px solid var(--line);padding:24px 16px;font:11.5px 'Geist Mon
 <header><div><a class="brand" href="/"><img src="/media/aura_logo_mono.png" alt="" width="24" height="24">AURA</a><a href="/">← Back to the site</a></div></header>
 <main>
 <nav class="toc" aria-label="On this page"><a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#licences">Open-source licences</a></nav>
-<p class="note">This is the same text the app shows under Settings → Privacy &amp; Data. AURA itself is open source under the
+<p class="note">The app shows this text too, under Settings → Privacy &amp; Data, though an older version may show an earlier copy. AURA itself is open source under the
 <a href="https://github.com/Dinesh210805/aura-android-use/blob/main/LICENSE">GNU AGPL-3.0</a>, so you can also read exactly what the code does.</p>
 ${render(text('PRIVACY'), 'privacy')}
 ${render(text('TERMS'), 'terms')}
