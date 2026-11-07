@@ -22,6 +22,9 @@ data class McpToolInfo(
  */
 object McpToolCatalog {
 
+    /** Tools that are classified but not offered, so the Tools reference screen must not list them. */
+    internal val offTools = setOf("run_steps")
+
     /** Short human copy per tool. Keep in sync with the registered tool set. */
     private val descriptions: Map<String, String> = mapOf(
         "get_device_status" to "Battery, network and device state",
@@ -78,6 +81,7 @@ object McpToolCatalog {
      */
     val entries: List<McpToolInfo> =
         McpToolScopes.toolScopeMap.entries
+            .filterNot { it.key in offTools }
             .map { (name, scope) -> McpToolInfo(name, scope, descriptions[name] ?: name) }
             .sortedBy { it.name }
 

@@ -86,6 +86,14 @@ internal object McpServerBuilder {
         trailSink: ToolTrailSink = ToolTrailSink.NOOP,
         /** Wasted-turn guard for this server; pass one in to read its counters afterwards. */
         actionGuard: ActionGuard = ActionGuard(),
+        /**
+         * Registers `run_steps`. Off for every real server.
+         * - Why: models put client-side tools such as `mark_step` in the batch, and each refusal
+         *   costs a full model turn. The tests keep it on so the code stays covered.
+         * - Change together: to offer it again, also restore it in `DeferredTools.CORE`, the
+         *   `how_you_work` line in [Doctrine], [McpToolCatalog.offTools] and the aura-phone skill.
+         */
+        runStepsEnabled: Boolean = false,
         // Spec 2026-07-17 — device skills exposed as MCP prompts (slash-commands).
         promptSkills: List<PromptSkill> = emptyList(),
         /**
@@ -217,8 +225,9 @@ internal object McpServerBuilder {
         )
         server.registerAppTools(deviceBridge, perceptionCache, deepLinkBridge, uiTreeBridge)
         server.registerKeyTools(deviceBridge)
-        // set_value, run_steps (dispatches through the handlers registered here), clipboard.
-        server.registerStepTools(deviceBridge, perceptionCache, uiTreeBridge)
+        // set_value, clipboard, and run_steps when enabled (it dispatches through the handlers
+        // registered here).
+        server.registerStepTools(deviceBridge, perceptionCache, uiTreeBridge, runStepsEnabled)
 
         // Phase 4 — screenshot, events
         server.registerPerceptionTools(screenshotBridge, uiTreeBridge)

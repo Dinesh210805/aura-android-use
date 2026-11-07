@@ -52,7 +52,7 @@ object Doctrine {
                 "you what you need; its description says when.",
             "Target elements by som_id from the latest screen you were shown. som_ids expire after " +
                 "every action. Never pass pixel coordinates.",
-            "Take one consequential action per step; routine steps already on screen may share one run_steps call.",
+            "Take one consequential action per step.",
         ),
         section(
             "choosing_a_route",

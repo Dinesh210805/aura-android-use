@@ -180,4 +180,5 @@ internal fun buildTestServer(toolsets: Set<Toolset> = Toolset.ALL): io.modelcont
         browserBridge = InertBrowserBridge,
         auditLogger = com.aura.mcp.bridge.NoOpAuditLogger,
         toolsets = toolsets,
+        runStepsEnabled = true,
     )

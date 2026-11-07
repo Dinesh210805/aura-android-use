@@ -439,12 +439,13 @@ internal object Scenarios {
         Scenario("P3", "batch", "run_steps cannot nest, look, or launch") {
             phone.show(screen(APP, button("btn", "Pay", 200, 1000, 880, 1150)))
             read()
-            for (bad in listOf("run_steps", "read_screen", "launch_app", "end_session")) {
+            for (bad in listOf("run_steps", "read_screen", "launch_app", "end_session", "mark_step")) {
                 val r = call("run_steps", mapOf("steps" to listOf(
                     mapOf("tool" to "tap", "args" to mapOf("som_id" to som("btn"))),
                     mapOf("tool" to bad, "args" to emptyMap<String, Any?>()),
                 )))
                 check("'$bad' refused before anything ran", r.isError && "cannot run inside" in r.text, r.text.take(200))
+                check("the refusal says nothing ran and how to recover", "Nothing ran" in r.text && "on its own" in r.text, r.text.take(200))
             }
             expectNoTouch(0)
         },

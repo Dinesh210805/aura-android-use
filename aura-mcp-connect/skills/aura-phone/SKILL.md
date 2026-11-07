@@ -63,8 +63,6 @@ A tool missing from your list means its group is switched off for this computer
 - `set_value(som_id, value)` sets a switch on/off or a field to exact text, and confirms it. Safe to
   repeat. `type_text` and `scroll` report `field_text` / `moved` so a cut-off field or the end of
   a list is a fact, not a guess.
-- `run_steps(steps)` runs up to 8 routine actions from the current screen in one call and stops at
-  the first refusal. Never batch anything that sends, pays, deletes or confirms.
 - `wait_for(expect="text")` waits for that text to appear (`gone=true`: to leave).
 
 ## After every gesture
