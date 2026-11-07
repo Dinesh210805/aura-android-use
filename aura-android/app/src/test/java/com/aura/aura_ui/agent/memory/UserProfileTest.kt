@@ -28,8 +28,8 @@ class UserProfileTest {
         assertTrue(parseLanguages("  ,  , ").isEmpty())
     }
 
-    @Test fun `store defaults to english and tamil until set`() {
-        assertEquals(listOf("English", "Tamil"), UserProfileStore(ctx).load().languages)
+    @Test fun `store defaults to english until set`() {
+        assertEquals(listOf("English"), UserProfileStore(ctx).load().languages)
     }
 
     @Test fun `cleared list stays cleared and does not resurrect the default`() {
