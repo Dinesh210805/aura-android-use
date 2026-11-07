@@ -81,3 +81,12 @@ social-media/
 
 # Local video recordings (reels, demos)
 /*.mp4
+
+# Local voiceover generator (Gemini Live); not part of the app
+voicegen/
+
+# Local images dropped at the repo root (phone screenshots, chat exports). Root only: the website
+# and app keep their own images in subfolders.
+/*.jpeg
+/*.jpg
+/*.png
