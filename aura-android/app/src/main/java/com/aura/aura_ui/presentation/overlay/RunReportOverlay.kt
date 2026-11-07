@@ -62,14 +62,15 @@ import com.aura.aura_ui.ui.theme.Mono
 import com.aura.aura_ui.presentation.overlay.ReportMarkdown.Block
 
 /**
- * The run report card: how a remote MCP run ended (done, partial, failed, stopped, paused, or
- * the client went quiet), with the client's markdown report or, without one, the last steps.
+ * The run report card: how a run ended (done, partial, failed, stopped, paused, or a remote client
+ * went quiet), with its markdown report or, without one, the last steps.
  *
  * - Contract: [show] replaces whatever is up; [hide] is idempotent. Main thread only.
  * - Why its window sits above the run controls: while paused, Resume and Cancel must stay
  *   reachable under the card.
  * - Why not `FLAG_NOT_TOUCHABLE`: it scrolls and has a close button. `RemoteRun` clears the
- *   report on the next tool call, so it is never on screen while a client taps.
+ *   report on a client's next tool call and `AuraAgent.runSpike` when a run starts, so it is never
+ *   on screen while anything taps.
  */
 class RunReportOverlay(
     private val context: Context,
@@ -191,7 +192,7 @@ internal fun RunReportCard(report: RemoteRun.Report, onClose: () -> Unit) {
                     Heading(if (report.outcome == Outcome.PAUSED) "So far" else "What happened", level = 3)
                     report.recent.forEach { Bullet("•", it) }
                 }
-                footnoteFor(report.outcome)?.let {
+                footnoteFor(report)?.let {
                     Text(it, color = Ui.textSecondary, fontSize = 12.sp, lineHeight = 16.sp)
                 }
             }
@@ -199,12 +200,30 @@ internal fun RunReportCard(report: RemoteRun.Report, onClose: () -> Unit) {
     }
 }
 
-private fun footnoteFor(outcome: Outcome): String? = when (outcome) {
-    Outcome.PAUSED -> "Resume or cancel with the buttons below."
-    Outcome.STOPPED -> "This client is refused until it stops calling."
-    Outcome.WENT_QUIET -> "The client stopped sending commands without finishing."
+/** Only for remote runs: each line describes a client, or the controls of a run still open. */
+internal fun footnoteFor(report: RemoteRun.Report): String? = when {
+    report.onDevice -> null
+    report.outcome == Outcome.PAUSED -> "Resume or cancel with the buttons below."
+    report.outcome == Outcome.STOPPED -> "This client is refused until it stops calling."
+    report.outcome == Outcome.WENT_QUIET -> "The client stopped sending commands without finishing."
     else -> null
 }
+
+/**
+ * The card as plain text, for the session log.
+ * - Change together: [RunReportCard], which draws the same parts in the same order.
+ */
+internal fun reportText(report: RemoteRun.Report): String = listOfNotNull(
+    (listOf(statusOf(report.outcome).title) + metaParts(report)).joinToString(" · "),
+    report.summary,
+    report.markdown ?: report.recent.takeIf { it.isNotEmpty() }?.joinToString("\n") { "- $it" },
+).joinToString("\n\n")
+
+private fun metaParts(report: RemoteRun.Report): List<String> = listOfNotNull(
+    report.client,
+    formatDuration(report.durationMs),
+    report.steps.takeIf { it > 0 }?.let { if (it == 1) "1 step" else "$it steps" },
+)
 
 @Composable
 private fun Header(status: Status, onClose: () -> Unit) {
@@ -249,13 +268,8 @@ private fun Header(status: Status, onClose: () -> Unit) {
 
 @Composable
 private fun MetaRow(report: RemoteRun.Report) {
-    val parts = listOfNotNull(
-        report.client,
-        formatDuration(report.durationMs),
-        report.steps.takeIf { it > 0 }?.let { if (it == 1) "1 step" else "$it steps" },
-    )
     Text(
-        parts.joinToString("  ·  "),
+        metaParts(report).joinToString("  ·  "),
         color = Ui.textSecondary,
         fontSize = 12.sp,
         maxLines = 1,

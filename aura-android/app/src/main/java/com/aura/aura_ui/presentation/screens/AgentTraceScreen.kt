@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.aura.aura_ui.presentation.screens.trace.ReportLogCard
 import com.aura.aura_ui.presentation.screens.trace.TraceVisibility
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -120,12 +121,9 @@ fun AgentTraceScreen(
     onNavigateBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    // One read for the whole screen. False in every release build by construction, so the blocks
-    // below cannot reach a user however this composable is reached.
-    // Bumped by the debug toggle below so the whole list recomposes against the new answer.
+    // Bumped by the view switch below so the whole list recomposes against the new answer.
     var internalsToggle by remember { mutableIntStateOf(0) }
-    val showInternals = remember(internalsToggle) { TraceVisibility.debugMode(context) }
-    val canToggle = remember { TraceVisibility.isToggleAvailable(context) }
+    val showInternals = remember(internalsToggle) { TraceVisibility.showFull(context) }
     val scheme = rememberMonoScheme()
     val store = remember { McpSessionStore(context) }
     val scope = rememberCoroutineScope()
@@ -194,8 +192,8 @@ fun AgentTraceScreen(
                         onClick = {
                             exporting = true
                             scope.launch {
-                                // Debug exports the whole folder, raw bodies included; the story
-                                // view exports the redacted JSON a user can safely send.
+                                // The full view exports the whole folder, raw bodies included; the
+                                // story view exports one JSON file with the screenshots inside.
                                 val file = withContext(Dispatchers.IO) {
                                     if (showInternals) SessionJsonExporter(context).exportFolder(sessionId)
                                     else SessionJsonExporter(context).export(sessionId)
@@ -232,53 +230,46 @@ fun AgentTraceScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Debug builds only — TraceVisibility.isToggleAvailable is false in release, so a
-            // release build has no switch at all rather than a switch that defaults to off.
-            if (canToggle) {
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(Mono.ShapeChip)
-                            .background(scheme.chip)
-                            .clickable {
-                                TraceVisibility.setDebugMode(context, !showInternals)
-                                internalsToggle++
-                            }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            if (showInternals) {
-                                "Debug — every prompt, reply, hook, gate and byte"
-                            } else {
-                                "Story — what AURA did, in plain words"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scheme.textSecondary,
-                        )
-                        Text(
-                            if (showInternals) "DEBUG" else "STORY",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (showInternals) Mono.Blood else scheme.textPrimary,
-                        )
-                    }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(Mono.ShapeChip)
+                        .background(scheme.chip)
+                        .clickable {
+                            TraceVisibility.setShowFull(context, !showInternals)
+                            internalsToggle++
+                        }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        if (showInternals) {
+                            "Full log — every prompt, reply, hook, gate and byte"
+                        } else {
+                            "Story — what AURA did, in plain words"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = scheme.textSecondary,
+                    )
+                    Text(
+                        if (showInternals) "FULL" else "STORY",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (showInternals) Mono.Blood else scheme.textPrimary,
+                    )
                 }
             }
             if (!showInternals) {
                 storyItems(s, crops, cropSources, scheme, onZoom = { zoom = it })
                 s.outcome?.let { verdict -> item { ProofCard(verdict, scheme) } }
+                s.reports.forEach { report -> item { ReportLogCard(report, scheme) } }
                 return@LazyColumn
             }
             item { SummaryStrip(s, scheme) }
-            // The proof card is NOT behind showInternals: "did it actually do what I asked, and
-            // what is that based on" is the user's question about the run, not a developer's
-            // question about the harness.
             s.outcome?.let { verdict -> item { ProofCard(verdict, scheme) } }
-            // Everything below that is about how AURA is BUILT rather than what it DID is asked
-            // for by facet — see TraceVisibility for why the rule lives in one place.
+            s.reports.forEach { report -> item { ReportLogCard(report, scheme) } }
             if (showInternals) {
                 s.assembly?.let { asm -> item { AssemblyCard(asm, scheme) } }
                 s.budget?.let { b -> item { BudgetCard(b, scheme) } }

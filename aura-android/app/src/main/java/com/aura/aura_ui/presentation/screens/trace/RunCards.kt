@@ -16,8 +16,10 @@ import androidx.compose.ui.unit.dp
 import com.aura.aura_ui.mcp.log.MemoryWrite
 import com.aura.aura_ui.mcp.log.RunAssembly
 import com.aura.aura_ui.mcp.log.RunBudgetLog
+import com.aura.aura_ui.mcp.log.RunReportLog
 import com.aura.aura_ui.mcp.log.RunVerdict
 import com.aura.aura_ui.mcp.log.SessionLog
+import com.aura.aura_ui.mcp.log.sessionTitle
 import com.aura.aura_ui.mcp.log.summarize
 import com.aura.aura_ui.ui.theme.Mono
 import com.aura.aura_ui.ui.theme.MonoScheme
@@ -28,6 +30,16 @@ import java.util.Date
 
 // ── Top-level cards ─────────────────────────────────────────────────────────
 
+/** A task's report card as the log kept it. Open by default: it is the run in a few lines. */
+@Composable
+internal fun ReportLogCard(report: RunReportLog, scheme: MonoScheme) {
+    Surface(shape = Mono.ShapeCardSmall, color = scheme.card, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+            PayloadSection("Report card", report.text, scheme, startCollapsed = false)
+        }
+    }
+}
+
 @Composable
 internal fun SummaryStrip(s: SessionLog, scheme: MonoScheme) {
     val summary = remember(s) { summarize(s) }
@@ -35,9 +47,7 @@ internal fun SummaryStrip(s: SessionLog, scheme: MonoScheme) {
     Surface(shape = Mono.ShapeCard, color = scheme.card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                s.command?.takeIf { it.isNotBlank() }
-                    ?: s.utterances.firstOrNull { it.kind == "speech" || it.kind == "text" }?.text
-                    ?: "Agent run",
+                sessionTitle(s),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = scheme.textPrimary,

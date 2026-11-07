@@ -72,6 +72,8 @@ data class SessionLog(
      * Null for MCP sessions and runs that never set a plan. (Run Ledger, Build 1.)
      */
     var planProgress: PlanProgress? = null,
+    /** The report card each task ended with, oldest first: a conversation can hold several. */
+    val reports: MutableList<RunReportLog> = mutableListOf(),
     val invocations: MutableList<ToolInvocation> = mutableListOf(),
     /** LLM/VLM calls made during the run (on-device agent only). */
     val llmCalls: MutableList<LlmCall> = mutableListOf(),
@@ -153,6 +155,15 @@ data class RunVerdict(
     val target: Int? = null,
     val deliverable: String? = null,
     val findings: List<ProofItem> = emptyList(),
+)
+
+/** What a run's report card said, kept so the log still has it after the card closes. */
+@Serializable
+data class RunReportLog(
+    val atMillis: Long,
+    /** The task the card reports on. Null for a remote client's session, which has no goal. */
+    val task: String? = null,
+    val text: String,
 )
 
 /** One finding: what was found, and the verbatim screen text the harness matched it against. */

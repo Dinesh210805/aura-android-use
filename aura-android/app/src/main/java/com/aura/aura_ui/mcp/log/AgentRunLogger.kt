@@ -48,13 +48,6 @@ class AgentRunLogger(
      */
     private val orphanSteps = mutableListOf<PipelineStep>()
 
-    /**
-     * Raw bodies are written only where someone can read them: debug builds and developer mode.
-     * They hold every screen's text and each full prompt, tens of MB a run — on an ordinary
-     * phone that is storage and private data kept for a view the user cannot open.
-     */
-    private var rawEnabled = false
-
     private val rootDir: File = File(context.applicationContext.filesDir, "mcp_logs").apply { mkdirs() }
 
     /** Own writer, used unless this run is adopted into a conversation's session. */
@@ -89,7 +82,6 @@ class AgentRunLogger(
 
     /** Open a new agent session for [goal]. Safe to call once per run. */
     fun startRun(goal: String, agentLabel: String?) {
-        rawEnabled = com.aura.aura_ui.presentation.screens.trace.TraceVisibility.isToggleAvailable(appContext)
         orphanSteps.clear()
         // Install the LLM tap synchronously so the very first chat call is captured.
         AgentLlmTap.resetPrefixProbe()
@@ -324,9 +316,9 @@ class AgentRunLogger(
     /**
      * Close the run. [reason] is "completed" | "failed" | "cancelled"; [verdict] is the harness's
      * judgement of whether the goal was actually met, which is a different question (spec
-     * 2026-09-15) and null when the run never got one.
+     * 2026-09-15) and null when the run never got one. [report] is what its report card said.
      */
-    fun endRun(reason: String, verdict: RunVerdict? = null) {
+    fun endRun(reason: String, verdict: RunVerdict? = null, report: RunReportLog? = null) {
         AgentLlmTap.sink = null
         AgentPerceptionTap.sink = null
         AgentTraceTap.sink = null
@@ -338,6 +330,7 @@ class AgentRunLogger(
                 // The verdict rides the still-open conversation session too: a spoken task is
                 // exactly where "it said done but only did 3 of 10" needs to be reviewable.
                 verdict?.let { s.outcome = it }
+                report?.let { s.reports.add(it) }
                 s.utterances.add(
                     Utterance(
                         atMillis = System.currentTimeMillis(),
@@ -358,6 +351,7 @@ class AgentRunLogger(
             it.endedAtMillis = System.currentTimeMillis()
             it.endReason = reason
             verdict?.let { v -> it.outcome = v }
+            report?.let { r -> it.reports.add(r) }
         }
         pending = null
         lastToolIndex = -1
@@ -472,7 +466,7 @@ class AgentRunLogger(
     }
 
     /** Write [text] byte-exact to `raw/<name>`; returns the session-relative path, or null. */
-    private fun writeRaw(dir: File, name: String, text: String): String? = if (!rawEnabled) null else runCatching {
+    private fun writeRaw(dir: File, name: String, text: String): String? = runCatching {
         File(dir, "raw").mkdirs()
         File(File(dir, "raw"), name).writeText(text)
         "raw/$name"

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aura.aura_ui.mcp.log.AgentRunLogger
 import com.aura.aura_ui.mcp.log.LiveConversationLogger
+import com.aura.aura_ui.mcp.log.sessionTitle
 import com.aura.aura_ui.mcp.log.McpSessionStore
 import com.aura.aura_ui.mcp.log.SessionLog
 import com.aura.aura_ui.presentation.components.rememberMonoScheme
@@ -182,16 +183,7 @@ private fun SessionCard(
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    // Each plane is recognisable by a different thing: an agent run by the command the user
-    // gave, an MCP session by its first tool, and a conversation by its opening line. Falling
-    // through to the tool name is what labelled every Live session "(no calls)".
-    val title = when (session.source) {
-        AgentRunLogger.SOURCE_AGENT -> session.command?.takeIf { it.isNotBlank() } ?: "Agent run"
-        LiveConversationLogger.SOURCE_LIVE ->
-            session.utterances.firstOrNull { it.kind == "speech" || it.kind == "text" }
-                ?.text?.takeIf { it.isNotBlank() } ?: "Live conversation"
-        else -> session.invocations.firstOrNull()?.toolName ?: "(no calls)"
-    }
+    val title = sessionTitle(session)
     val df = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
     val thumb = remember(session.sessionId) {
         thumbProvider()?.takeIf { it.exists() }?.let {

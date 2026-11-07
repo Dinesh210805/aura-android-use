@@ -144,6 +144,17 @@ class McpSessionLogger(
         }
     }
 
+    override fun endSession(reason: String, outcome: String?, report: String?) {
+        scope.launch {
+            mutex.withLock {
+                report?.takeIf { it.isNotBlank() }?.let {
+                    currentSession?.reports?.add(RunReportLog(System.currentTimeMillis(), text = it))
+                }
+                closeCurrent(reason)
+            }
+        }
+    }
+
     // ── Internals ──────────────────────────────────────────────────
 
     private fun rotateIfNeeded(now: Long, tokenId: String?, agentLabel: String?) {

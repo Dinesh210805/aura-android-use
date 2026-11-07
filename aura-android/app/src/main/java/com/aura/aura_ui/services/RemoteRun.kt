@@ -20,7 +20,8 @@ import kotlinx.serialization.json.jsonObject
 
 /**
  * A remote MCP client's run as the overlay shows it: the same status strip and run controls an
- * on-device run gets, then a report card when it ends.
+ * on-device run gets, then a report card when it ends. On-device runs put their own card here too
+ * ([showOnDeviceReport]), so one card and one close path serve both.
  *
  * - Contract: a run starts at the first tool call from an outside client and ends on an accepted
  *   `end_session`, the user's Cancel ([stopByUser]), or [IDLE_END_MS] without a call. It never
@@ -39,7 +40,10 @@ class RemoteRun internal constructor(
 ) {
     enum class Outcome { DONE, PARTIAL, FAILED, STOPPED, PAUSED, WENT_QUIET }
 
-    /** What the report card draws. [markdown] is the client's own report, untrusted. */
+    /**
+     * What the report card draws. [markdown] is the client's own report, untrusted. [onDevice]
+     * marks a run of AURA's own agent, which has no client to warn about.
+     */
     data class Report(
         val outcome: Outcome,
         val client: String,
@@ -48,6 +52,7 @@ class RemoteRun internal constructor(
         val summary: String?,
         val markdown: String?,
         val recent: List<String>,
+        val onDevice: Boolean = false,
     )
 
     private data class Live(
@@ -142,6 +147,14 @@ class RemoteRun internal constructor(
     @Synchronized
     fun noteResumed() {
         if (_report.value?.outcome == Outcome.PAUSED) _report.value = null
+    }
+
+    /**
+     * Shows how an on-device run ended, on the card remote runs use.
+     * - Contract: replaces any card up. `AuraAgent.runSpike` closes it when the next task starts.
+     */
+    fun showOnDeviceReport(report: Report) {
+        _report.value = report
     }
 
     fun dismissReport() {

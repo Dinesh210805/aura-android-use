@@ -82,4 +82,38 @@ class AgentRunLoggerTrailTest {
         }
         error("session never finished writing")
     }
+
+    @Test fun `a run's report card text lands in its log`() {
+        val root = File(context.filesDir, "mcp_logs").apply { deleteRecursively() }
+        val logger = AgentRunLogger(context, noShots)
+        logger.startRun("open Spotify", "test")
+        logger.onToolStart("launch_app", "{}")
+        logger.endRun("completed", report = RunReportLog(5L, "open Spotify", "Task complete · AURA · 3s"))
+
+        val s = awaitSession(root) { it.endReason != null }
+        assertEquals(listOf("Task complete · AURA · 3s"), s.reports.map { it.text })
+    }
+
+    /** Live keeps its session open between tasks, so each task's card must survive the next. */
+    @Test fun `every task in a conversation keeps its own report`() = kotlinx.coroutines.runBlocking {
+        val root = File(context.filesDir, "mcp_logs").apply { deleteRecursively() }
+        val conversation = SessionLogWriter(root, "test")
+        conversation.open { id, now ->
+            SessionLog(sessionId = id, startedAtMillis = now, agentLabel = null, tokenId = null, source = LiveConversationLogger.SOURCE_LIVE)
+        }
+        LiveSessionScope.setConversation(conversation)
+        val logger = AgentRunLogger(context, noShots)
+        listOf("open Spotify", "open Maps").forEach { task ->
+            LiveSessionScope.expectRun {
+                logger.startRun(task, "test")
+                logger.endRun("completed", report = RunReportLog(5L, task, "Done: $task"))
+            }
+        }
+        LiveSessionScope.setConversation(null)
+        conversation.close { it.endReason = "closed" }
+
+        val s = awaitSession(root) { it.endReason != null }
+        assertEquals(listOf("open Spotify", "open Maps"), s.reports.map { it.task })
+        assertEquals("the first task names the session", "open Spotify", s.command)
+    }
 }

@@ -59,6 +59,7 @@ import com.aura.aura_ui.mcp.bridge.AppContactsBridge
 import com.aura.aura_ui.mcp.bridge.AppDeepLinkBridge
 import com.aura.aura_ui.services.AgentStatusRegistry
 import com.aura.aura_ui.services.ControlLockStore
+import com.aura.aura_ui.services.RemoteRun
 import com.aura.aura_ui.mcp.bridge.AppBrowserBridge
 import com.aura.aura_ui.mcp.bridge.AppFilesBridge
 import com.aura.aura_ui.mcp.bridge.AppDeviceBridge
@@ -142,12 +143,17 @@ class AuraAgent(private val context: Context) {
         // the eval suite and AndroidWorld reach runSpike through the same doors, and a benchmark
         // sweep filed as history would leak earlier tasks into later ones' recall.
         remember: Boolean = false,
+        // Show this run's report card when it ends. Off unless the caller knows a PERSON is
+        // watching: a card left up between benchmark tasks would land in their screen reads.
+        showReportCard: Boolean = false,
     ): String {
         // Hoisted (was inline) so the same bridge answers the turn-0 "where am I"
         // preamble below — one accessibility read, no extra tool call.
         val deviceBridge = AppDeviceBridge(context)
         // Owned by the server (it enforces at scopedTool); held here only for the run's log line.
         val actionGuard = com.aura.mcp.server.ActionGuard()
+        // Set only by an end_session the server accepted; the hooks also see the refused ones.
+        var writtenReport: String? = null
         val handle = InProcessMcpServer.connect(
             deviceBridge = deviceBridge,
             screenshotBridge = AppScreenshotBridge(context),
@@ -172,6 +178,11 @@ class AuraAgent(private val context: Context) {
             },
             readScreenImage = { com.aura.aura_ui.data.preferences.ReadScreenImageStore.enabled.value },
             actionGuard = actionGuard,
+            sessionLogSink = object : com.aura.mcp.bridge.SessionLogSink by com.aura.mcp.bridge.NoOpSessionLogSink {
+                override fun endSession(reason: String, outcome: String?, report: String?) {
+                    writtenReport = report
+                }
+            },
         )
 
         val mcpClient = Client(clientInfo = Implementation(name = CLIENT_NAME, version = CLIENT_VERSION))
@@ -195,8 +206,13 @@ class AuraAgent(private val context: Context) {
         // messaging mum" cannot name the task, and neither can the pause checkpoint. Measured
         // on device 2026-08-04: a real harness run reported activeTask=null throughout.
         ControlLockStore.shared.noteTaskStarted(goal)
+        // A card left from the last task would sit over the screen this run is about to tap.
+        RemoteRun.shared.dismissReport()
 
+        val startedAtMs = System.currentTimeMillis()
         var endReason = "completed"
+        // What a run that never reached an answer told the user instead, for its report card.
+        var abortReply: String? = null
         // What the run said last, for the diary line written in the finally.
         var finalReply: String? = null
         var toolStartedAt = 0L
@@ -768,16 +784,19 @@ class AuraAgent(private val context: Context) {
                 // my budget"); Koog's exception carries a stack trace, so it borrows the generic one.
                 val spoken = causes.filterIsInstance<RunBudgetExceeded>()
                     .firstOrNull()?.message ?: BUDGET_ABORT_MESSAGE
+                abortReply = spoken
                 onEvent(AgentStreamEvent.Finished(spoken))
                 spoken
             } else if (quotaReason != null) {
                 Log.i(TAG, "⏹ Provider quota exhausted — clean abort")
                 endReason = "quota"
+                abortReply = quotaReason
                 onEvent(AgentStreamEvent.Finished(quotaReason))
                 quotaReason
             } else {
                 Log.e(TAG, "❌ Agent run failed: ${t.message}", t)
                 endReason = if (t is kotlinx.coroutines.CancellationException) "cancelled" else "failed"
+                if (endReason == "failed") abortReply = t.message
                 throw t
             }
         } finally {
@@ -864,7 +883,27 @@ class AuraAgent(private val context: Context) {
             runCatching { persistScope.cancel() }
             // The verdict rides the log beside the mechanical end reason, so a review — and the
             // eval harness — can tell "stopped cleanly" from "actually did what was asked".
-            runLogger.endRun(endReason, proofVerdictFor(ledgerController.snapshot()))
+            val finished = ledgerController.snapshot()
+            val card = OnDeviceReport.of(
+                endReason = endReason,
+                verdict = finished.outcome?.verdict,
+                claimed = finished.outcome?.claimed,
+                reply = finalReply ?: abortReply,
+                writtenReport = writtenReport,
+                durationMs = System.currentTimeMillis() - startedAtMs,
+                steps = finished.totalSteps,
+                recentSteps = finished.recentSteps,
+            )
+            runLogger.endRun(
+                endReason,
+                proofVerdictFor(finished),
+                com.aura.aura_ui.mcp.log.RunReportLog(
+                    atMillis = System.currentTimeMillis(),
+                    task = goal,
+                    text = com.aura.aura_ui.presentation.overlay.reportText(card),
+                ),
+            )
+            if (showReportCard) RemoteRun.shared.showOnDeviceReport(card)
             remoteAttachment?.close()
             runCatching { mcpClient.close() }
             handle.close()
@@ -887,6 +926,7 @@ class AuraAgent(private val context: Context) {
     suspend fun runFromSavedSettings(
         goal: String,
         remember: Boolean = false,
+        showReportCard: Boolean = false,
         onEvent: (AgentStreamEvent) -> Unit = {},
     ): String {
         // Refused before a model ever sees it. Deliberately not routed through the agent as a
@@ -908,6 +948,7 @@ class AuraAgent(private val context: Context) {
             generation = saved.generation,
             onEvent = onEvent,
             remember = remember,
+            showReportCard = showReportCard,
         )
     }
 
@@ -926,6 +967,7 @@ class AuraAgent(private val context: Context) {
         ledgerId: String,
         // Same meaning as runSpike's: the overlay's resume offer is a person asking; Live logs its own.
         remember: Boolean = false,
+        showReportCard: Boolean = false,
         onEvent: (AgentStreamEvent) -> Unit = {},
     ): String {
         val store = RunLedgerStore(EncryptedJsonStore(context, RunLedgerStore.STORE_NAME))
@@ -950,6 +992,7 @@ class AuraAgent(private val context: Context) {
             // turn and might re-plan from scratch.
             resumePreamble = ResumePreamble.forResume(seed),
             remember = remember,
+            showReportCard = showReportCard,
         )
     }
 

@@ -1,6 +1,20 @@
 package com.aura.aura_ui.mcp.log
 
 /**
+ * What the Logs screen calls a session: the task it was given, else what its kind is known by.
+ * - Why: AURA opens a conversation with a greeting, so its own words never name one.
+ */
+fun sessionTitle(s: SessionLog): String = s.command?.takeIf { it.isNotBlank() } ?: when (s.source) {
+    AgentRunLogger.SOURCE_AGENT -> "Agent run"
+    LiveConversationLogger.SOURCE_LIVE ->
+        s.utterances.firstOrNull { it.speaker == "user" && it.text.isNotBlank() && it.kind in SPOKEN }?.text
+            ?: "Live conversation"
+    else -> s.invocations.firstOrNull()?.toolName ?: "(no calls)"
+}
+
+private val SPOKEN = setOf("speech", "text")
+
+/**
  * Render-time view model for the native agent trace screen (Trace-v2).
  *
  * A run is shown as a list of **turns** (the GenAI-span shape): each turn is one
