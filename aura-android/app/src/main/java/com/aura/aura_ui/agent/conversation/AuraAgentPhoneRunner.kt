@@ -21,7 +21,7 @@ class AuraAgentPhoneRunner(private val context: Context) : PhoneTaskRunner {
     override suspend fun run(task: String, onProgress: (String) -> Unit): String =
         minimizedBrowser {
             LiveSessionScope.expectRun {
-                AuraAgent(context).runFromSavedSettings(task) { onProgress(it.toProgress()) }
+                AuraAgent(context).runFromSavedSettings(task, showReportCard = true) { onProgress(it.toProgress()) }
             }
         }
 
@@ -34,7 +34,7 @@ class AuraAgentPhoneRunner(private val context: Context) : PhoneTaskRunner {
         val resumable = store.latestResumable() ?: return null
         return minimizedBrowser {
             LiveSessionScope.expectRun {
-                AuraAgent(context).resumeRun(resumable.runId) { onProgress(it.toProgress()) }
+                AuraAgent(context).resumeRun(resumable.runId, showReportCard = true) { onProgress(it.toProgress()) }
             }
         }
     }

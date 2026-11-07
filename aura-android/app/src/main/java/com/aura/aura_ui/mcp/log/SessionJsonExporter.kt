@@ -3,8 +3,6 @@ package com.aura.aura_ui.mcp.log
 import android.content.Context
 import android.util.Base64
 import android.util.Log
-import com.aura.aura_ui.presentation.screens.trace.TraceRedaction
-import com.aura.aura_ui.presentation.screens.trace.TraceVisibility
 import java.io.File
 
 /**
@@ -44,8 +42,8 @@ class SessionJsonExporter(private val context: Context) {
      */
     /**
      * The whole session folder as a zip — metadata, every raw request/response/result byte-exact,
-     * screenshots. The developer export: the JSON export redacts and cannot carry tens of MB of
-     * raw bodies, and a trace someone else is going to debug needs exactly those.
+     * screenshots. The JSON export cannot carry tens of MB of raw bodies, and a trace someone else
+     * is going to debug needs exactly those.
      */
     fun exportFolder(sessionId: String): File? {
         val dir = store.sessionDir(sessionId) ?: return null
@@ -82,16 +80,7 @@ class SessionJsonExporter(private val context: Context) {
                 out.write("  },\n")
 
                 out.write("  \"session\": ")
-                // Redacted here and not only at the screen, because THIS is the copy that leaves
-                // the phone. The screen decides what someone looks at; an export is what they send
-                // to somebody else. In a release build TraceRedaction always strips the internals
-                // — see TraceVisibility for why that is pinned rather than defaulted.
-                out.write(
-                    TraceRedaction.redactMetadata(
-                        metadata.readText(),
-                        TraceVisibility.debugMode(context),
-                    ),
-                )
+                out.write(metadata.readText())
                 out.write(",\n")
 
                 out.write("  \"images\": [")

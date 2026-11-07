@@ -78,6 +78,9 @@ ${blocks.joinToString("\n")}
         for (call in session.llmCalls) {
             entries += Entry(call.timestampMillis, llmBlock(call))
         }
+        for (report in session.reports) {
+            entries += Entry(report.atMillis, "<pre style=\"white-space:pre-wrap\">${esc(report.text)}</pre>")
+        }
         // Speech carries its own timestamp, so it sorts into the same clock as tools and LLM
         // calls without any special casing — a Live session that hands work to the action
         // plane reads as one story rather than two logs.

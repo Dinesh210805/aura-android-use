@@ -442,7 +442,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         com.aura.aura_ui.presentation.overlay.PausePillOverlay(this)
     }
 
-    /** The report card shown when a remote MCP run ends or is paused; see [RemoteRun]. */
+    /** The report card shown when a run ends or a remote run is paused; see [RemoteRun]. */
     private val reportCard by lazy {
         com.aura.aura_ui.presentation.overlay.RunReportOverlay(this, this, this) {
             com.aura.aura_ui.services.RemoteRun.shared.dismissReport()
@@ -784,7 +784,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         val startedAt = System.currentTimeMillis()
         val reply = try {
             withContext(Dispatchers.IO) {
-                auraAgent.runFromSavedSettings(text, remember = remember) { event ->
+                auraAgent.runFromSavedSettings(text, remember = remember, showReportCard = remember) { event ->
                     when (event) {
                         is com.aura.aura_ui.agent.AgentStreamEvent.ToolStarting -> steps++
                         is com.aura.aura_ui.agent.AgentStreamEvent.ToolFailed -> toolFailures++
@@ -922,7 +922,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         conversationViewModel.updatePhase(ConversationPhase.THINKING)
         val reply = try {
             withContext(Dispatchers.IO) {
-                auraAgent.resumeRun(offer.ledgerId, remember = true) { event -> onAgentStreamEvent(event) }
+                auraAgent.resumeRun(offer.ledgerId, remember = true, showReportCard = true) { event -> onAgentStreamEvent(event) }
             }
         } catch (ce: CancellationException) {
             throw ce
@@ -1286,6 +1286,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             com.aura.aura_ui.services.AgentStatusRegistry.speech.collect { statusStrip.setSpeech(it) }
         }
         serviceScope.launch {
+            // A run that ended with this service down, such as one cancelled by closing AURA, is
+            // over: its card must not appear the next time AURA opens.
+            com.aura.aura_ui.services.RemoteRun.shared.dismissReport()
             com.aura.aura_ui.services.RemoteRun.shared.report.collect { report ->
                 if (report == null) {
                     reportCard.hide()

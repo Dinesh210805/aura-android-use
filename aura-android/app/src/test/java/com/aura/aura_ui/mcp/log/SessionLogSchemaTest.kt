@@ -120,4 +120,18 @@ class SessionLogSchemaTest {
         assertEquals("ActionGuard", decoded.invocations[0].hookDecision?.hook)
         assertEquals("vim", decoded.invocations[0].skillLoaded)
     }
+
+    @Test
+    fun `reports default to empty on old logs and round-trip on new ones`() {
+        assertTrue(json.decodeFromString(SessionLog.serializer(), legacyJson).reports.isEmpty())
+
+        val original = SessionLog(sessionId = "s", startedAtMillis = 1L, agentLabel = null, tokenId = null).apply {
+            reports.add(RunReportLog(2L, "send it", "Task complete · AURA · 3s"))
+        }
+        val decoded = json.decodeFromString(
+            SessionLog.serializer(),
+            json.encodeToString(SessionLog.serializer(), original),
+        )
+        assertEquals(original.reports, decoded.reports)
+    }
 }

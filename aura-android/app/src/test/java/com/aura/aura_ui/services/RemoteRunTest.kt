@@ -94,4 +94,14 @@ class RemoteRunTest {
         run.noteResumed()
         assertNull(run.report.value)
     }
+
+    @Test
+    fun `an on-device report shows, and a new task closes it`() {
+        run.showOnDeviceReport(
+            RemoteRun.Report(Outcome.DONE, "AURA", 1_000, 2, null, "Done.", emptyList(), onDevice = true),
+        )
+        assertEquals("Done.", run.report.value!!.markdown)
+        run.dismissReport()
+        assertNull(run.report.value)
+    }
 }

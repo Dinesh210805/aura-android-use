@@ -3,6 +3,8 @@ package com.aura.mcp.server
 import com.aura.mcp.bridge.ContactsBridge
 import com.aura.mcp.bridge.DeepLinkBridge
 import com.aura.mcp.bridge.FilesBridge
+import com.aura.mcp.bridge.NoOpSessionLogSink
+import com.aura.mcp.bridge.SessionLogSink
 import com.aura.mcp.bridge.DeviceBridge
 import com.aura.mcp.bridge.McpAuditLogger
 import com.aura.mcp.bridge.McpScope
@@ -161,6 +163,8 @@ object InProcessMcpServer {
         trailSink: ToolTrailSink = ToolTrailSink.NOOP,
         /** Forwarded to [McpServerBuilder.build]; the caller keeps it to log its counters. */
         actionGuard: ActionGuard = ActionGuard(),
+        /** Forwarded to [McpServerBuilder.build]; hears the `end_session` the server accepted. */
+        sessionLogSink: SessionLogSink = NoOpSessionLogSink,
     ): InProcessMcpHandle {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -185,6 +189,7 @@ object InProcessMcpServer {
             readScreenImage = readScreenImage,
             trailSink = trailSink,
             actionGuard = actionGuard,
+            sessionLogSink = sessionLogSink,
         )
 
         // Client end runs in a plain context; server end carries the principal

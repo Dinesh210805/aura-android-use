@@ -73,4 +73,39 @@ class AgentTraceModelTest {
         assertEquals(100L, sum.wallClockMs)
         assertTrue(sum.promptTokens == 200)
     }
+
+    @Test
+    fun `a session is named by the task it was given, not AURA's greeting`() {
+        val s = session {
+            command = "Open YouTube"
+            utterances.add(Utterance(1L, "aura", "Hey Dinesh, bright and early!", "speech"))
+            utterances.add(Utterance(2L, "user", "Dude, open YouTube for me", "speech"))
+        }
+        assertEquals("Open YouTube", sessionTitle(s))
+    }
+
+    @Test
+    fun `a conversation with no task is named by what the person said`() {
+        val s = SessionLog(sessionId = "s", startedAtMillis = 0L, agentLabel = null, tokenId = null, source = LiveConversationLogger.SOURCE_LIVE).apply {
+            utterances.add(Utterance(1L, "aura", "Hey Dinesh!", "speech"))
+            utterances.add(Utterance(2L, "user", "What's the time?", "speech"))
+        }
+        assertEquals("What's the time?", sessionTitle(s))
+    }
+
+    @Test
+    fun `a conversation where nobody asked anything never shows the greeting`() {
+        val s = SessionLog(sessionId = "s", startedAtMillis = 0L, agentLabel = null, tokenId = null, source = LiveConversationLogger.SOURCE_LIVE).apply {
+            utterances.add(Utterance(1L, "aura", "Hey Dinesh!", "speech"))
+        }
+        assertEquals("Live conversation", sessionTitle(s))
+    }
+
+    @Test
+    fun `other sessions keep their own names`() {
+        assertEquals("Agent run", sessionTitle(session { }))
+        val mcp = SessionLog(sessionId = "s", startedAtMillis = 0L, agentLabel = null, tokenId = null).apply { invocations.add(tool(1, 0, "tap")) }
+        assertEquals("tap", sessionTitle(mcp))
+        assertEquals("(no calls)", sessionTitle(SessionLog(sessionId = "s", startedAtMillis = 0L, agentLabel = null, tokenId = null)))
+    }
 }
