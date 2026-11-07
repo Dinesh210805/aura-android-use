@@ -25,7 +25,7 @@ data class UserProfile(
 ) {
     companion object {
         /** Pre-filled until the user edits Settings → Memory. Order is preference order. */
-        val DEFAULT_LANGUAGES = listOf("English", "Tamil")
+        val DEFAULT_LANGUAGES = listOf("English")
 
         /** Guard rails: a language list is a short prompt line, not free-form storage. */
         const val MAX_LANGUAGES = 6
