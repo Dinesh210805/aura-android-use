@@ -271,6 +271,7 @@ private fun buildServer(phone: MockPhone): Server = McpServerBuilder.build(
     filesBridge = NoFiles,
     browserBridge = InertBrowserBridge,
     auditLogger = NoOpAuditLogger,
+    runStepsEnabled = true,
 )
 
 private object NoScreenshot : ScreenshotBridge {

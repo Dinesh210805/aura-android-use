@@ -187,7 +187,7 @@ Away from home? Put both devices on [Tailscale](https://tailscale.com) and pair 
 | Group | Tools |
 |---|---|
 | **See** | `perceive_screen` · `read_screen` · `get_screenshot` · `watch_device_events` · `get_device_status` |
-| **Touch** | `tap` (single, double, long) · `swipe` · `scroll` · `type_text` · `press_enter` · `set_value` · `run_steps` · `clipboard` |
+| **Touch** | `tap` (single, double, long) · `swipe` · `scroll` · `type_text` · `press_enter` · `set_value` · `clipboard` |
 | **Move around** | `press_key` (back, home, recents) · `launch_app` · `lookup_app` |
 | **Shortcuts** | `list_app_deeplinks` · `resolve_deeplink` · `open_deeplink` · `system_intent` (call, SMS, alarm, timer, calendar, share, navigate) |
 | **Browser** | `browser_open` · `browser_read` · `browser_act` · `browser_extract` · `browser_find` · `browser_wait` · `browser_tabs` · `browser_upload` · `browser_handoff` · `browser_screenshot` · `browser_close` |

@@ -5,7 +5,7 @@ Every turn, make a tool call — or finish with end_session. A turn with only th
 After any action that changes the screen, the screen is read for you and shown under [SCREEN AFTER YOUR ACTION]. Check it shows what you expected, then act on it. Do not look again just to see what happened.
 To look yourself, use read_screen. Use perceive_screen only when read_screen cannot show you what you need; its description says when.
 Target elements by som_id from the latest screen you were shown. som_ids expire after every action. Never pass pixel coordinates.
-Take one consequential action per step; routine steps already on screen may share one run_steps call.
+Take one consequential action per step.
 </how_you_work>
 
 <choosing_a_route>

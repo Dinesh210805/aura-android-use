@@ -34,9 +34,10 @@ internal fun Server.registerStepTools(
     bridge: DeviceBridge,
     perceptionCache: PerceptionCache,
     uiTreeBridge: UiTreeBridge,
+    runStepsEnabled: Boolean,
 ) {
     registerSetValue(bridge, perceptionCache, uiTreeBridge)
-    registerRunSteps()
+    if (runStepsEnabled) registerRunSteps()
     registerClipboard(bridge)
 }
 
@@ -193,9 +194,9 @@ private fun Server.registerRunSteps() {
         name = "run_steps",
         description = "Do several actions in one call when you already know them all from the current screen, " +
             "e.g. type into a field then press_enter, or set two toggles. Each step is " +
-            "{\"tool\": name, \"args\": {...}}; tools: ${STEP_TOOLS.joinToString()}. Steps run in order; the " +
-            "first one that fails or is refused stops the rest. Not for anything that sends, pays, deletes or " +
-            "needs you to look first.",
+            "{\"tool\": name, \"args\": {...}}; tools: ${STEP_TOOLS.joinToString()}. Call any other tool, such as " +
+            "mark_step, on its own. Steps run in order; the first one that fails or is refused stops the rest. " +
+            "Not for anything that sends, pays, deletes or needs you to look first.",
         inputSchema = ToolSchema(
             properties = JsonObject(
                 mapOf(
@@ -221,7 +222,10 @@ private fun Server.registerRunSteps() {
             val tool = (o["tool"] as? JsonPrimitive)?.content
                 ?: return@scopedTool errorResult("step ${i + 1} has no 'tool'")
             if (tool !in STEP_TOOLS) {
-                return@scopedTool errorResult("step ${i + 1}: '$tool' cannot run inside run_steps. Allowed: ${STEP_TOOLS.joinToString()}")
+                return@scopedTool errorResult(
+                    "Nothing ran. Step ${i + 1}: '$tool' cannot run inside run_steps. Call it on its own, " +
+                        "then send the remaining steps again. Allowed: ${STEP_TOOLS.joinToString()}",
+                )
             }
             val args = o["args"] ?: JsonObject(emptyMap())
             if (args !is JsonObject) return@scopedTool errorResult("step ${i + 1}: 'args' must be an object")

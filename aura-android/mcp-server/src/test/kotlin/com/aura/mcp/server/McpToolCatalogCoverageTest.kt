@@ -29,7 +29,7 @@ class McpToolCatalogCoverageTest {
     @Test
     fun `catalog entries cover exactly the scope map`() {
         assertEquals(
-            McpToolScopes.toolScopeMap.keys,
+            McpToolScopes.toolScopeMap.keys - McpToolCatalog.offTools,
             McpToolCatalog.entries.map { it.name }.toSet(),
             "McpToolCatalog.entries must render every classified tool and no phantom ones",
         )
