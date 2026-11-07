@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-labelledby="title">
+  <title id="title">YODA</title>
+  <rect width="108" height="108" rx="24" fill="#fff"/>
+  <path fill="#171717" d="M34 31h10l10 16 10-16h10L59 56v21H49V56z"/>
+  <circle cx="68" cy="69" r="4" fill="#a6e27d"/>
+</svg>
