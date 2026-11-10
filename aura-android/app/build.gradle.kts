@@ -11,8 +11,15 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.google.firebase.crashlytics)
+}
+
+// Apply Google/Firebase plugins only when google-services.json is present so
+// clean checkouts and CI can build without Firebase project credentials.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+} else {
+    logger.lifecycle("google-services.json not found - skipping Google Services/Crashlytics plugins.")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,8 +177,12 @@ android {
             // Upload native symbols (OmniParser ONNX Runtime, sherpa-onnx JNI) so
             // JNI crashes symbolicate to function names, not raw addresses. The
             // Crashlytics plugin registers this as a per-build-type extension.
-            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
-                nativeSymbolUploadEnabled = true
+            if (project.file("google-services.json").exists()) {
+                pluginManager.withPlugin("com.google.firebase.crashlytics") {
+                    extensions.configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension>("firebaseCrashlytics") {
+                        nativeSymbolUploadEnabled = true
+                    }
+                }
             }
         }
         debug {
