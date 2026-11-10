@@ -63,8 +63,8 @@ class DeviceRegistry @Inject constructor(
 
             // FirebaseAuth persists the account, so the uid is stable for the life of the install
             // and the same document is updated on every report.
-            val auth = FirebaseAuth.getInstance()
-            val uid = (auth.currentUser ?: auth.signInAnonymously().await().user)?.uid
+            val auth = runCatching { FirebaseAuth.getInstance() }.getOrNull() ?: return
+            val uid = (auth.currentUser ?: runCatching { auth.signInAnonymously().await().user }.getOrNull())?.uid
                 ?: return
 
             val installId = runCatching { FirebaseInstallations.getInstance().id.await() }
@@ -111,7 +111,7 @@ class DeviceRegistry @Inject constructor(
                 // Server time, not the phone's clock, so a wrong device clock can't mis-sort rows.
                 put("lastSeen", FieldValue.serverTimestamp())
             }
-            val docRef = FirebaseFirestore.getInstance().collection(COLLECTION).document(uid)
+            val docRef = runCatching { FirebaseFirestore.getInstance().collection(COLLECTION).document(uid) }.getOrNull() ?: return
 
             // `firstSeen` may only be written when the document is created (the rules reject a
             // change). Instead of paying a read to find out, remember which uid we created and,
