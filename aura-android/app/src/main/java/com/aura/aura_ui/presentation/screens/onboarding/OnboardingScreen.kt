@@ -1746,8 +1746,11 @@ private fun RestrictedAppsStep() {
             scanning = true
             scanError = null
             try {
-                val apps = AppInventoryScanner(context).scanInstalledApps().filter { it.isLaunchable() }
-                val suggestions = RestrictedAppClassifier(context).classify(apps)
+                val (apps, suggestions) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val scanned = AppInventoryScanner(context).scanInstalledApps().filter { it.isLaunchable() }
+                    val classified = RestrictedAppClassifier(context).classify(scanned)
+                    scanned to classified
+                }
                 store.mergeSuggestions(suggestions)
                 hasScanned = true
             } catch (t: Throwable) {
