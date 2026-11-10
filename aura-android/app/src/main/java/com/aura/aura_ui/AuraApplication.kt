@@ -22,6 +22,9 @@ class AuraApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Best-effort Firebase init for builds/environments where auto-init is unavailable
+        // (e.g. no google-services.json / debug package variant). Never crash startup.
+        runCatching { com.google.firebase.FirebaseApp.initializeApp(this) }
         // Before anything can log an event: applies the diagnostics switch to Analytics/Crashlytics.
         com.aura.aura_ui.data.preferences.DiagnosticsStore.hydrate(this)
         // Before anything starts: the last kill switch / block / version verdict, from disk, so a
@@ -37,21 +40,23 @@ class AuraApplication : Application() {
         // services one at a time ~20 s apart, with backoff — the wake word was measured coming back
         // after 81–480 s. Whichever component brings the process back up restarts it right away.
         if (getSharedPreferences("aura_settings", MODE_PRIVATE).getBoolean("wake_word_enabled", false)) {
-            com.aura.aura_ui.services.WakeWordListeningService.start(this)
+            runCatching { com.aura.aura_ui.services.WakeWordListeningService.start(this) }
         }
         // First remote-gate fetch at process start; the foreground service keeps it
         // fresh on a 15-min ticker. refresh() never throws.
         appScope.launch {
-            remoteGateManager.refresh()
+            runCatching { remoteGateManager.refresh() }
         }
         appScope.launch {
-            deviceRegistry.reportLaunch()
+            runCatching { deviceRegistry.reportLaunch() }
         }
         // Firebase's own anonymous per-install ID, attached as a custom key so it's
         // easy to eyeball alongside Analytics data. No new identifier is invented —
         // it resets on uninstall and is already attached to every crash report.
-        FirebaseInstallations.getInstance().id.addOnSuccessListener { id ->
-            FirebaseCrashlytics.getInstance().setCustomKey("installation_id", id)
+        runCatching {
+            FirebaseInstallations.getInstance().id.addOnSuccessListener { id ->
+                runCatching { FirebaseCrashlytics.getInstance().setCustomKey("installation_id", id) }
+            }
         }
     }
 

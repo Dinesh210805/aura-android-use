@@ -37,29 +37,35 @@ class RemoteGateManager @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
-    private val remoteConfig = FirebaseRemoteConfig.getInstance()
+    private val remoteConfig: FirebaseRemoteConfig? = runCatching { FirebaseRemoteConfig.getInstance() }
+        .onFailure { Log.w(TAG, "Firebase Remote Config unavailable: ${it.message}") }
+        .getOrNull()
 
     /** Same flow as [state]; here so Hilt consumers don't reach into the companion. */
     val gateState: StateFlow<GateState> = state
 
     init {
-        remoteConfig.setConfigSettingsAsync(
-            FirebaseRemoteConfigSettings.Builder()
-                .setMinimumFetchIntervalInSeconds(if (BuildConfig.DEBUG) 0L else FETCH_INTERVAL_SECONDS)
-                .build(),
-        )
-        remoteConfig.setDefaultsAsync(
-            mapOf(
-                KEY_KILL_SWITCH_ENABLED to false,
-                KEY_KILL_SWITCH_MESSAGE to DEFAULT_KILL_SWITCH_MESSAGE,
-                KEY_MIN_SUPPORTED_VERSION_CODE to 0L,
-                KEY_VERSION_GATE_MESSAGE to DEFAULT_VERSION_GATE_MESSAGE,
-                KEY_LATEST_VERSION_CODE to BuildConfig.VERSION_CODE.toLong(),
-                // Empty on purpose: the real URL is set in Remote Config, so a wrong baked-in
-                // value can never reach users.
-                KEY_UPDATE_URL to "",
-            ),
-        )
+        remoteConfig?.let { rc ->
+            runCatching {
+                rc.setConfigSettingsAsync(
+                    FirebaseRemoteConfigSettings.Builder()
+                        .setMinimumFetchIntervalInSeconds(if (BuildConfig.DEBUG) 0L else FETCH_INTERVAL_SECONDS)
+                        .build(),
+                )
+                rc.setDefaultsAsync(
+                    mapOf(
+                        KEY_KILL_SWITCH_ENABLED to false,
+                        KEY_KILL_SWITCH_MESSAGE to DEFAULT_KILL_SWITCH_MESSAGE,
+                        KEY_MIN_SUPPORTED_VERSION_CODE to 0L,
+                        KEY_VERSION_GATE_MESSAGE to DEFAULT_VERSION_GATE_MESSAGE,
+                        KEY_LATEST_VERSION_CODE to BuildConfig.VERSION_CODE.toLong(),
+                        // Empty on purpose: the real URL is set in Remote Config, so a wrong baked-in
+                        // value can never reach users.
+                        KEY_UPDATE_URL to "",
+                    ),
+                )
+            }.onFailure { Log.w(TAG, "Failed to configure Remote Config: ${it.message}") }
+        }
     }
 
     /**
@@ -71,30 +77,42 @@ class RemoteGateManager @Inject constructor(
      * - Fails: never throws. Each source's error is logged and that source is skipped.
      */
     suspend fun refresh() {
-        try {
-            remoteConfig.fetchAndActivate().await()
-        } catch (e: Exception) {
-            Log.w(TAG, "Remote Config fetch failed, using cached/default values: ${e.message}")
-        }
-        // The last activated values load from disk asynchronously. Reading before that finishes
-        // would return the defaults and, saved below, briefly forget an active kill switch.
-        runCatching { remoteConfig.ensureInitialized().await() }
+        val rc = remoteConfig
+        if (rc != null) {
+            try {
+                rc.fetchAndActivate().await()
+            } catch (e: Exception) {
+                Log.w(TAG, "Remote Config fetch failed, using cached/default values: ${e.message}")
+            }
+            // The last activated values load from disk asynchronously. Reading before that finishes
+            // would return the defaults and, saved below, briefly forget an active kill switch.
+            runCatching { rc.ensureInitialized().await() }
 
-        val inputs = GateInputs(
-            killSwitchEnabled = remoteConfig.getBoolean(KEY_KILL_SWITCH_ENABLED),
-            killSwitchMessage = remoteConfig.getString(KEY_KILL_SWITCH_MESSAGE),
-            minSupportedVersionCode = remoteConfig.getLong(KEY_MIN_SUPPORTED_VERSION_CODE),
-            versionGateMessage = remoteConfig.getString(KEY_VERSION_GATE_MESSAGE),
-            latestVersionCode = remoteConfig.getLong(KEY_LATEST_VERSION_CODE),
-            updateUrl = remoteConfig.getString(KEY_UPDATE_URL),
-        )
-        saveInputs(context, inputs)
+            val inputs = GateInputs(
+                killSwitchEnabled = rc.getBoolean(KEY_KILL_SWITCH_ENABLED),
+                killSwitchMessage = rc.getString(KEY_KILL_SWITCH_MESSAGE),
+                minSupportedVersionCode = rc.getLong(KEY_MIN_SUPPORTED_VERSION_CODE),
+                versionGateMessage = rc.getString(KEY_VERSION_GATE_MESSAGE),
+                latestVersionCode = rc.getLong(KEY_LATEST_VERSION_CODE),
+                updateUrl = rc.getString(KEY_UPDATE_URL),
+            )
+            saveInputs(context, inputs)
+        }
 
         // Checked last because it can only tighten the gate.
         val block = runCatching { Blocklist.check(context) }
             .onFailure { Log.w(TAG, "blocklist check failed: ${it.message}") }
             .getOrElse { Blocklist.cached(context) }
 
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val inputs = GateInputs(
+            killSwitchEnabled = p.getBoolean(KEY_KILL_SWITCH_ENABLED, false),
+            killSwitchMessage = p.getString(KEY_KILL_SWITCH_MESSAGE, null) ?: DEFAULT_KILL_SWITCH_MESSAGE,
+            minSupportedVersionCode = p.getLong(KEY_MIN_SUPPORTED_VERSION_CODE, 0L),
+            versionGateMessage = p.getString(KEY_VERSION_GATE_MESSAGE, null) ?: DEFAULT_VERSION_GATE_MESSAGE,
+            latestVersionCode = p.getLong(KEY_LATEST_VERSION_CODE, 0L),
+            updateUrl = p.getString(KEY_UPDATE_URL, null).orEmpty(),
+        )
         publish(evaluateGate(inputs, block, BuildConfig.VERSION_CODE.toLong()))
     }
 

@@ -274,13 +274,12 @@ class MainActivity : FragmentActivity() {
         // Start visual feedback overlay service
         startVisualFeedbackService()
 
-        // Phase 8: ALWAYS start the foreground service when the user opens the
-        // app so the on-device MCP server boots and begins listening on 8765 —
-        // regardless of keep-alive (which only governs whether it survives the
-        // app being closed). Without this, a new install would never start the
-        // server until the user manually toggled keep-alive ON, leading to
-        // confusing "/mcp connection refused" failures.
-        AssistantForegroundService.ensureMcpServerRunning(this)
+        // Start the MCP foreground service after the UI is ready to reduce startup
+        // jank and avoid racing permission/onboarding flows on low-end devices.
+        window.decorView.post {
+            runCatching { AssistantForegroundService.ensureMcpServerRunning(this) }
+                .onFailure { Log.w(TAG, "Failed to start MCP foreground service", it) }
+        }
 
         // OAuth redirect from a third-party MCP server's sign-in (Sub-project #2). If this launch
         // is the aura://mcp/oauth callback, capture the code and stop — no UI flow to resume.
@@ -829,10 +828,10 @@ class MainActivity : FragmentActivity() {
 
     private fun requestPermissions() {
         Log.d(TAG, "Requesting permissions")
-        
+
         // Build list of permissions based on Android version
         val permissionsList = mutableListOf(Manifest.permission.RECORD_AUDIO)
-        
+
         // Add POST_NOTIFICATIONS for Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionsList.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -841,15 +840,32 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT >= 36) {
             permissionsList.add("android.permission.POST_PROMOTED_NOTIFICATIONS")
         }
-        
-        permissionLauncher.launch(permissionsList.toTypedArray())
+
+        // Avoid launching a runtime permission dialog and a Settings activity at
+        // the same time — this can race on some devices/OEMs and cause crashes.
+        val runtimeNeeded = permissionsList.any {
+            checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (runtimeNeeded) {
+            try {
+                permissionLauncher.launch(permissionsList.toTypedArray())
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to launch runtime permission request", e)
+            }
+        }
 
         if (!Settings.canDrawOverlays(this)) {
-            val intent =
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                    data = Uri.parse("package:$packageName")
-                }
-            overlayPermissionLauncher.launch(intent)
+            try {
+                val intent =
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        data = Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                overlayPermissionLauncher.launch(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to launch overlay permission settings", e)
+            }
         }
     }
 

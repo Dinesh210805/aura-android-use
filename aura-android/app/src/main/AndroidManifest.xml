@@ -65,8 +65,8 @@
          directly (AlarmClock.EXTRA_SKIP_UI), the Google Assistant model. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
-    <!-- Accessibility Service Permissions -->
-    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
+    <!-- Accessibility service binding is declared on the service itself; do not
+         request BIND_ACCESSIBILITY_SERVICE as a normal app permission. -->
     
     <!-- Screenshot Permissions -->  
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
@@ -209,23 +209,29 @@
             android:noHistory="true"
             android:launchMode="singleTop" />
 
-        <!-- Assistant Foreground Service -->
-        <!-- foregroundServiceType uses connectedDevice (no time limit on Android 14+)
-             so the keep-alive WebSocket connection to the MCP server persists
-             indefinitely without the 6-hour dataSync timeout. -->
+        <!-- Assistant Foreground Service.
+             Uses specialUse for better OEM compatibility (Android 14+ connectedDevice
+             has strict prerequisites and can crash on some devices). -->
         <service
             android:name=".services.AssistantForegroundService"
             android:enabled="true"
             android:exported="false"
             android:stopWithTask="false"
-            android:foregroundServiceType="microphone|connectedDevice" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="aura_background_mcp_server" />
+        </service>
 
-        <!-- AURA Accessibility Service -->
+        <!-- AURA Accessibility Service.
+             Note: do NOT set foregroundServiceType here — accessibility services
+             are bound by the system, not started as app-managed foreground
+             services. Declaring mediaProjection on a bound accessibility service
+             is invalid and can cause SecurityException/crashes on some devices. -->
         <service
             android:name=".accessibility.AuraAccessibilityService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
