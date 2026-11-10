@@ -474,16 +474,16 @@ class AssistantForegroundService : LifecycleService() {
         // when ChipVisibilityPolicy says something is genuinely happening — a boot in
         // the background must not pin a pill (the permanent "AURA ready" complaint).
         val initialChip = LiveUpdateNotificationHelper.buildSilentNotification(this)
-        // Never fatal: a background-originated start (BootReceiver, MCP reconnect)
-        // can be refused on Android 12+, and letting that escape onCreate took the
-        // whole process down. connectedDevice is claimed deliberately — see the
-        // manifest note about the Android 14 dataSync 6-hour cap.
-        if (!startForegroundSafely(
-                notificationId,
-                initialChip,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-            )
-        ) {
+        // Use specialUse as the primary safe type to avoid Android 14+ connectedDevice
+        // policy restrictions that can cause ForegroundServiceStartNotAllowedException
+        // on some OEMs (e.g., MIUI/HyperOS on Redmi). ForegroundServiceCompat will
+        // handle fallbacks if needed.
+        val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            0
+        }
+        if (!startForegroundSafely(notificationId, initialChip, fgsType)) {
             Log.w("AssistantService", "Could not enter foreground — stopping cleanly")
             stopSelf()
             return
@@ -691,11 +691,12 @@ class AssistantForegroundService : LifecycleService() {
                 } else {
                     LiveUpdateNotificationHelper.buildSilentNotification(this@AssistantForegroundService)
                 }
-                startForegroundSafely(
-                    notificationId,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                )
+                val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                } else {
+                    0
+                }
+                startForegroundSafely(notificationId, notification, fgsType)
             }
         }
 
