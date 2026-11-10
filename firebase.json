@@ -1,0 +1,13 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "aura-android-use-nabin",
+          "appId": "1:757780584787:android:dc99dc7516f5f4b18929a6",
+          "fileOutput": "aura-android/app/google-services.json"
+        }
+      }
+    }
+  }
+}
