@@ -1,0 +1,89 @@
+name: Android Build and Release
+
+on:
+  push:
+    branches: [ main, master, fix/** ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build APKs
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: aura-android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;35.0.0" "ndk;27.0.12077973" || true
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Build Release APK (unsigned if no keystore)
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Collect APKs
+        run: |
+          mkdir -p ../artifacts
+          find . -path "*app/build/outputs/apk/debug/*.apk" -exec cp {} ../artifacts/ \;
+          find . -path "*app/build/outputs/apk/release/*.apk" -exec cp {} ../artifacts/ \;
+          ls -lah ../artifacts
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aura-android-apks
+          path: artifacts/*.apk
+          if-no-files-found: warn
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: aura-android-apks
+          path: release-artifacts
+
+      - name: List release artifacts
+        run: ls -lah release-artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: false
