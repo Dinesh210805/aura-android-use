@@ -56,9 +56,9 @@ object Blocklist {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val cached = Verdict(prefs.getBoolean(KEY_BLOCKED, false), prefs.getString(KEY_MESSAGE, null))
 
-        val auth = FirebaseAuth.getInstance()
-        val uid = auth.currentUser?.uid
-            ?: runCatching { auth.signInAnonymously().await().user?.uid }.getOrNull()
+        val auth = runCatching { FirebaseAuth.getInstance() }.getOrNull()
+        val uid = auth?.currentUser?.uid
+            ?: auth?.let { runCatching { it.signInAnonymously().await().user?.uid }.getOrNull() }
         val keys = listOfNotNull(DeviceIdentity.deviceHash(context), DeviceIdentity.accountHash(uid))
         val keyTag = keys.joinToString(",")
 
@@ -67,7 +67,7 @@ object Blocklist {
             lastCheckMs = prefs.getLong(KEY_CHECKED_AT, 0L),
             keysChanged = prefs.getString(KEY_CHECKED_KEYS, null) != keyTag,
         )
-        if (!due || keys.isEmpty()) return decide(null, cached.blocked, cached.message)
+        if (!due || keys.isEmpty() || auth == null) return decide(null, cached.blocked, cached.message)
 
         val remote = runCatching { lookup(keys, uid) }
             .onFailure { Log.w(TAG, "blocklist lookup failed: ${it.message}") }
@@ -95,7 +95,7 @@ object Blocklist {
      * that is offline and blocked.
      */
     private suspend fun lookup(keys: List<String>, uid: String?): Verdict {
-        val db = FirebaseFirestore.getInstance()
+        val db = runCatching { FirebaseFirestore.getInstance() }.getOrNull() ?: return Verdict(false, null)
         val hits = db.collection(COLLECTION)
             .whereIn(FieldPath.documentId(), keys)
             .get(Source.SERVER)
