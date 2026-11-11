@@ -57,6 +57,7 @@ presentation/
 | `agent/skills` | `SkillsScreen.kt` + `SkillsViewModel.kt` |
 | `agent/memory` | `MemoryScreen.kt` + `MemoryViewModel.kt`: read-only memory inspector |
 | `agent/mcp_servers` | `McpServersScreen.kt` + `McpServersViewModel.kt`: external MCP servers |
+| `agent/chat` | `agentcore/ChatUi.kt` (outside this folder): the new agent's chat; opened from Home's **New agent** button in developer mode |
 | `agent/companion` | `CompanionScreen.kt` + `CompanionViewModel.kt`: voice mode and Gemini key |
 | `agent/voice` | `VoiceSettingsScreen.kt`: TTS voice and previews (`res/raw/voice_preview_*`) |
 | `activity` | `McpSessionLogScreen.kt`: past sessions, newest first |

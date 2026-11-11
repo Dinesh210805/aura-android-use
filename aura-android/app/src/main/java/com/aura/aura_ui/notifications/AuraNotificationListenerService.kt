@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import com.aura.aura_ui.agent.state.AuraStateStore
 import com.aura.aura_ui.agent.state.NotificationBrief
+import com.aura.aura_ui.agentcore.AgentCore
 
 /**
  * AURA's notification listener — the agent's **event sense**.
@@ -37,9 +38,15 @@ class AuraNotificationListenerService : NotificationListenerService() {
         feedState()
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification?) = feedState()
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        feedState()
+        sbn?.let { AgentCore.ifAlwaysOn(this)?.onNotificationPosted(it) }
+    }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) = feedState()
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        feedState()
+        sbn?.let { AgentCore.ifAlwaysOn(this)?.onNotificationRemoved(it.key) }
+    }
 
     /**
      * Publish what is waiting to [com.aura.aura_ui.agent.state.AuraStateStore], so AURA can open a

@@ -3,6 +3,7 @@ package com.aura.aura_ui.agent.conversation
 import android.content.Context
 import com.aura.aura_ui.agent.AuraAgent
 import com.aura.aura_ui.agent.ledger.RunLedgerStore
+import com.aura.aura_ui.agentcore.AgentCore
 import com.aura.aura_ui.agent.memory.EncryptedJsonStore
 import com.aura.aura_ui.mcp.bridge.AppBrowserBridge
 import com.aura.aura_ui.mcp.log.LiveSessionScope
@@ -21,7 +22,9 @@ class AuraAgentPhoneRunner(private val context: Context) : PhoneTaskRunner {
     override suspend fun run(task: String, onProgress: (String) -> Unit): String =
         minimizedBrowser {
             LiveSessionScope.expectRun {
-                AuraAgent(context).runFromSavedSettings(task, showReportCard = true) { onProgress(it.toProgress()) }
+                // The agent switch: `AgentCore.enabled` routes voice tasks to the agent in `agentcore/`.
+                AgentCore.ifEnabled(context)?.runTask(task) { onProgress(it.toProgress()) }
+                    ?: AuraAgent(context).runFromSavedSettings(task, showReportCard = true) { onProgress(it.toProgress()) }
             }
         }
 

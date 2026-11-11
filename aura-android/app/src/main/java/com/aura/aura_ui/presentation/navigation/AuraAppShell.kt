@@ -119,6 +119,9 @@ object AuraRoutes {
     const val AGENT_COMPANION = "agent/companion"
     const val AGENT_VOICE = "agent/voice"
 
+    /** The `agentcore` chat. Reachable only from the developer-mode button on Home. */
+    const val AGENT_CHAT = "agent/chat"
+
     const val SETTINGS_TAVILY = "settings/tavily"
     const val SETTINGS_MCP_CENTER = "settings/mcp_center"
     const val SETTINGS_TRUSTED_DEVICES = "settings/trusted_devices"
@@ -192,8 +195,16 @@ fun AuraAppShell(
             // Allowed or UpdateAvailable: render the app; overlay a dismissible
             // update banner above the nav content when an update is available.
             var updateDismissed by remember { mutableStateOf(false) }
+            val developerMode by com.aura.aura_ui.data.preferences.DeveloperModeStore.enabled.collectAsState()
     Scaffold(
         containerColor = warm.canvasBottom,
+        floatingActionButton = {
+            if (developerMode && currentRoute == AuraRoutes.HOME) {
+                androidx.compose.material3.ExtendedFloatingActionButton(
+                    onClick = { navController.navigate(AuraRoutes.AGENT_CHAT) },
+                ) { androidx.compose.material3.Text("New agent") }
+            }
+        },
         bottomBar = {
             // The capsule is the app's ONE navigation element: tab icons on
             // top-level screens, ‹ back · title on subpages (Capsule design).
@@ -312,6 +323,7 @@ fun AuraAppShell(
             composable(AuraRoutes.AGENT_MCP_SERVERS) {
                 McpServersScreen(onNavigateBack = { navController.navigateUp() })
             }
+            composable(AuraRoutes.AGENT_CHAT) { com.aura.aura_ui.agentcore.AgentChatScreen() }
             composable(AuraRoutes.AGENT_COMPANION) {
                 CompanionScreen(
                     onNavigateBack = { navController.navigateUp() },
@@ -388,6 +400,7 @@ private val routeTitles = mapOf(
     AuraRoutes.AGENT_SKILLS to "Skills",
     AuraRoutes.AGENT_MEMORY to "Memory",
     AuraRoutes.AGENT_MCP_SERVERS to "MCP Servers",
+    AuraRoutes.AGENT_CHAT to "Chat",
     AuraRoutes.AGENT_COMPANION to "Companion",
     AuraRoutes.AGENT_VOICE to "Voice",
     AuraRoutes.ACTIVITY to "Activity",

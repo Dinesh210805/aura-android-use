@@ -40,7 +40,8 @@ see `aura-mcp-connect/README.md`.
 
 ## Documentation rules
 - **Folder READMEs are the map.** Before editing a folder, read its `README.md` if it has one.
-  Current ones, under `aura-android/app/src/main/java/com/aura/aura_ui/`: `presentation/`, `remote/`.
+  Current ones, under `aura-android/app/src/main/java/com/aura/aura_ui/`: `agentcore/` (the new
+  chat agent; the one under `agent/` still runs the app), `presentation/`, `remote/`.
   Also `benchmark/` (the AndroidWorld benchmark).
 - **Update the README in the same commit** when you add, remove, rename or repurpose anything it
   describes, then bump its **Last reviewed** date.

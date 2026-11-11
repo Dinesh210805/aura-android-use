@@ -165,6 +165,8 @@ object InProcessMcpServer {
         actionGuard: ActionGuard = ActionGuard(),
         /** Forwarded to [McpServerBuilder.build]; hears the `end_session` the server accepted. */
         sessionLogSink: SessionLogSink = NoOpSessionLogSink,
+        /** Forwarded to [McpServerBuilder.build]. */
+        labelLookup: ((somId: Int) -> String?) -> Unit = {},
     ): InProcessMcpHandle {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -190,6 +192,7 @@ object InProcessMcpServer {
             trailSink = trailSink,
             actionGuard = actionGuard,
             sessionLogSink = sessionLogSink,
+            labelLookup = labelLookup,
         )
 
         // Client end runs in a plain context; server end carries the principal

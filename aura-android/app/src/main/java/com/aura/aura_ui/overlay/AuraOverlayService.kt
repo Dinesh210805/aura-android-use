@@ -784,7 +784,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         val startedAt = System.currentTimeMillis()
         val reply = try {
             withContext(Dispatchers.IO) {
-                auraAgent.runFromSavedSettings(text, remember = remember, showReportCard = remember) { event ->
+                val onEvent: (com.aura.aura_ui.agent.AgentStreamEvent) -> Unit = { event ->
                     when (event) {
                         is com.aura.aura_ui.agent.AgentStreamEvent.ToolStarting -> steps++
                         is com.aura.aura_ui.agent.AgentStreamEvent.ToolFailed -> toolFailures++
@@ -792,6 +792,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     }
                     onAgentStreamEvent(event)
                 }
+                // The agent switch: `AgentCore.enabled` routes this run to the agent in `agentcore/`.
+                com.aura.aura_ui.agentcore.AgentCore.ifEnabled(this@AuraOverlayService)?.runTask(text, onEvent)
+                    ?: auraAgent.runFromSavedSettings(text, remember = remember, showReportCard = remember, onEvent = onEvent)
             }
         } catch (ce: CancellationException) {
             com.aura.aura_ui.telemetry.AuraAnalytics.agentTask(

@@ -103,6 +103,11 @@ internal object McpServerBuilder {
          */
         ownPackageName: String? = null,
         /**
+         * Receives a lookup from a som_id on the latest screen to that element's label, once,
+         * while the server is built. A host uses it to see what a gesture is about to press.
+         */
+        labelLookup: ((somId: Int) -> String?) -> Unit = {},
+        /**
          * Spec 2026-07-31 — control lock. Reports whether the human currently has the
          * wheel; every tool call is refused while they do.
          *
@@ -149,6 +154,7 @@ internal object McpServerBuilder {
                 if (snap.ok) snap.payloadJson else null
             },
         )
+        labelLookup(perceptionCache::labelFor)
         val cvMemo = com.aura.mcp.cache.CvMemo()
         // Shared "when did we last look at the screen" baseline. Written by
         // perceive_screen and by every post-action settle, so change detection always
