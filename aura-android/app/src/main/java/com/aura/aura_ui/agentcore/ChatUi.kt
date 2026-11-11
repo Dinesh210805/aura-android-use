@@ -121,7 +121,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     val connectors = MutableStateFlow(core.connectors.configs())
     val connectorStatus = MutableStateFlow<String?>(null)
     val jobs = MutableStateFlow(emptyList<JobRow>())
-    val log = MutableStateFlow(emptyList<LogEntry>())
+    val log = MutableStateFlow(emptyList<RunLog>())
 
     init {
         core.start()
@@ -191,13 +191,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             turn = launch {
                 running.value = true
                 try {
-                    core.engine.runTurn(id, text, uris.mapNotNull(::attachment)).collect { event ->
+                    val turn = core.engine.runTurn(id, text, uris.mapNotNull(::attachment), handOffScreen = core.handsOffScreen())
+                    turn.collect { event ->
                         when (event) {
                             is AgentEvent.TurnStarted -> status.value = "Thinking"
                             is AgentEvent.ToolStarted -> status.value = event.tool.replace('_', ' ')
                             is AgentEvent.ToolFinished -> status.value = "Thinking"
                             is AgentEvent.PlanUpdated -> plan.value = event
-                            is AgentEvent.AssistantText, is AgentEvent.UserPromptRequested, is AgentEvent.TurnEnded -> Unit
+                            // Work on the screen happens on the overlay, where it can be watched and paused.
+                            is AgentEvent.TurnEnded -> if (event.end == TurnEnd.HANDED_OFF) core.handOff(id, text)
+                            is AgentEvent.AssistantText, is AgentEvent.UserPromptRequested -> Unit
                         }
                     }
                 } finally {
@@ -496,34 +499,67 @@ private fun ConnectionsPanel(vm: ChatViewModel) {
 /** GitHub's hosted MCP server; it takes a personal access token as the bearer. */
 private const val GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 
-/** The OpenTelemetry spans of recent turns, newest first, with the screenshots the model was sent. */
+/** Recent runs from the OpenTelemetry traces, newest first. Tap a run for its steps, a step for its details. */
 @Composable
 private fun LogPanel(vm: ChatViewModel) {
-    val entries by vm.log.collectAsState()
+    val runs by vm.log.collectAsState()
     LaunchedEffect(Unit) { vm.loadLog() }
-    if (entries.isEmpty()) Text("No runs logged yet.")
-    LazyColumn(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(entries) { entry -> LogRow(entry) }
+    if (runs.isEmpty()) Text("No runs logged yet.")
+    LazyColumn(Modifier.heightIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(runs, key = { it.startMs }) { run -> RunCard(run) }
     }
 }
 
 @Composable
-private fun LogRow(entry: LogEntry) {
-    var open by remember(entry) { mutableStateOf(false) }
+private fun RunCard(run: RunLog) {
+    var open by remember(run.startMs) { mutableStateOf(false) }
+    val scheme = MaterialTheme.colorScheme
+    Surface(color = scheme.surfaceVariant, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().animateContentSize()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.fillMaxWidth().clickable { open = !open }) {
+                Text(
+                    clock.format(Instant.ofEpochMilli(run.startMs)) + if (run.failed) " · had errors" else "",
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (run.failed) scheme.error else scheme.onSurface,
+                )
+                Text(
+                    "${run.modelCalls} model calls · ${run.toolCalls} tool calls · ${run.tokens} tokens · ${run.durationMs / 1000} s",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (open) run.steps.forEach { StepRow(it) }
+        }
+    }
+}
+
+@Composable
+private fun StepRow(step: LogEntry) {
+    var open by remember(step) { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().clickable { open = !open }.animateContentSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(clockSeconds.format(Instant.ofEpochMilli(entry.atMs)), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+            Text(clockSeconds.format(Instant.ofEpochMilli(step.atMs)), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
             Spacer(Modifier.width(8.dp))
-            Text(entry.name, Modifier.weight(1f), color = if (entry.ok) scheme.onSurface else scheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (entry.image == null) Text("${entry.durationMs} ms", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+            val title = when (step.kind) {
+                LogKind.MODEL -> "Model · ${step.label}"
+                LogKind.TOOL -> "Tool · ${step.label.replace('_', ' ')}"
+                LogKind.SCREEN, LogKind.RUN, LogKind.INTERNAL -> step.label
+            }
+            Text(title, Modifier.weight(1f), color = if (step.ok) scheme.onSurface else scheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val meta = when (step.kind) {
+                LogKind.MODEL -> "${step.inputTokens}→${step.outputTokens} tok · ${step.durationMs} ms"
+                LogKind.SCREEN -> ""
+                LogKind.TOOL, LogKind.RUN, LogKind.INTERNAL -> "${step.durationMs} ms"
+            }
+            Text(meta, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
         }
-        entry.image?.let { file ->
+        step.image?.let { file ->
             val bitmap = remember(file) { runCatching { BitmapFactory.decodeFile(file.path)?.asImageBitmap() }.getOrNull() }
-            bitmap?.let { Image(it, contentDescription = "Screenshot sent to the model", Modifier.heightIn(max = if (open) 640.dp else 200.dp)) }
+            bitmap?.let { Image(it, contentDescription = "Screenshot sent to the model", Modifier.heightIn(max = if (open) 640.dp else 180.dp)) }
         }
         if (open) {
-            entry.details.forEach { (key, value) ->
+            step.details.forEach { (key, value) ->
                 Text("$key: $value", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
         }

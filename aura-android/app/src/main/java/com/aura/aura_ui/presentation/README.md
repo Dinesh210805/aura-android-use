@@ -49,7 +49,8 @@ presentation/
 ### Routes → screens
 | Route | Screen |
 |---|---|
-| `home` | `screens/home/AuraHomeScreen.kt` (+ `AppPromptMarquee.kt`, the scrolling example prompts) |
+| `home` | `agentcore/ChatUi.kt` (outside this folder): the chat with the agent. The bottom bar is hidden here; the chat's drawer links to the other screens |
+| `home/dashboard` | `screens/home/AuraHomeScreen.kt` (+ `AppPromptMarquee.kt`, the scrolling example prompts): the status dashboard, opened from the chat's drawer |
 | `agent` | `screens/agent/AgentHubScreen.kt`, the hub linking to everything below |
 | `agent/brain` | `ProviderSettingsScreen.kt`: LLM provider, model and keys |
 | `agent/tools` | `screens/agent/ToolsScreen.kt`: MCP tool list, read/write/agent tags |
@@ -57,7 +58,6 @@ presentation/
 | `agent/skills` | `SkillsScreen.kt` + `SkillsViewModel.kt` |
 | `agent/memory` | `MemoryScreen.kt` + `MemoryViewModel.kt`: read-only memory inspector |
 | `agent/mcp_servers` | `McpServersScreen.kt` + `McpServersViewModel.kt`: external MCP servers |
-| `agent/chat` | `agentcore/ChatUi.kt` (outside this folder): the new agent's chat; opened from Home's **New agent** button in developer mode |
 | `agent/companion` | `CompanionScreen.kt` + `CompanionViewModel.kt`: voice mode and Gemini key |
 | `agent/voice` | `VoiceSettingsScreen.kt`: TTS voice and previews (`res/raw/voice_preview_*`) |
 | `activity` | `McpSessionLogScreen.kt`: past sessions, newest first |

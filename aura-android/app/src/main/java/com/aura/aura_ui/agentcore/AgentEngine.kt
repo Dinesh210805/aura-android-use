@@ -93,6 +93,13 @@ class AgentEngine(
         text: String,
         attachments: List<Attachment> = emptyList(),
         mode: RunMode = RunMode.FOREGROUND,
+        /** End the turn with [TurnEnd.HANDED_OFF] the moment it asks for the `screen` toolset. */
+        handOffScreen: Boolean = false,
+        /**
+         * This turn continues a request that was handed off: the user's message is already in
+         * the visible transcript, and the `screen` toolset starts loaded.
+         */
+        continuesHandOff: Boolean = false,
     ): Flow<AgentEvent> = channelFlow {
         refusal(text)?.let { reason ->
             threads.append(threadId, ItemKind.USER, text, attachments = attachments)
@@ -106,20 +113,25 @@ class AgentEngine(
             return@channelFlow
         }
         send(AgentEvent.TurnStarted(threadId, main.label))
-        threads.append(threadId, ItemKind.USER, text, attachments = attachments)
+        if (!continuesHandOff) threads.append(threadId, ItemKind.USER, text, attachments = attachments)
         val stored = threads.loadContext(threadId)
-        val turn = TurnState(threadId, mode, stored.taint) { event ->
+        val turn = TurnState(threadId, mode, stored.taint, handsOffScreen = handOffScreen) { event ->
             record(threadId, event)
             send(event)
         }
+        if (continuesHandOff) turn.load(ToolHub.SCREEN)
         val run = TurnRun(stored.messages)
         running[threadId] = turn
         onTurn(true, mode)
         val ended = try {
             val answer = execute(main, turn, run, stored.messages.isEmpty(), text, attachments)
-            threads.append(threadId, ItemKind.ASSISTANT, answer)
-            send(AgentEvent.AssistantText(answer, final = true))
-            AgentEvent.TurnEnded(run.end, answer)
+            if (run.end == TurnEnd.HANDED_OFF) {
+                AgentEvent.TurnEnded(TurnEnd.HANDED_OFF, null)
+            } else {
+                threads.append(threadId, ItemKind.ASSISTANT, answer)
+                send(AgentEvent.AssistantText(answer, final = true))
+                AgentEvent.TurnEnded(run.end, answer)
+            }
         } catch (e: CancellationException) {
             running.remove(threadId, turn)
             withContext(NonCancellable) { save(turn, run) }
@@ -132,7 +144,8 @@ class AgentEngine(
             onTurn(false, mode)
         }
         running.remove(threadId, turn)
-        save(turn, run)
+        // A handed-off turn leaves the thread as it found it; the overlay's turn starts clean.
+        if (ended.end != TurnEnd.HANDED_OFF) save(turn, run)
         send(ended)
         val untitled = threads.thread(threadId)?.title == ThreadStore.DEFAULT_TITLE
         if (untitled && ended.end == TurnEnd.ANSWERED) title(threadId, text)
@@ -183,6 +196,10 @@ class AgentEngine(
                 turn.saying = visibleText(reply)
                 turn.saying.takeIf { it.isNotBlank() }?.let { turn.emit(AgentEvent.AssistantText(it, final = false)) }
                 val results = executeTools(reply, false).map { it.toMessagePart() }
+                if (turn.handedOff) {
+                    run.end = TurnEnd.HANDED_OFF
+                    return@functionalStrategy ""
+                }
                 steps++
                 val atLimit = steps >= maxSteps || now() >= deadline
                 val onScreen = ToolHub.SCREEN in turn.loaded()
@@ -300,6 +317,9 @@ class AgentEngine(
         buildString {
             if (firstTurn) memory.block()?.let { append(it).append("\n\n") }
             append(DeviceContext.render(device())).append("\n\n")
+            // Loaded before the first request only when the turn continues a hand-off; the guide
+            // would otherwise have arrived as the result of loading the toolset.
+            if (ToolHub.SCREEN in turn.loaded()) append(SystemPrompt.SCREEN_GUIDE).append("\n\n")
             attachments.filterNot { it.isImage }.forEach { append(fileBlock(turn, it)).append("\n\n") }
             append(text)
         }

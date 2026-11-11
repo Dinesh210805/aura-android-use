@@ -6,13 +6,20 @@
 > comment and this README in the same commit.
 
 The new on-device chat agent for AURA: one Koog agent loop with threads, memory, skills, scheduled
-tasks, connectors and a safety gate in front of every tool. The chat is reachable from the
-**New agent** button on Home, which shows when developer mode is on (`DeveloperModeStore.enabled`).
+tasks, connectors and a safety gate in front of every tool. The chat is the app's Home
+(`AuraRoutes.HOME` in `AuraAppShell.kt`).
 
 **The agent switch.** `AgentCore.enabled` (the "Use for voice and the overlay" switch in the chat
 drawer) decides which agent runs a task started from the overlay or the voice companion:
 `AuraOverlayService` and `AuraAgentPhoneRunner` call `AgentCore.ifEnabled(context)?.runTask(...)`
-and fall back to the agent under `agent/`. Off by default.
+and fall back to the agent under `agent/`. On by default.
+
+**Hand-over to the overlay.** A chat turn does not drive the screen itself. The moment it asks
+for the `screen` toolset it ends with `TurnEnd.HANDED_OFF`, having saved nothing, and
+`AgentCore.handOff` sends the same request to `AuraOverlayService` (`ACTION_RUN_TASK`), where the
+user sees the transcript and can pause. The overlay's turn continues in the chat's thread with
+the toolset already loaded. This is skipped when the overlay cannot be drawn or the switch is off;
+the chat then drives the screen itself. Attachments do not travel with a hand-over.
 
 ## Files
 
@@ -94,6 +101,6 @@ stores (in `ModelGateway.kt`); and in `AgentCore.kt`, `TaskResearch` and `WebRes
 - Streaming replies, a fallback model, and separate FAST model selection (FAST resolves to MAIN).
 - Remote trace export UI (`RemoteTraces` exists, nothing sets it).
 - Resuming a turn after the app is killed.
-- Voice input on the chat screen (the mic button is not wired in `AuraAppShell.kt`), and the
-  app's own visual style for it.
+- Voice input inside the chat screen (its mic button opens the overlay), and the app's own
+  visual style for it.
 - The voice companion's own conversation is not in the run log.

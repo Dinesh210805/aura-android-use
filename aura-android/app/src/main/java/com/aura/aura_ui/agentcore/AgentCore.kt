@@ -5,10 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
+import android.provider.Settings
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -31,6 +33,7 @@ import com.aura.aura_ui.mcp.bridge.AppBrowserBridge
 import com.aura.aura_ui.mcp.bridge.AppDeviceBridge
 import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
 import com.aura.aura_ui.notifications.AuraNotificationListenerService
+import com.aura.aura_ui.overlay.AuraOverlayService
 import com.aura.mcp.server.SensitivePolicy
 import java.io.File
 import java.util.TimeZone
@@ -154,24 +157,53 @@ class AgentCore private constructor(private val app: Context) {
 
     /** Whether the overlay and the voice companion run on this agent instead of the one under `agent/`. */
     var enabled: Boolean
-        get() = prefs.getBoolean(KEY_ENABLED, false)
+        get() = prefs.getBoolean(KEY_ENABLED, ENABLED_BY_DEFAULT)
         set(value) = prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+
+    /** A request the chat handed to the overlay: the thread it belongs to and its exact text. */
+    @Volatile
+    private var handedOff: Pair<String, String>? = null
+
+    /**
+     * Whether a chat turn should hand screen work to the overlay, where the user sees the
+     * transcript and can pause.
+     * - Contract: false when the overlay cannot be drawn or would run the other agent; the
+     *   chat then drives the screen itself.
+     */
+    fun handsOffScreen(): Boolean = enabled && Settings.canDrawOverlays(app)
+
+    /**
+     * Run [text] on the overlay as the continuation of the chat turn in [threadId].
+     * - Reads/Writes: starts `AuraOverlayService` with `ACTION_RUN_TASK`; the overlay calls
+     *   [runTask], which picks the thread up from here.
+     */
+    fun handOff(threadId: String, text: String) {
+        handedOff = threadId to text
+        app.startService(
+            Intent(app, AuraOverlayService::class.java)
+                .setAction(AuraOverlayService.ACTION_RUN_TASK)
+                .putExtra(AuraOverlayService.EXTRA_TASK_TEXT, text),
+        )
+    }
 
     /**
      * Run one request behind the call shape of the agent under `agent/`, so the overlay and the
      * voice companion can use either agent.
-     * - Contract: returns what to say to the user. Requests made within [SURFACE_THREAD_IDLE_MS]
+     * - Contract: returns what to say to the user. A request the chat handed off ([handOff])
+     *   continues in the chat's thread. Otherwise requests made within [SURFACE_THREAD_IDLE_MS]
      *   of each other share one thread, so "now send it to mom" has its context. A request made
      *   while a turn is running is handed to that turn. Questions the agent asks go to
      *   `AskUserBroker.shared`, which the overlay shows and the companion speaks.
      */
     suspend fun runTask(text: String, onEvent: (AgentStreamEvent) -> Unit): String {
-        val threadId = surfaceThread()
-        if (engine.steer(threadId, text)) return "Okay, I'll take that into account."
+        val fromChat = handedOff?.takeIf { it.second == text }?.first
+        handedOff = null
+        val threadId = fromChat ?: surfaceThread()
+        if (fromChat == null && engine.steer(threadId, text)) return "Okay, I'll take that into account."
         surfaceThreads += threadId
         var answer: String? = null
         try {
-            engine.runTurn(threadId, text).collect { event ->
+            engine.runTurn(threadId, text, continuesHandOff = fromChat != null).collect { event ->
                 when (event) {
                     is AgentEvent.ToolStarted -> onEvent(AgentStreamEvent.ToolStarting(event.tool, event.argsPreview))
                     is AgentEvent.ToolFinished -> onEvent(
@@ -291,6 +323,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val PREFS = "agentcore"
         private const val KEY_ALWAYS_ON = "always_on"
         private const val KEY_ENABLED = "use_for_overlay_and_voice"
+        private const val ENABLED_BY_DEFAULT = true
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
         private const val ASK_TIMEOUT_MS = 120_000L
@@ -315,7 +348,7 @@ class AgentCore private constructor(private val app: Context) {
          */
         /** The core, only if the user switched the overlay and voice to it. Cheap to call on every run. */
         fun ifEnabled(context: Context): AgentCore? =
-            if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, false)) get(context) else null
+            if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, ENABLED_BY_DEFAULT)) get(context) else null
 
         fun ifAlwaysOn(context: Context): AgentCore? =
             if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ALWAYS_ON, false)) get(context) else null

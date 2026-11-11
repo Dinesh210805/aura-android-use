@@ -91,6 +91,12 @@ enum class TurnEnd {
 
     /** The provider, the network or the harness failed. */
     FAILED,
+
+    /**
+     * The turn needs to drive the screen and was started where the user cannot watch it do so.
+     * Nothing was done or saved; the caller runs the same request on the overlay.
+     */
+    HANDED_OFF,
 }
 
 /**

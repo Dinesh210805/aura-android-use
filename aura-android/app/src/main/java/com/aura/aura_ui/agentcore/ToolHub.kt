@@ -101,8 +101,14 @@ class TurnState(
     val mode: RunMode,
     /** Untrusted origins already in the thread's stored context. */
     inheritedTaint: Set<Origin> = emptySet(),
+    /** True when this turn must not drive the screen itself: asking for the `screen` toolset ends it. */
+    val handsOffScreen: Boolean = false,
     private val sink: suspend (AgentEvent) -> Unit,
 ) {
+    /** Set when the turn asked for the screen and [handsOffScreen] is true. */
+    @Volatile
+    var handedOff: Boolean = false
+
     val taint = TurnTaint(inheritedTaint)
     private val toolsets = mutableSetOf(ToolHub.CORE)
     private val images = ArrayDeque<ByteArray>()
@@ -409,6 +415,12 @@ class ToolHub(
         }
 
         suspend fun gated(args: JsonObject): ToolOutcome {
+            val wantsScreen = spec.toolset == SCREEN ||
+                (spec.name == LOAD_TOOLSET && args["name"]?.jsonPrimitive?.contentOrNull == SCREEN)
+            if (turn.handsOffScreen && wantsScreen) {
+                turn.handedOff = true
+                return ToolOutcome("Handing this task to the overlay.")
+            }
             val label = if (spec.risk == ToolRisk.ACT) targetLabel(spec.name, args) else null
             val argsText = args.toString()
             // Any call carrying a URL can send data out, whatever the tool was classified as.
@@ -476,6 +488,7 @@ class ToolHub(
         const val SCREEN = "screen"
 
         private const val READ_SCREEN = "read_screen"
+        private const val LOAD_TOOLSET = "load_toolset"
         private const val MAX_SAID_IN_QUESTION = 400
         private const val MAX_RESULT_CHARS = 12_000
         private const val PREVIEW_CHARS = 240

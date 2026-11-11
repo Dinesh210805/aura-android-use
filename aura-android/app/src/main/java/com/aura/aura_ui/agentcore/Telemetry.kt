@@ -39,15 +39,33 @@ data class RemoteTraces(
     val headers: Map<String, String> = emptyMap(),
 )
 
-/** One line of the run log: a finished span, or a screenshot that was sent to the model. */
+enum class LogKind { MODEL, TOOL, SCREEN, RUN, INTERNAL }
+
+/** One step of a run: a finished span, or a screenshot that was sent to the model. */
 data class LogEntry(
     val atMs: Long,
-    val name: String,
+    val kind: LogKind,
+    /** The tool's or the model's name, ready to show. */
+    val label: String,
     val durationMs: Long,
     val ok: Boolean,
     val details: Map<String, String> = emptyMap(),
     val image: File? = null,
-)
+    val traceId: String = "",
+) {
+    val inputTokens: Long get() = tokens("input_tokens")
+    val outputTokens: Long get() = tokens("output_tokens")
+
+    private fun tokens(suffix: String): Long = details.entries.firstOrNull { it.key.endsWith(suffix) }?.value?.toLongOrNull() ?: 0
+}
+
+/** One run in the log: the model calls, tool calls and screenshots of one turn, oldest first. */
+data class RunLog(val startMs: Long, val durationMs: Long, val steps: List<LogEntry>) {
+    val modelCalls: Int get() = steps.count { it.kind == LogKind.MODEL }
+    val toolCalls: Int get() = steps.count { it.kind == LogKind.TOOL }
+    val tokens: Long get() = steps.sumOf { it.inputTokens + it.outputTokens }
+    val failed: Boolean get() = steps.any { !it.ok }
+}
 
 class AgentTelemetry(
     private val tracesDir: File,
@@ -69,41 +87,63 @@ class AgentTelemetry(
     }
 
     /**
-     * The newest [limit] log entries, newest first: spans from the two most recent day files,
-     * with the screenshots taken in that time placed among them.
-     * - Contract: blocking file I/O; call it off the main thread.
+     * The newest [limit] runs, newest first, read from the two most recent day files. Each run is
+     * one trace: its model calls and tool calls in order, with the screenshots sent in that time.
+     * - Contract: blocking file I/O; call it off the main thread. Spans that only describe the
+     *   loop's own structure ([LogKind.INTERNAL]) are left out.
      */
-    fun recent(limit: Int = 300): List<LogEntry> = runCatching {
+    fun recent(limit: Int = 30): List<RunLog> = runCatching {
         val files = tracesDir.listFiles().orEmpty()
-        val spans = files.filter { it.name.startsWith("spans-") }.sortedByDescending { it.name }.take(2)
-            .flatMap { it.readLines() }.mapNotNull(::entry)
-        val oldest = spans.minOfOrNull { it.atMs } ?: Long.MAX_VALUE
         val screens = files.filter { it.name.startsWith("screen-") }.mapNotNull { file ->
             file.name.removePrefix("screen-").removeSuffix(".png").toLongOrNull()
-                ?.takeIf { it >= oldest }?.let { LogEntry(it, "Screenshot sent to the model", 0, true, image = file) }
+                ?.let { LogEntry(it, LogKind.SCREEN, "Screenshot sent to the model", 0, true, image = file) }
         }
-        (spans + screens).sortedByDescending { it.atMs }.take(limit)
+        files.filter { it.name.startsWith("spans-") }.sortedByDescending { it.name }.take(2)
+            .flatMap { it.readLines() }.mapNotNull(::entry)
+            .groupBy { it.traceId }.values
+            .map { spans ->
+                val start = spans.minOf { it.atMs }
+                val end = spans.maxOf { it.atMs + it.durationMs }
+                val shown = spans.filter { it.kind == LogKind.MODEL || it.kind == LogKind.TOOL }
+                RunLog(start, end - start, (shown + screens.filter { it.atMs in start..end }).sortedBy { it.atMs })
+            }
+            .filter { it.steps.isNotEmpty() }
+            .sortedByDescending { it.startMs }
+            .take(limit)
     }.getOrDefault(emptyList())
 
     private fun entry(line: String): LogEntry? = runCatching {
         val span = Json.parseToJsonElement(line).jsonObject
         val start = span.getValue("start_ns").jsonPrimitive.long
+        val name = span.getValue("name").jsonPrimitive.content
+        val kind = kindOf(name)
         LogEntry(
             atMs = start / NS_PER_MS,
-            name = span.getValue("name").jsonPrimitive.content,
+            kind = kind,
+            label = name.substringAfter(' ', name),
             durationMs = (span.getValue("end_ns").jsonPrimitive.long - start) / NS_PER_MS,
             ok = !span.getValue("status").jsonPrimitive.content.contains("error", ignoreCase = true),
             details = span["attributes"]?.jsonObject.orEmpty().mapValues { it.value.jsonPrimitive.content },
+            traceId = span.getValue("trace_id").jsonPrimitive.content,
         )
     }.getOrNull()
+
+    /** Span names follow the OpenTelemetry GenAI conventions: an operation, then what it ran on. */
+    private fun kindOf(spanName: String): LogKind = when (spanName.substringBefore(' ')) {
+        "execute_tool" -> LogKind.TOOL
+        "chat", "generate_content", "text_completion" -> LogKind.MODEL
+        "invoke_agent" -> LogKind.RUN
+        else -> LogKind.INTERNAL
+    }
 
     /** Call inside `install(OpenTelemetry) { ... }` when building the agent for a turn. */
     fun configure(config: OpenTelemetryConfig) {
         config.setServiceInfo(SERVICE_NAME, appVersion)
         config.addSpanExporter(device)
-        remote()?.takeIf { it.endpoint.startsWith("https://") }?.let {
-            config.addSpanExporter(OtlpJsonSpanExporter(it.endpoint, it.headers))
-        }
+        val collector = remote()?.takeIf { it.endpoint.startsWith("https://") }
+        collector?.let { config.addSpanExporter(OtlpJsonSpanExporter(it.endpoint, it.headers)) }
+        // Prompts, tool arguments and results are recorded only while traces stay on this phone.
+        config.setVerbose(collector == null)
     }
 
     private companion object {
