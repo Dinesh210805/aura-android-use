@@ -218,7 +218,7 @@ object ContextAssembler {
                 index in stale && message is Message.User -> message.copy(
                     parts = message.parts.map { part ->
                         if (part is MessagePart.Tool.Result && part.tool in SCREEN_TOOLS) {
-                            part.copy(output = STALE_SCREEN)
+                            MessagePart.Tool.Result(part.id, part.tool, STALE_SCREEN, part.isError)
                         } else {
                             part
                         }
@@ -244,7 +244,7 @@ object ContextAssembler {
                 message.copy(
                     parts = message.parts.map { part ->
                         if (part is MessagePart.Tool.Result && part.output.length > PRUNE_MIN_CHARS) {
-                            part.copy(output = PRUNED_RESULT)
+                            MessagePart.Tool.Result(part.id, part.tool, PRUNED_RESULT, part.isError)
                         } else {
                             part
                         }

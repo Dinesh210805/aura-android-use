@@ -541,7 +541,7 @@ private fun evictStalePerceptionText(messages: List<Message>): List<Message> {
                     if (part is MessagePart.Tool.Result &&
                         part.tool in PerceptionEvictionPolicy.PERCEPTION_TOOLS
                     ) {
-                        part.copy(output = PerceptionEvictionPolicy.PLACEHOLDER)
+                        MessagePart.Tool.Result(part.id, part.tool, PerceptionEvictionPolicy.PLACEHOLDER, part.isError)
                     } else {
                         part
                     }
