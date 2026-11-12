@@ -15,6 +15,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
@@ -150,16 +151,18 @@ internal fun Server.scopedTool(
     inputSchema: ToolSchema = ToolSchema(),
     handler: suspend (CallToolRequest) -> CallToolResult,
 ) {
+    val required = McpToolScopes.requiredScopeFor(name)
+    // Every action carries the driver's one-line reason for the user; see [ToolStatus].
+    val schema = if (required == McpScope.WRITE) ToolStatus.withStatus(inputSchema) else inputSchema
     RegisteredToolNames.names += name
-    RegisteredToolNames.descriptions[name] = description to inputSchema.properties.toString()
+    RegisteredToolNames.descriptions[name] = description to schema.properties.toString()
     // GP1 — capture THIS server's sinks now (registration time); the handler
     // closure below reads only these locals, never mutable shared state.
     val sinks = sinks()
-    val required = McpToolScopes.requiredScopeFor(name)
     addTool(
         name = name,
         description = description,
-        inputSchema = inputSchema,
+        inputSchema = schema,
     ) { request ->
         // Before every gate, including the ones about to refuse this call: a client that
         // keeps calling into a paused phone is still driving it, and if refusals did not
@@ -269,7 +272,8 @@ internal fun Server.scopedTool(
 
         // After every permanent gate, so a blocked or paused call is reported as that, not as a
         // wasted turn. See [ActionGuard] for the rules.
-        val argsJson = request.arguments?.toString() ?: "{}"
+        // Without the status: two identical actions with different wording are still a repeat.
+        val argsJson = request.arguments?.let { JsonObject(it - ToolStatus.ARG) }?.toString() ?: "{}"
         sinks.guard?.refusalFor(name, argsJson)?.let { refusal ->
             trail.step("gate", "ActionGuard", "refuse", refusal.kind)
             return@addTool refused(actionGuardResult(name, refusal), "action_guard:${refusal.kind}")
@@ -279,6 +283,9 @@ internal fun Server.scopedTool(
         // Fire STARTED only after auth/scope/policy passed — the chip should
         // never flip to "Acting" for a call we're about to reject.
         sinks.phase.onPhase(name, required, ToolPhaseSink.Phase.STARTED)
+        if (required == McpScope.WRITE) {
+            runCatching { ToolStatus.sink(name, ToolStatus.of(request.arguments), request.arguments) }
+        }
         sinks.session.onToolStart(
             toolName = name,
             argsJson = request.arguments?.toString(),

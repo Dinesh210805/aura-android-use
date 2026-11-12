@@ -64,7 +64,8 @@ class ToolDescriptionBudgetTest {
     private val ceilings: Map<String, Int> = mapOf(
         "perception" to 1_340,
         "browser" to 2_060,
-        "gestures" to 860,
+        // +140 for the `status` argument on every action (ToolStatus): the line under the cursor.
+        "gestures" to 1_010,
         "assistant" to 1_160,
         "apps" to 745,
         "other" to 1_080,

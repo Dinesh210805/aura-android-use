@@ -269,6 +269,10 @@ class AuraAccessibilityService : AccessibilityService() {
         touchWatchOverlay = TouchWatchOverlay(this) { ControlLockStore.shared.onHumanTouch() }
             .also { it.attach() }
 
+        // Every action, from AURA's agent or a remote MCP client, names its purpose under the cursor.
+        com.aura.mcp.server.ToolStatus.sink = com.aura.aura_ui.services.StepPill::onTool
+        agentCursor.start()
+
         uiTreeExtractor = UITreeExtractor(this)
         screenCaptureManager = ScreenCaptureManager(this, uiTreeExtractor)
         gestureInjector = GestureInjector(this)
@@ -643,7 +647,8 @@ class AuraAccessibilityService : AccessibilityService() {
         releaseKeepScreenOn()
         touchWatchOverlay?.detach()
         touchWatchOverlay = null
-        agentCursor.detach()
+        agentCursor.release()
+        com.aura.mcp.server.ToolStatus.sink = { _, _, _ -> }
         // Accessibility and the UI overlay have independent lifecycles. If the service is
         // disabled outside RestrictedAppAccessibilityGate, do not leave a full-screen overlay
         // alive above the next app.
@@ -1074,11 +1079,39 @@ class AuraAccessibilityService : AccessibilityService() {
         val end = endTarget?.takeIf { !it.normalized }
         tapFlash.flash(coords.x, coords.y, end?.x, end?.y)
         if (end == null) {
+            if (com.aura.aura_ui.services.StepPill.wantsTarget) com.aura.aura_ui.services.StepPill.onTarget(labelAt(coords.x.toInt(), coords.y.toInt()))
             agentCursor.pointAt(coords.x, coords.y)
         } else {
             agentCursor.trace(listOf(coords.x to coords.y, end.x to end.y), options.durationMs, options.holdMs)
         }
     }
+
+    /**
+     * The words on the element under ([x], [y]): the smallest node containing the point that has
+     * text or a description. Used only to name a tap whose driver gave no status.
+     * - Fails: null on anything; the pill keeps its plainer line.
+     */
+    private fun labelAt(x: Int, y: Int): String? = runCatching {
+        val root = rootInActiveWindow ?: return@runCatching null
+        val box = android.graphics.Rect()
+        var best: String? = null
+        var bestArea = Long.MAX_VALUE
+        val stack = ArrayDeque<android.view.accessibility.AccessibilityNodeInfo>().apply { add(root) }
+        var visited = 0
+        while (stack.isNotEmpty() && visited++ < LABEL_SCAN_MAX) {
+            val node = stack.removeLast()
+            node.getBoundsInScreen(box)
+            if (!box.contains(x, y)) continue
+            val words = (node.text ?: node.contentDescription)?.toString()?.trim()
+            val area = box.width().toLong() * box.height()
+            if (!words.isNullOrEmpty() && area < bestArea) {
+                best = words
+                bestArea = area
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let(stack::add)
+        }
+        best?.lineSequence()?.firstOrNull()
+    }.getOrNull()
 
     private val tapFlash by lazy { TapFlashOverlay(this) }
 
@@ -1127,6 +1160,7 @@ class AuraAccessibilityService : AccessibilityService() {
         // Stamped BEFORE dispatch: the resulting touch events can reach the control lock before
         // dispatchGesture() returns, and an unstamped echo reads as the user taking over.
         ControlLockStore.shared.noteDispatch(SelfActionWindow.ActionKind.TAP)
+        if (com.aura.aura_ui.services.StepPill.wantsTarget) com.aura.aura_ui.services.StepPill.onTarget(labelAt(x, y))
         agentCursor.pointAt(x.toFloat(), y.toFloat())
         val dispatched = dispatchGesture(gesture, null, null)
         AgentLogger.Auto.d("Tap at ($x, $y) dispatched: $dispatched")
@@ -2128,3 +2162,6 @@ private fun AccessibilityNodeInfo.performSelfAction(
     ControlLockStore.shared.noteDispatch(kind)
     return performAction(action, arguments)
 }
+
+/** How many nodes [AuraAccessibilityService.labelAt] may visit; a deep tree is cut short, not walked whole. */
+private const val LABEL_SCAN_MAX = 400
