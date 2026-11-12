@@ -50,7 +50,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -186,6 +191,8 @@ data class VoiceAssistantState(
     // Screen-share (MediaProjection) is currently held — AURA can see the screen. Drives the
     // brand-tinted screen-share toggle in the input pill.
     val isScreenSharing: Boolean = false,
+    /** Space kept free under the prompt box, for the run controls while a run is paused. */
+    val bottomLiftDp: Int = 0,
 )
 
 /**
@@ -227,41 +234,8 @@ fun VoiceAssistantOverlay(
     callbacks: VoiceAssistantCallbacks,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val screenHeight = configuration.screenHeightDp.dp
     val density = LocalDensity.current
-    
-    // Get theme-aware colors
     val colors = rememberOverlayColors()
-    
-    // Sheet expansion state
-    var sheetExpanded by remember { mutableStateOf(false) }
-    val collapsedHeight = screenHeight * 0.35f
-    val expandedHeight = screenHeight * 0.75f
-    
-    // Drag offset for sheet
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    val currentSheetHeight by animateDpAsState(
-        targetValue = if (sheetExpanded) expandedHeight else collapsedHeight,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "sheet_height"
-    )
-    
-    // Draggable state for the response sheet
-    val draggableState = rememberDraggableState { delta ->
-        dragOffset += delta
-        // Determine if we should expand or collapse based on drag direction
-        if (dragOffset < -100) {
-            sheetExpanded = true
-            dragOffset = 0f
-        } else if (dragOffset > 100) {
-            sheetExpanded = false
-            dragOffset = 0f
-        }
-    }
 
     // Open animation — an elastic, physics-based rise (spring → 60fps) with a slight
     // scale-up + overshoot so it feels alive rather than a slide/PPT transition. Fires in
@@ -382,6 +356,7 @@ fun VoiceAssistantOverlay(
                             ) { _, dragAmount -> pillDragDy += dragAmount }
                         }
                 )
+                if (state.bottomLiftDp > 0) Spacer(modifier = Modifier.height(state.bottomLiftDp.dp))
             }
         }
     }
@@ -453,808 +428,13 @@ private fun ResumeChip(
     }
 }
 
-/**
- * Empty state when no conversation
- */
-@Composable
-private fun EmptyOverlayState(
-    suggestedCommands: List<String>,
-    recentCommands: List<String>,
-    resumeOffer: com.aura.aura_ui.agent.ledger.ResumeOffer?,
-    colors: OverlayColorScheme,
-    onSuggestionClick: (String) -> Unit,
-    onResumeClick: () -> Unit,
-    onResumeDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Build 3: resume chip for an interrupted run (never auto-resumes — the user taps it).
-        resumeOffer?.let { offer ->
-            Surface(
-                onClick = onResumeClick,
-                shape = RoundedCornerShape(12.dp),
-                color = AuraPrimary.copy(alpha = 0.12f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = AuraPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = offer.chipLabel(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = "Dismiss",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.textSecondary,
-                        modifier = Modifier.clickable(onClick = onResumeDismiss)
-                    )
-                }
-            }
-        }
 
-        // Animated AURA orb
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(
-                            AuraPrimary.copy(alpha = 0.3f),
-                            AuraSecondary.copy(alpha = 0.1f),
-                            Color.Transparent
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = null,
-                tint = AuraPrimary,
-                modifier = Modifier.size(32.dp)
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Hi, I'm AURA",
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Medium
-            ),
-            color = colors.textPrimary,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "Tap the mic and ask me anything",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.textSecondary,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Horizontally scrollable suggestions
-        if (suggestedCommands.isNotEmpty() || recentCommands.isNotEmpty()) {
-            HorizontalSuggestions(
-                suggestedCommands = suggestedCommands,
-                recentCommands = recentCommands,
-                colors = colors,
-                onSuggestionClick = onSuggestionClick
-            )
-        }
-    }
-}
 
-/**
- * Message bubble for the transcript. WhatsApp-inverse: the user is LEFT-aligned, AURA is
- * RIGHT-aligned under the colored logo avatar. Tap a finalized bubble to reveal actions
- * (copy · like · dislike · share). Used identically by STT/TTS and Gemini Live.
- */
-@Composable
-private fun OverlayMessageBubble(
-    message: ConversationMessage,
-    colors: OverlayColorScheme,
-    onCopy: () -> Unit = {},
-    onShare: () -> Unit = {},
-    onLike: () -> Unit = {},
-    onDislike: () -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    val isUser = message.isUser
-    var showActions by remember { mutableStateOf(false) }
-    // Local like/dislike state: 0 none, 1 like, -1 dislike. Mutually exclusive.
-    var reaction by remember(message.id) { mutableIntStateOf(0) }
-    val hapticFeedback = rememberHapticFeedback()
 
-    // ── Typing animation ────────────────────────────────────────────────────
-    // For streaming bubbles: animate visible character count from 0 → full length
-    // each time the text grows. Non-streaming messages display instantly.
-    val targetChars = message.text.length
-    val animatedChars by animateIntAsState(
-        targetValue = if (message.isStreaming) targetChars else targetChars,
-        animationSpec = if (message.isStreaming) {
-            tween(durationMillis = (targetChars * 18).coerceIn(80, 600))
-        } else {
-            snap()
-        },
-        label = "typingChars"
-    )
-    val displayText = if (message.isStreaming) {
-        message.text.take(animatedChars)
-    } else {
-        message.text
-    }
 
-    // Blinking cursor — only animates for streaming bubbles; static 1f otherwise
-    val cursorAlpha by if (message.isStreaming) {
-        rememberInfiniteTransition(label = "cursor").animateFloat(
-            initialValue = 1f, targetValue = 0f,
-            animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
-            label = "cursorAlpha"
-        )
-    } else {
-        remember { mutableFloatStateOf(1f) }
-    }
-    // ────────────────────────────────────────────────────────────────────────
 
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.Start else Arrangement.End,
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Column(horizontalAlignment = if (isUser) Alignment.Start else Alignment.End) {
-            Surface(
-                shape = RoundedCornerShape(
-                    topStart = 18.dp,
-                    topEnd = 18.dp,
-                    bottomStart = if (isUser) 4.dp else 18.dp,
-                    bottomEnd = if (isUser) 18.dp else 4.dp
-                ),
-                color = if (isUser) {
-                    colors.userBubbleColor.copy(alpha = if (message.isPartial) 0.6f else 1f)
-                } else {
-                    colors.assistantBubbleColor
-                },
-                border = if (isUser) null else BorderStroke(1.dp, colors.textTertiary.copy(alpha = 0.14f)),
-                modifier = Modifier
-                    .widthIn(max = 252.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        if (!message.isPartial) {
-                            showActions = !showActions
-                        }
-                    }
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    // Main text — with inline cursor appended while streaming
-                    val shownText = if (message.isStreaming && animatedChars >= targetChars) {
-                        // Text fully typed — show blinking cursor
-                        buildString {
-                            append(displayText)
-                            append("\u2588") // block cursor ▉
-                        }
-                    } else {
-                        displayText
-                    }
 
-                    Text(
-                        text = shownText,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            lineHeight = 20.sp
-                        ),
-                        color = if (isUser) {
-                            Color.White.copy(
-                                alpha = if (message.isStreaming && animatedChars >= targetChars)
-                                    0.7f + 0.3f * cursorAlpha else 1f
-                            )
-                        } else {
-                            colors.textPrimary
-                        }
-                    )
 
-                    // Timestamp only on finalized messages
-                    if (!message.isPartial && !message.isStreaming) {
-                        Text(
-                            text = message.getRelativeTime(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isUser) {
-                                Color.White.copy(alpha = 0.7f)
-                            } else {
-                                colors.textSecondary
-                            },
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                }
-            }
-
-            // Message Actions — copy · like · dislike · share
-            AnimatedVisibility(
-                visible = showActions && !message.isPartial,
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut() + slideOutVertically()
-            ) {
-                MessageActions(
-                    colors = colors,
-                    reaction = reaction,
-                    onCopy = {
-                        hapticFeedback(AuraHapticType.LIGHT)
-                        onCopy()
-                        showActions = false
-                    },
-                    onLike = {
-                        hapticFeedback(AuraHapticType.LIGHT)
-                        reaction = if (reaction == 1) 0 else 1
-                        onLike()
-                    },
-                    onDislike = {
-                        hapticFeedback(AuraHapticType.LIGHT)
-                        reaction = if (reaction == -1) 0 else -1
-                        onDislike()
-                    },
-                    onShare = {
-                        hapticFeedback(AuraHapticType.LIGHT)
-                        onShare()
-                        showActions = false
-                    },
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-        }
-
-        // AURA reply carries the colored logo avatar on its outer (right) edge.
-        if (!isUser) {
-            Spacer(modifier = Modifier.width(8.dp))
-            AuraLogoAvatar(size = 28.dp, modifier = Modifier.padding(bottom = 2.dp))
-        }
-    }
-}
-
-/**
- * Skeleton steps section - Shows the planned steps from task_progress.
- * Briefly displayed before auto-minimize.
- */
-@Composable
-private fun SkeletonStepsSection(
-    taskProgress: com.aura.aura_ui.conversation.TaskProgress,
-    colors: OverlayColorScheme,
-    modifier: Modifier = Modifier,
-) {
-    val enterTransition = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        enterTransition.animateTo(1f, animationSpec = tween(400))
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .alpha(enterTransition.value)
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.assistantBubbleColor.copy(alpha = 0.6f))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        // Goal header
-        Text(
-            text = taskProgress.goal,
-            style = MaterialTheme.typography.labelMedium,
-            color = colors.textPrimary,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-
-        // Step items
-        taskProgress.tasks.forEachIndexed { index, step ->
-            val isCurrent = index + 1 == taskProgress.current
-            val isDone = index + 1 < taskProgress.current
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Step indicator
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when {
-                                isDone -> AuraPrimary.copy(alpha = 0.8f)
-                                isCurrent -> AuraPrimary
-                                else -> colors.textSecondary.copy(alpha = 0.2f)
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isDone) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    } else {
-                        Text(
-                            text = "${index + 1}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isCurrent) Color.White else colors.textSecondary,
-                            fontSize = 10.sp,
-                        )
-                    }
-                }
-
-                // Step description
-                Text(
-                    text = step,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = when {
-                        isDone -> colors.textSecondary.copy(alpha = 0.6f)
-                        isCurrent -> colors.textPrimary
-                        else -> colors.textSecondary.copy(alpha = 0.7f)
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
-                    fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
-                )
-            }
-        }
-    }
-}
-
-/**
- * On-device agent process timeline (Phase 3 slice D). Renders the structured
- * [AgentStep] stream as a clean monochrome vertical timeline — each tool call grouped
- * with its outcome (running spinner → check / cross), under a collapsible header that
- * summarizes progress. Replaces the flat log-line look of [LiveThinkingSection] for
- * the on-device agent.
- */
-@Composable
-private fun AgentProcessTrace(
-    steps: List<AgentStep>,
-    isRunning: Boolean,
-    colors: OverlayColorScheme,
-    modifier: Modifier = Modifier,
-) {
-    var expanded by remember { mutableStateOf(true) }
-    val rotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(250, easing = FastOutSlowInEasing),
-        label = "trace_chevron",
-    )
-    val doneCount = steps.count { it.status != AgentStepStatus.RUNNING }
-    val headline = when {
-        isRunning -> steps.lastOrNull { it.status == AgentStepStatus.RUNNING }?.title?.let { "$it…" }
-            ?: "Working…"
-        steps.any { it.status == AgentStepStatus.FAILED } -> "Done with issues"
-        else -> "Done"
-    }
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = colors.surfaceVariant.copy(alpha = 0.95f),
-        shadowElevation = 2.dp,
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Header — tap to collapse/expand
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (isRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 2.dp,
-                        color = colors.textPrimary,
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(14.dp)
-                            .clip(CircleShape)
-                            .background(colors.textPrimary.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = if (steps.any { it.status == AgentStepStatus.FAILED }) "!" else "✓",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                            color = colors.textPrimary,
-                        )
-                    }
-                }
-                Text(
-                    text = headline,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = "$doneCount/${steps.size}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textTertiary,
-                )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = colors.textSecondary,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .graphicsLayer { rotationZ = rotation },
-                )
-            }
-
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn(tween(180)) + expandVertically(tween(260)),
-                exit = fadeOut(tween(120)) + shrinkVertically(tween(220)),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 14.dp, bottom = 12.dp, top = 2.dp),
-                ) {
-                    steps.forEachIndexed { index, step ->
-                        AgentStepRow(
-                            step = step,
-                            isLast = index == steps.lastIndex,
-                            colors = colors,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** One row in [AgentProcessTrace]: status dot + connector line, verb, tool, args. */
-@Composable
-private fun AgentStepRow(
-    step: AgentStep,
-    isLast: Boolean,
-    colors: OverlayColorScheme,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Timeline rail: status indicator + connector to the next step.
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(18.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(18.dp).padding(top = 2.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                when (step.status) {
-                    AgentStepStatus.RUNNING -> CircularProgressIndicator(
-                        modifier = Modifier.size(13.dp),
-                        strokeWidth = 1.6.dp,
-                        color = colors.textPrimary,
-                    )
-                    AgentStepStatus.DONE -> StatusGlyph("✓", colors.textPrimary, colors)
-                    AgentStepStatus.FAILED -> StatusGlyph("✗", colors.textPrimary, colors)
-                }
-            }
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(1.5.dp)
-                        .weight(1f)
-                        .padding(vertical = 2.dp)
-                        .background(colors.textTertiary.copy(alpha = 0.4f)),
-                )
-            }
-        }
-
-        // Step content
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = if (isLast) 0.dp else 12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = step.title,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                    color = if (step.status == AgentStepStatus.FAILED) colors.textPrimary else colors.textPrimary,
-                )
-                Text(
-                    text = step.tool,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = colors.textTertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (step.detail.isNotBlank()) {
-                Text(
-                    text = step.detail,
-                    style = MaterialTheme.typography.labelSmall.copy(lineHeight = 14.sp),
-                    color = colors.textSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-/** Small circular status glyph (✓ / ✗) for the timeline rail. */
-@Composable
-private fun StatusGlyph(symbol: String, tint: Color, colors: OverlayColorScheme) {
-    Box(
-        modifier = Modifier
-            .size(16.dp)
-            .clip(CircleShape)
-            .background(colors.textPrimary.copy(alpha = 0.10f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = symbol,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-            color = tint,
-        )
-    }
-}
-
-/**
- * Live thinking section - Shows real-time agent pipeline outputs during processing.
- * Toggle button (expanded by default) reveals the thinking trace.
- */
-@Composable
-private fun LiveThinkingSection(
-    agentOutputs: List<com.aura.aura_ui.conversation.AgentOutput>,
-    processingContext: String,
-    colors: OverlayColorScheme,
-    modifier: Modifier = Modifier,
-) {
-    var isExpanded by remember { mutableStateOf(true) } // Open by default
-    
-    val infiniteTransition = rememberInfiniteTransition(label = "thinking_live")
-    
-    // Pulsing indicator
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
-    
-    // Shimmer effect
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -1f,
-        targetValue = 2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmer"
-    )
-    
-    // Rotation for expand icon
-    val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 180f else 0f,
-        animationSpec = tween(300, easing = FastOutSlowInEasing),
-        label = "rotation"
-    )
-    
-    // Auto-scroll to latest output
-    val listState = rememberLazyListState()
-    LaunchedEffect(agentOutputs.size) {
-        if (agentOutputs.isNotEmpty() && isExpanded) {
-            listState.animateScrollToItem(agentOutputs.size - 1)
-        }
-    }
-
-    Column(
-        modifier = modifier.fillMaxWidth()
-    ) {
-        // Header bar — tap to toggle
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = if (isExpanded) 0.dp else 16.dp, bottomEnd = if (isExpanded) 0.dp else 16.dp),
-            color = colors.surfaceVariant.copy(alpha = 0.95f),
-            shadowElevation = 4.dp,
-        ) {
-            Box {
-                // Shimmer overlay
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    colors.accentBlue.copy(alpha = 0.08f),
-                                    colors.accentPurple.copy(alpha = 0.12f),
-                                    colors.accentBlue.copy(alpha = 0.08f),
-                                    Color.Transparent
-                                ),
-                                start = Offset(x = shimmerOffset * 300f, y = 0f),
-                                end = Offset(x = (shimmerOffset + 0.5f) * 300f, y = 50f)
-                            )
-                        )
-                )
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isExpanded = !isExpanded }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Animated thinking orb
-                    Box(contentAlignment = Alignment.Center) {
-                        Box(
-                            modifier = Modifier
-                                .size(14.dp)
-                                .alpha(pulseAlpha * 0.4f)
-                                .scale(1f + pulseAlpha * 0.15f)
-                                .clip(CircleShape)
-                                .background(colors.accentBlue.copy(alpha = 0.3f))
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .alpha(0.7f + pulseAlpha * 0.3f)
-                                .clip(CircleShape)
-                                .background(colors.accentBlue)
-                        )
-                    }
-                    
-                    Text(
-                        text = if (agentOutputs.isEmpty()) "Thinking..." else agentOutputs.last().output.take(40),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontWeight = FontWeight.Medium
-                        ),
-                        color = colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    
-                    // Toggle icon
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (isExpanded) "Collapse" else "Expand",
-                        tint = colors.textSecondary,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .graphicsLayer { rotationZ = rotationAngle }
-                    )
-                }
-            }
-        }
-        
-        // Expanded content — agent output stream
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = fadeIn(animationSpec = tween(200)) + expandVertically(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = tween(250))
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                color = colors.surface.copy(alpha = 0.6f),
-                tonalElevation = 1.dp,
-            ) {
-                if (agentOutputs.isEmpty()) {
-                    // No outputs yet — show waiting state
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = colors.accentBlue
-                        )
-                        Text(
-                            text = processingContext.ifBlank { "Processing your request..." },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.textSecondary
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 200.dp),
-                        contentPadding = PaddingValues(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(agentOutputs.size) { index ->
-                            val output = agentOutputs[index]
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                // Agent badge
-                                Text(
-                                    text = output.agent,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp
-                                    ),
-                                    color = colors.accentBlue,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(colors.accentBlue.copy(alpha = 0.1f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                                
-                                // Output text
-                                Text(
-                                    text = output.output,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        lineHeight = 16.sp
-                                    ),
-                                    color = colors.textSecondary,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Custom easing functions for premium animations
-private val EaseInOutBack = CubicBezierEasing(0.68f, -0.2f, 0.32f, 1.2f)
-private val EaseOutSine = CubicBezierEasing(0.39f, 0.575f, 0.565f, 1f)
 
 /**
  * Bottom Input Bar (Compact Floating Pill)
@@ -1349,7 +529,6 @@ private fun InputBar(
                     VoiceWaveformVisualizer(
                         // The user's voice only: AURA's playback must not move it.
                         amplitude = if (state.isListening) state.audioAmplitude else 0f,
-                        colors = colors,
                         modifier = Modifier.fillMaxWidth()
                     )
                     // Phase verb shown beneath the waveform.
@@ -1380,6 +559,20 @@ private fun InputBar(
                         )
                     }
                 }
+                // Talking isn't always possible: switch to the keyboard. The mic closes.
+                Text(
+                    text = "Type",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.textPrimary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(colors.iconBackground)
+                        .clickable {
+                            hapticFeedback(AuraHapticType.LIGHT)
+                            onInputActivate()
+                        }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
             } else {
                 val focusRequester = remember { FocusRequester() }
                 val keyboard = LocalSoftwareKeyboardController.current
@@ -1421,7 +614,18 @@ private fun InputBar(
                             unfocusedTextColor = colors.textPrimary
                         ),
                         textStyle = MaterialTheme.typography.bodyMedium,
-                        singleLine = true
+                        singleLine = true,
+                        // Enter sends and puts the keyboard away, like the send button.
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                if (textInput.isNotBlank()) {
+                                    onTextSubmit(textInput)
+                                    textInput = ""
+                                }
+                                onInputDeactivate()
+                            },
+                        ),
                     )
                     // Tap-to-activate scrim — present only until the window is focusable.
                     // Touches reach views even in a FLAG_NOT_FOCUSABLE window, so this
@@ -1494,439 +698,85 @@ private fun InputBar(
 // ============================================================================
 
 /**
- * The mic level as a voice-recorder trace: bars that scroll left, one new bar every
- * [WAVE_SAMPLE_MS] from the live mic level. Flat and still when nobody is speaking.
+ * The voice as a white ribbon: three sine strands that breathe with the mic level and drift
+ * sideways, tapering to nothing at both ends. Calm and nearly flat in silence.
  *
  * - Contract: [amplitude] is linear RMS as a fraction of full scale (0..1), the scale every
- *   capture path reports. Pass 0 when not listening: the trace scrolls flat, then stops.
- * - Why dB: speech RMS sits around 0.01..0.2 of full scale, so linear bars would barely move.
- *   [waveLevel] maps [WAVE_FLOOR_DB]..[WAVE_CEIL_DB] onto the bar height, and the floor keeps
- *   room noise flat.
+ *   capture path reports. Pass 0 when not listening.
+ * - Why dB: speech RMS sits around 0.01..0.2 of full scale, so a linear height would barely move.
+ *   [waveLevel] maps [WAVE_FLOOR_DB]..[WAVE_CEIL_DB] onto 0..1, and the floor keeps room noise still.
+ * - Why the level is smoothed: raw mic levels jump every 40 ms; a spring makes the ribbon swell
+ *   and settle like a voice instead of flickering.
  */
 @Composable
 private fun VoiceWaveformVisualizer(
     amplitude: Float,
-    colors: OverlayColorScheme,
     modifier: Modifier = Modifier,
 ) {
-    val levels = remember { mutableStateListOf<Float>().apply { repeat(WAVE_BARS) { add(0f) } } }
-    val latest by rememberUpdatedState(amplitude)
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            // Silent and already flat: park until the voice comes back, so nothing redraws.
-            if (waveLevel(latest) == 0f && levels.all { it == 0f }) {
-                snapshotFlow { waveLevel(latest) }.first { it > 0f }
-            }
-            levels.removeAt(0)
-            levels.add(waveLevel(latest))
-            kotlinx.coroutines.delay(WAVE_SAMPLE_MS)
-        }
-    }
-
-    val barColor = colors.textSecondary
+    val level by animateFloatAsState(
+        targetValue = waveLevel(amplitude),
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 120f),
+        label = "waveLevel",
+    )
+    val drift = rememberInfiniteTransition(label = "waveDrift")
+    val phase by drift.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(WAVE_PERIOD_MS, easing = LinearEasing)),
+        label = "wavePhase",
+    )
     Canvas(
         modifier = modifier
             .height(48.dp)
             .fillMaxWidth()
             .padding(horizontal = 8.dp),
     ) {
-        val step = size.width / WAVE_BARS
-        val stroke = step * 0.55f
-        val minH = stroke
-        val maxH = size.height * 0.9f
         val midY = size.height / 2f
-        levels.forEachIndexed { i, level ->
-            val h = minH + (maxH - minH) * level
-            val x = step * i + step / 2f
-            drawLine(
-                color = barColor.copy(alpha = 0.45f + 0.55f * level),
-                start = Offset(x, midY - h / 2f),
-                end = Offset(x, midY + h / 2f),
-                strokeWidth = stroke,
-                cap = StrokeCap.Round,
-            )
+        val maxA = size.height * 0.42f
+        val baseA = size.height * 0.04f
+        WAVE_STRANDS.forEach { (freq, speed, alpha) ->
+            val path = Path()
+            val a = baseA + maxA * level
+            var x = 0f
+            while (x <= size.width) {
+                val t = x / size.width
+                val taper = kotlin.math.sin(Math.PI * t).toFloat()
+                val y = midY + a * taper * kotlin.math.sin(t * freq * 2 * Math.PI + phase * speed).toFloat()
+                if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
+                x += 3f
+            }
+            drawPath(path, Color.White.copy(alpha = alpha), style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
         }
     }
 }
 
-/** Linear RMS (0..1 of full scale) → bar height 0..1 on a dB scale; 0 below the noise floor. */
+/** Linear RMS (0..1 of full scale) → 0..1 on a dB scale; 0 below the noise floor. */
 private fun waveLevel(rms: Float): Float {
     if (rms <= 0f) return 0f
     val db = 20f * kotlin.math.log10(rms)
     return ((db - WAVE_FLOOR_DB) / (WAVE_CEIL_DB - WAVE_FLOOR_DB)).coerceIn(0f, 1f)
 }
 
-private const val WAVE_BARS = 32
-private const val WAVE_SAMPLE_MS = 60L
+/** Each strand: cycles across the width, drift speed, opacity. */
+private val WAVE_STRANDS = listOf(Triple(1.5f, 1f, 0.95f), Triple(2.2f, -1.4f, 0.5f), Triple(3.1f, 2f, 0.28f))
+private const val WAVE_PERIOD_MS = 2_400
 
-/** Below this the mic is treated as silence. Raise it if room noise wiggles the trace. */
+/** Below this the mic is treated as silence. Raise it if room noise moves the ribbon. */
 private const val WAVE_FLOOR_DB = -48f
 
-/** Full-height bar. Lower it if normal speech never reaches the top. */
+/** Full height. Lower it if normal speech never reaches the top. */
 private const val WAVE_CEIL_DB = -12f
 
-// Color interpolation helper
-private fun lerp(start: Color, end: Color, fraction: Float): Color {
-    return Color(
-        red = start.red + (end.red - start.red) * fraction,
-        green = start.green + (end.green - start.green) * fraction,
-        blue = start.blue + (end.blue - start.blue) * fraction,
-        alpha = start.alpha + (end.alpha - start.alpha) * fraction
-    )
-}
 
-/**
- * Message action buttons
- */
-@Composable
-private fun MessageActions(
-    colors: OverlayColorScheme,
-    reaction: Int,
-    onCopy: () -> Unit,
-    onLike: () -> Unit,
-    onDislike: () -> Unit,
-    onShare: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = colors.surfaceVariant.copy(alpha = 0.8f),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            MessageActionButton(
-                icon = Icons.Default.ContentCopy,
-                contentDescription = "Copy",
-                tint = colors.textSecondary,
-                onClick = onCopy
-            )
-            MessageActionButton(
-                icon = if (reaction == 1) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                contentDescription = "Like",
-                tint = if (reaction == 1) AuraBrandViolet else colors.textSecondary,
-                onClick = onLike
-            )
-            MessageActionButton(
-                icon = if (reaction == -1) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
-                contentDescription = "Dislike",
-                tint = if (reaction == -1) AuraBrandMagenta else colors.textSecondary,
-                onClick = onDislike
-            )
-            MessageActionButton(
-                icon = Icons.Default.Share,
-                contentDescription = "Share",
-                tint = colors.textSecondary,
-                onClick = onShare
-            )
-        }
-    }
-}
 
-@Composable
-private fun MessageActionButton(
-    icon: ImageVector,
-    contentDescription: String,
-    tint: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = modifier.size(32.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(18.dp)
-        )
-    }
-}
 
-/**
- * Quick Actions Section with suggestions and recent commands
- */
-@Composable
-private fun QuickActionsSection(
-    suggestedCommands: List<String>,
-    recentCommands: List<String>,
-    colors: OverlayColorScheme,
-    onSuggestionClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Suggested Commands
-        if (suggestedCommands.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Try saying:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.textSecondary,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-                
-                suggestedCommands.take(3).forEach { command ->
-                    SuggestionChip(
-                        text = command,
-                        colors = colors,
-                        onClick = { onSuggestionClick(command) }
-                    )
-                }
-            }
-        }
-        
-        // Recent Commands
-        if (recentCommands.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Recent:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.textSecondary,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-                
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                ) {
-                    recentCommands.take(2).forEach { command ->
-                        RecentCommandChip(
-                            text = command,
-                            colors = colors,
-                            onClick = { onSuggestionClick(command) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
-@Composable
-private fun SuggestionChip(
-    text: String,
-    colors: OverlayColorScheme,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val hapticFeedback = rememberHapticFeedback()
-    
-    Surface(
-        onClick = {
-            hapticFeedback(AuraHapticType.LIGHT)
-            onClick()
-        },
-        shape = RoundedCornerShape(16.dp),
-        color = colors.surfaceVariant.copy(alpha = 0.9f),
-        border = BorderStroke(1.dp, colors.accentBlue.copy(alpha = 0.5f)),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Lightbulb,
-                contentDescription = null,
-                tint = colors.accentBlue,
-                modifier = Modifier.size(16.dp)
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.textPrimary
-            )
-        }
-    }
-}
 
-@Composable
-private fun RecentCommandChip(
-    text: String,
-    colors: OverlayColorScheme,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val hapticFeedback = rememberHapticFeedback()
-    
-    Surface(
-        onClick = {
-            hapticFeedback(AuraHapticType.LIGHT)
-            onClick()
-        },
-        shape = RoundedCornerShape(12.dp),
-        color = colors.accentBlue.copy(alpha = 0.3f),
-        border = BorderStroke(1.dp, colors.accentBlue.copy(alpha = 0.4f)),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.History,
-                contentDescription = null,
-                tint = colors.accentBlue,
-                modifier = Modifier.size(14.dp)
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
 
-/**
- * Horizontally scrollable suggestions
- */
-@Composable
-private fun HorizontalSuggestions(
-    suggestedCommands: List<String>,
-    recentCommands: List<String>,
-    colors: OverlayColorScheme,
-    onSuggestionClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Suggested commands
-        if (suggestedCommands.isNotEmpty()) {
-            Text(
-                text = "Try saying:",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.textSecondary
-            )
-            
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp)
-            ) {
-                items(suggestedCommands) { command ->
-                    SuggestionChip(
-                        text = command,
-                        colors = colors,
-                        onClick = { onSuggestionClick(command) }
-                    )
-                }
-            }
-        }
-        
-        // Recent commands
-        if (recentCommands.isNotEmpty()) {
-            Text(
-                text = "Recent:",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.textSecondary
-            )
-            
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp)
-            ) {
-                items(recentCommands) { command ->
-                    RecentCommandChip(
-                        text = command,
-                        colors = colors,
-                        onClick = { onSuggestionClick(command) }
-                    )
-                }
-            }
-        }
-    }
-}
 
 // ============================================================================
 // PREVIEW
 // ============================================================================
 
-@Preview(showBackground = true, backgroundColor = 0xFF000000)
-@Composable
-private fun VoiceAssistantOverlayPreview() {
-    val sampleMessages = listOf(
-        ConversationMessage(
-            text = "Open the camera app",
-            isUser = true
-        ),
-        ConversationMessage(
-            text = "Opening Camera app for you...",
-            isUser = false
-        ),
-        ConversationMessage(
-            text = "What's on my screen?",
-            isUser = true
-        ),
-        ConversationMessage(
-            text = "I can see the Camera app is now open. You're viewing through the main camera. Would you like me to take a photo or switch cameras?",
-            isUser = false
-        )
-    )
-    
-    MaterialTheme {
-        VoiceAssistantOverlay(
-            state = VoiceAssistantState(
-                isVisible = true,
-                messages = sampleMessages,
-                serverConnected = true
-            ),
-            callbacks = VoiceAssistantCallbacks()
-        )
-    }
-}
 
-@Preview(showBackground = true, backgroundColor = 0xFF000000)
-@Composable
-private fun VoiceAssistantOverlayListeningPreview() {
-    MaterialTheme {
-        VoiceAssistantOverlay(
-            state = VoiceAssistantState(
-                isVisible = true,
-                isListening = true,
-                partialTranscript = "Open the...",
-                audioAmplitude = 0.7f,
-                suggestedCommands = listOf("Open camera", "Turn on WiFi", "What's on screen?"),
-                recentCommands = listOf("Open settings", "Call mom")
-            ),
-            callbacks = VoiceAssistantCallbacks()
-        )
-    }
-}
 
-@Preview(showBackground = true, backgroundColor = 0xFF000000)
-@Composable
-private fun VoiceAssistantOverlayProcessingPreview() {
-    MaterialTheme {
-        VoiceAssistantOverlay(
-            state = VoiceAssistantState(
-                isVisible = true,
-                isProcessing = true,
-                processingContext = "Analyzing screen...",
-                messages = listOf(
-                    ConversationMessage(
-                        text = "What's on my screen?",
-                        isUser = true
-                    )
-                ),
-                serverConnected = true
-            ),
-            callbacks = VoiceAssistantCallbacks()
-        )
-    }
-}

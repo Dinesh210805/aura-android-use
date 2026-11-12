@@ -3,7 +3,7 @@
 > **Keep this file current.** If you add, remove, rename or repurpose anything in this folder,
 > update this README in the same commit. A stale map is worse than no map.
 >
-> **Last reviewed:** 2026-11-07.
+> **Last reviewed:** 2026-11-12.
 
 Everything the user sees in the AURA **app** (Settings, onboarding, the MCP centre, traces, eval),
 plus the **overlay UI** the assistant draws on top of other apps. All of it is Jetpack Compose.
@@ -79,11 +79,11 @@ story view). Every build records, shows and exports the same full log.
 ### Overlay UI
 | File | What it does |
 |---|---|
-| `screens/VoiceAssistantOverlay.kt` | The floating assistant: input pill, transcript, replies. The biggest file here. |
+| `screens/VoiceAssistantOverlay.kt` | The floating prompt box: close, text field (Enter sends), AURA button; while listening, the white voice ribbon and a "Type" button. Lifted above Resume/Cancel while a run is paused. |
 | `screens/AskUserCard.kt` | The card shown when the agent calls `ask_user` (human in the loop) |
-| `overlay/AgentStatusOverlay.kt` | The status strip during a run; also driven by the Live voice controller |
+| `overlay/AgentStatusOverlay.kt` | The status strip during a run: what the person said and what AURA is saying (`services/AgentStatusRegistry`) |
 | `overlay/PausePillOverlay.kt` | Pause/stop controls for a running task. The browser window reads its geometry. |
-| `overlay/RunReportOverlay.kt` | The report card when a run ends (done, partial, failed, stopped, or a remote client went quiet) or the user presses Pause on a remote run. Draws the `end_session` `report` markdown via `overlay/ReportMarkdown.kt`, else AURA's reply, else the last steps. State comes from `services/RemoteRun.kt`, which also puts remote runs on the status strip and run controls. On-device runs reach it from `AuraAgent.runSpike` through `agent/OnDeviceReport.kt`, unless they are benchmark runs, and the next task closes it. |
+| `overlay/RunReportOverlay.kt` | The report card when a run ends (done, partial, failed, stopped, or a remote client went quiet) or the user presses Pause on a remote run. Draws the `end_session` `report` markdown via `overlay/ReportMarkdown.kt`, else AURA's reply, else the last steps. State comes from `services/RemoteRun.kt`, which also puts remote runs on the status strip and run controls. On-device runs reach it through `agent/OnDeviceReport.kt`: from `AuraAgent.runSpike`, and from the overlay when a task it ran drove the phone (`OnDeviceReport.forTurn`, steps in the cursor's words from `services/StepPill`). Tasks the chat handed off get a chat card instead, and benchmark runs none. The next task closes it; closing it closes AURA. |
 | `overlay/OverlayOpenCue.kt` | One-shot sound (`res/raw/overlay_open_chime.mp3`) + haptic when the overlay opens |
 
 ### `components/`

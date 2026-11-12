@@ -176,6 +176,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
 
         private const val NOTIFICATION_ID = 1001
 
+        /** Change together: `PausePillOverlay.BUTTON_DP` plus a gap. */
+        private const val PANEL_LIFT_DP = 84
+
         /**
          * Longest the status strip may outlive the run that allowed it, waiting for its
          * last caption to finish.
@@ -584,8 +587,14 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         Log.d(TAG, "Overlay touchable=$desired (requested=$touchable, agentDriving=$agentDriving)")
     }
 
-    /** User tapped the text field — make the window focusable so the IME can attach. */
+    /**
+     * User tapped the text field or "Type": make the window focusable so the IME can attach.
+     * - Contract: the mic closes (typing replaces talking), and touches on the keyboard never
+     *   pause a running task (`ControlLockStore.userWithAura`).
+     */
     private fun activateTextInput() {
+        if (voiceOn) voiceLoop.quiet()
+        com.aura.aura_ui.services.ControlLockStore.shared.userWithAura = true
         setOverlayInputFocusable(true)
         inputActiveState.value = true
     }
@@ -593,6 +602,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     /** Typing ended (send / focus loss / dismiss) — restore the non-focusable window. */
     private fun deactivateTextInput() {
         inputActiveState.value = false
+        com.aura.aura_ui.services.ControlLockStore.shared.userWithAura = false
         setOverlayInputFocusable(false)
     }
 
@@ -1011,6 +1021,24 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         if (_isMinimized.value) restoreOverlay() else setOverlayTouchable(true)
     }
 
+    /**
+     * A paused run hands the person the prompt box: the panel comes up above Resume and Cancel,
+     * so they can type, talk (AURA button) or just carry on; Resume puts it back down.
+     * - Why [agentDriving] follows the pause: the touch guard refuses the panel touches while
+     *   the agent drives, and a paused agent is not driving.
+     */
+    private fun onLocalPause(paused: Boolean) {
+        panelLiftDp.intValue = if (paused) PANEL_LIFT_DP else 0
+        if (paused) {
+            agentDriving = false
+            if (_isMinimized.value) restoreOverlay() else setOverlayTouchable(true)
+        } else if (agentRunJob?.isActive == true) {
+            deactivateTextInput()
+            agentDriving = true
+            if (!_isMinimized.value) minimizeOverlay(showExecutingNotification = false)
+        }
+    }
+
     /** Silence AURA and close the mic; with [cancelRun], also abort the run in flight. */
     private fun interruptTurn(cancelRun: Boolean) {
         if (cancelRun) agentRunJob?.cancel()
@@ -1119,6 +1147,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     // UI State (observable)
     private val audioAmplitude = mutableFloatStateOf(0f)
 
+    /** Extra space under the prompt box while paused, so Resume and Cancel stay visible below it. */
+    private val panelLiftDp = androidx.compose.runtime.mutableIntStateOf(0)
+
 
     override fun onCreate() {
         super.onCreate()
@@ -1169,6 +1200,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     // user just grabbed the phone, and a card would land on what they reached for.
                     if (remote && paused && !pausedWas && lock.isPausedExplicitly) remoteRun.notePaused()
                     if (!paused) remoteRun.noteResumed()
+                    if (local && paused != pausedWas) onLocalPause(paused)
                     pausedWas = paused
                     pausePill.render(localRunActive = running, paused = paused)
                     // On the TRANSITION into a run only — during the run AURA may speak, and
@@ -2460,6 +2492,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             agentSteps = agentSteps,
             resumeOffer = conversationState.resumeOffer,
             isScreenSharing = isSharingScreen,
+            bottomLiftDp = panelLiftDp.intValue,
         )
 
         // Build 3: when the overlay is at rest (no messages, idle), check for an interrupted run
