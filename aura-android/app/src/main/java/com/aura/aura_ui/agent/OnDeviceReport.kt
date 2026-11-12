@@ -43,6 +43,45 @@ object OnDeviceReport {
         onDevice = true,
     )
 
+    /**
+     * The card for a run of the chat agent (`AgentCore.runTask`), which has no end_session verdict.
+     * - Contract: null when no phone action ran: a spoken or typed answer needs no card.
+     * - Why the reply is the lead and not the body: it is the agent's own one-paragraph account,
+     *   and the steps beneath it, in the words the cursor showed, are the evidence.
+     * @param trail the cursor lines of this run (`StepPill.trail`), oldest first.
+     */
+    fun forTurn(
+        reply: String,
+        failed: Boolean,
+        cancelled: Boolean,
+        paused: Boolean,
+        durationMs: Long,
+        actions: Int,
+        failedActions: Int,
+        trail: List<String>,
+    ): RemoteRun.Report? {
+        if (actions == 0 && !failed) return null
+        val outcome = when {
+            cancelled -> Outcome.STOPPED
+            paused -> Outcome.PAUSED
+            failed -> Outcome.FAILED
+            failedActions > 0 && failedActions >= actions -> Outcome.FAILED
+            failedActions > 0 -> Outcome.PARTIAL
+            else -> Outcome.DONE
+        }
+        return RemoteRun.Report(
+            outcome = outcome,
+            client = CLIENT,
+            durationMs = durationMs,
+            steps = actions,
+            summary = reply.trim().takeIf { it.isNotEmpty() },
+            markdown = null,
+            recent = trail.takeLast(MAX_RECENT) +
+                listOfNotNull(failedActions.takeIf { it > 0 }?.let { if (it == 1) "1 step didn't go through" else "$it steps didn't go through" }),
+            onDevice = true,
+        )
+    }
+
     /** Why [verdict] outranks [claimed]: the two differ exactly when the model over-claimed. */
     internal fun outcomeOf(endReason: String, verdict: String?, claimed: String?, steps: Int): Outcome =
         when (endReason) {

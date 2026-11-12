@@ -47,4 +47,16 @@ class StepPillTest {
         assertEquals("", StepPill.line.value)
         assertFalse(StepPill.wantsTarget)
     }
+
+    @Test
+    fun `the trail keeps the refined line and folds repeats`() {
+        StepPill.resetTrail()
+        StepPill.onTool("tap", null, null)
+        StepPill.onTarget("Library")
+        StepPill.onTool("scroll", "Looking for the album", null)
+        StepPill.onTool("scroll", "Looking for the album", null)
+        assertEquals(listOf("Tapping Library", "Looking for the album"), StepPill.trail())
+        StepPill.clear()
+        assertEquals(2, StepPill.trail().size)
+    }
 }

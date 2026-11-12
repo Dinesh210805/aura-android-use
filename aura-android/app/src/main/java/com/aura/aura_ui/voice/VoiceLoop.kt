@@ -254,7 +254,8 @@ class VoiceLoop(
         idleJob?.cancel()
         idleJob = scope.launch {
             delay(IDLE_END_MS)
-            if (_phase.value == Phase.IDLE) end()
+            // A task the person started by voice still has a spoken reply to come.
+            if (ControlLockStore.shared.localRunning.value) armIdleEnd() else if (_phase.value == Phase.IDLE) end()
         }
     }
 

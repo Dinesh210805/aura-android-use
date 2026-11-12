@@ -25,6 +25,9 @@ object StepPill {
     @Volatile
     private var pending: Pair<String, JsonObject?>? = null
 
+    /** Every line shown since [resetTrail], oldest first; the report card lists the last few. */
+    private val trail = ArrayDeque<String>()
+
     fun onTool(tool: String, status: String?, args: JsonObject?) {
         if (status != null) {
             pending = null
@@ -32,6 +35,10 @@ object StepPill {
         } else {
             pending = tool to args
             _line.value = fallback(tool, args, null)
+        }
+        synchronized(trail) {
+            trail.addLast(_line.value)
+            while (trail.size > TRAIL_MAX) trail.removeFirst()
         }
     }
 
@@ -42,10 +49,22 @@ object StepPill {
     fun onTarget(label: String?) {
         val (tool, args) = pending ?: return
         if (label.isNullOrBlank()) return
-        _line.value = fallback(tool, args, label)
+        val refined = fallback(tool, args, label)
+        synchronized(trail) { if (trail.lastOrNull() == _line.value) trail[trail.lastIndex] = refined }
+        _line.value = refined
     }
 
-    /** The run is over: nothing is in progress any more. */
+    /** Start a new run's trail. */
+    fun resetTrail() = synchronized(trail) { trail.clear() }
+
+    /** The steps since [resetTrail] in the words the person saw, repeats folded into one. */
+    fun trail(): List<String> = synchronized(trail) {
+        trail.fold(mutableListOf<String>()) { acc, s -> if (acc.lastOrNull() != s) acc += s; acc }
+    }
+
+    private const val TRAIL_MAX = 40
+
+    /** The run is over: nothing is in progress any more. Keeps the trail for the report. */
     fun clear() {
         pending = null
         _line.value = ""

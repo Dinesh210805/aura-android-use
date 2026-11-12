@@ -9,6 +9,31 @@ import org.junit.Test
 
 class OnDeviceReportTest {
 
+    private fun turn(actions: Int, failedActions: Int = 0, failed: Boolean = false, cancelled: Boolean = false) =
+        OnDeviceReport.forTurn("Sent it.", failed, cancelled, paused = false, durationMs = 9_000,
+            actions = actions, failedActions = failedActions, trail = listOf("Opening Messages", "Tapping Send"))
+
+    @Test
+    fun `a chat turn with no phone action has no card`() {
+        assertNull(turn(actions = 0))
+    }
+
+    @Test
+    fun `a chat turn reads done, partial or failed from its actions`() {
+        assertEquals(Outcome.DONE, turn(actions = 3)?.outcome)
+        assertEquals(Outcome.PARTIAL, turn(actions = 3, failedActions = 1)?.outcome)
+        assertEquals(Outcome.FAILED, turn(actions = 2, failedActions = 2)?.outcome)
+        assertEquals(Outcome.STOPPED, turn(actions = 2, cancelled = true)?.outcome)
+    }
+
+    @Test
+    fun `a chat turn leads with the reply and lists the cursor lines`() {
+        val card = requireNotNull(turn(actions = 2))
+        assertEquals("Sent it.", card.summary)
+        assertEquals(listOf("Opening Messages", "Tapping Send"), card.recent)
+    }
+
+
     private fun outcome(reason: String, verdict: String? = null, claimed: String? = null, steps: Int = 3) =
         OnDeviceReport.outcomeOf(reason, verdict, claimed, steps)
 
