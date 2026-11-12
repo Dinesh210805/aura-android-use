@@ -266,8 +266,8 @@ class AuraAccessibilityService : AccessibilityService() {
         // reports actual finger-down via ACTION_OUTSIDE without consuming the touch.
         // Degrades silently: if the window is refused, the CLICKED/LONG_CLICKED event path
         // still works.
-        touchWatchOverlay = TouchWatchOverlay(this) { ControlLockStore.shared.onHumanTouch() }
-            .also { it.attach() }
+        touchWatchOverlay = TouchWatchOverlay(this) { injected -> ControlLockStore.shared.onHumanTouch(injected) }
+            .also { ControlLockStore.shared.touchWatchActive = it.attach() }
 
         // Every action, from AURA's agent or a remote MCP client, names its purpose under the cursor.
         com.aura.mcp.server.ToolStatus.sink = com.aura.aura_ui.services.StepPill::onTool
@@ -647,6 +647,7 @@ class AuraAccessibilityService : AccessibilityService() {
         releaseKeepScreenOn()
         touchWatchOverlay?.detach()
         touchWatchOverlay = null
+        ControlLockStore.shared.touchWatchActive = false
         agentCursor.release()
         com.aura.mcp.server.ToolStatus.sink = { _, _, _ -> }
         // Accessibility and the UI overlay have independent lifecycles. If the service is

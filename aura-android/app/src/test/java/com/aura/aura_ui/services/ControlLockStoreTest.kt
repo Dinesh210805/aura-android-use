@@ -516,4 +516,85 @@ class ControlLockStoreTest {
 
         assertNull(store.activeTask)
     }
+
+    // ── Touch pause v2: sticky, exact, and quiet while the user is with AURA ────────
+
+    @Test
+    fun `a touch pause waits for the person instead of resuming after quiet seconds`() {
+        val clock = FakeClock()
+        val store = drivingStore(clock)
+
+        store.onHumanTouch()
+        clock.now += 10 * 60_000
+
+        assertTrue("a touch pause resumed by itself", store.isPausedByHuman)
+        assertEquals(ControlLockStore.PauseReason.TOUCH, store.pauseReason)
+    }
+
+    @Test
+    fun `once the injected mark is seen on our own tap, it alone decides`() {
+        val clock = FakeClock()
+        val store = drivingStore(clock)
+        store.noteDispatch(SelfActionWindow.ActionKind.TAP)
+        clock.now += 20
+        store.onHumanTouch(injected = true)       // our tap, marked: learn the mark
+        assertFalse(store.isPausedByHuman)
+
+        store.noteDispatch(SelfActionWindow.ActionKind.TAP)
+        clock.now += 20
+        store.onHumanTouch(injected = false)      // unmarked, even right after a dispatch: a person
+
+        assertTrue("a real finger right after AURA's tap was swallowed", store.isPausedByHuman)
+    }
+
+    @Test
+    fun `without a trusted mark, a touch inside the dispatch window is ours`() {
+        val clock = FakeClock()
+        val store = drivingStore(clock)
+        store.noteDispatch(SelfActionWindow.ActionKind.TAP)
+        clock.now += 120
+
+        store.onHumanTouch(injected = false)
+
+        assertFalse(store.isPausedByHuman)
+    }
+
+    @Test
+    fun `touching AURA's own surface while talking to it never pauses`() {
+        val clock = FakeClock()
+        val store = drivingStore(clock)
+        store.userWithAura = true
+
+        store.onHumanTouch()
+
+        assertFalse(store.isPausedByHuman)
+    }
+
+    @Test
+    fun `the finger lifting off Resume does not pause again, a later touch does`() {
+        val clock = FakeClock()
+        val store = drivingStore(clock)
+        store.onHumanTouch()
+        store.resume()
+
+        clock.now += 100
+        store.onHumanTouch()
+        assertFalse(store.isPausedByHuman)
+
+        clock.now += ControlLockStore.RESUME_TOUCH_GRACE_MS
+        store.onHumanTouch()
+        assertTrue(store.isPausedByHuman)
+    }
+
+    @Test
+    fun `with the touch watcher attached, accessibility events never pause`() {
+        val clock = FakeClock()
+        val store = drivingStore(clock)
+        store.touchWatchActive = true
+
+        clock.now += 60_000
+        store.onObservedEvent(isHumanSignal = true)
+
+        assertFalse(store.isPausedByHuman)
+    }
 }

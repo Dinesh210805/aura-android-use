@@ -56,7 +56,8 @@ import com.aura.aura_ui.utils.AgentLogger
  */
 internal class TouchWatchOverlay(
     private val service: AccessibilityService,
-    private val onTouch: () -> Unit,
+    /** A real finger-down; the argument is whether Android marked it as accessibility-injected. */
+    private val onTouch: (injected: Boolean?) -> Unit,
 ) {
     private var view: View? = null
 
@@ -66,7 +67,7 @@ internal class TouchWatchOverlay(
         return runCatching {
             val watcher = object : View(service) {
                 override fun onTouchEvent(event: MotionEvent): Boolean {
-                    if (event.action == MotionEvent.ACTION_OUTSIDE) onTouch()
+                    if (event.action == MotionEvent.ACTION_OUTSIDE) onTouch(injectedMark(event))
                     // Never consume: this window observes, it does not intercept.
                     return false
                 }
@@ -100,6 +101,18 @@ internal class TouchWatchOverlay(
         }
     }
 
+    /**
+     * Android 12+ marks a gesture an accessibility service injected (`AMOTION_EVENT_FLAG_IS_ACCESSIBILITY_EVENT`,
+     * 0x800; the constant is hidden from the SDK). Null below Android 12, where no mark exists.
+     * Logged so a device session shows whether the mark reaches `ACTION_OUTSIDE`.
+     */
+    private fun injectedMark(event: MotionEvent): Boolean? {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return null
+        val marked = event.flags and FLAG_IS_ACCESSIBILITY_EVENT != 0
+        AgentLogger.UI.d("touch-watch: down injected=$marked device=${event.deviceId} source=${event.source}")
+        return marked
+    }
+
     /** Removes the watcher. Safe without a prior [attach]. */
     fun detach() {
         val current = view ?: return
@@ -110,3 +123,5 @@ internal class TouchWatchOverlay(
         }
     }
 }
+
+private const val FLAG_IS_ACCESSIBILITY_EVENT = 0x800

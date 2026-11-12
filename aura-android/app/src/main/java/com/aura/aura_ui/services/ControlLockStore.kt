@@ -250,6 +250,10 @@ internal class ControlLockStore(
         // phone use from leaving AURA "paused" on no task at all.
         if (!isDriving) return
 
+        // With the touch watcher attached, a real finger is reported directly; events are only
+        // the fallback for a device that refused that window.
+        if (touchWatchActive) return
+
         // The agent asked the user a question and is suspended on the answer. Touching the phone
         // right now IS the answer, not an interruption — see [awaitingUserAnswer]. Placed before
         // attribution so it holds no matter which package the events come from.
@@ -286,6 +290,7 @@ internal class ControlLockStore(
         // countdown, so somebody using their phone for two minutes does not have AURA
         // resume underneath them at the thirty-second mark.
         lastHumanSignalAtMs = now
+        pauseReason = PauseReason.EVENT
         _pausedByHuman.value = true
         armExpiry()
     }
@@ -312,18 +317,66 @@ internal class ControlLockStore(
      * *at* dispatch time, not a second and a half later during a repaint. The window is
      * doing the job it was designed for instead of being stretched to cover animation.
      */
-    fun onHumanTouch() {
+    fun onHumanTouch(injected: Boolean? = null) {
         if (!isDriving) return
+        // AURA is waiting for this person (a question, the listening bar, the prompt box): the
+        // touch is them answering, not taking the wheel.
+        if (awaitingUserAnswer() || userWithAura) return
 
         val now = clock()
-        if (SelfActionWindow.attribute(now, lastDispatch) is SelfActionWindow.Attribution.SelfCaused) return
+        if (isOwnTouch(now, injected)) return
 
-        resumedAtMs?.let { if (now - it < RESUME_GRACE_MS) return }
+        resumedAtMs?.let { if (now - it < RESUME_TOUCH_GRACE_MS) return }
 
+        // Sticky, like the Pause button: the paused sheet waits for Resume or Close. A touch
+        // pause that lapsed after quiet seconds resumed AURA under someone still reading.
         lastHumanSignalAtMs = now
+        pausedExplicitly = true
+        pauseReason = PauseReason.TOUCH
         _pausedByHuman.value = true
-        armExpiry()
     }
+
+    /**
+     * Was this finger-down AURA's own injected gesture?
+     *
+     * - Why two rules: on Android 12+ a gesture injected by an accessibility service is marked
+     *   ([injected], the input flag `0x800`). Once one of our own dispatches has been seen with
+     *   that mark, the mark alone decides. Until then (an older Android, or a build that does not
+     *   carry the flag to `ACTION_OUTSIDE`), a touch within [DISPATCH_TOUCH_MS] of a dispatch is
+     *   ours: an injected touch lands at dispatch time, not later.
+     */
+    private fun isOwnTouch(now: Long, injected: Boolean?): Boolean {
+        val sinceDispatch = lastDispatch?.let { now - it.atMs }
+        val nearDispatch = sinceDispatch != null && sinceDispatch in 0..DISPATCH_TOUCH_MS
+        if (injected == true) {
+            if (nearDispatch) injectedFlagTrusted = true
+            return true
+        }
+        if (injectedFlagTrusted && injected == false) return false
+        return nearDispatch
+    }
+
+    /** Set once an own dispatch arrived carrying the injected mark; from then the mark decides. */
+    @Volatile
+    private var injectedFlagTrusted = false
+
+    /**
+     * The person is using AURA's own surface right now: the listening bar, the prompt box, the
+     * paused sheet. Set by the overlay; while true a touch never pauses.
+     */
+    @Volatile
+    var userWithAura: Boolean = false
+
+    /** Set when [TouchWatchOverlay] is attached: real touches then replace accessibility-event guessing. */
+    @Volatile
+    var touchWatchActive: Boolean = false
+
+    /** Why the current pause began, for the paused sheet's wording. Meaningless while not paused. */
+    @Volatile
+    var pauseReason: PauseReason = PauseReason.BUTTON
+        private set
+
+    enum class PauseReason { TOUCH, BUTTON, EVENT }
 
     /**
      * The human takes the wheel deliberately — spoken "pause"/"stop", or a UI control.
@@ -336,6 +389,7 @@ internal class ControlLockStore(
     fun pause() {
         lastHumanSignalAtMs = clock()
         pausedExplicitly = true
+        pauseReason = PauseReason.BUTTON
         _pausedByHuman.value = true
         // No armExpiry(): see [pausedExplicitly]. A deliberate pause outlasts silence.
     }
@@ -400,6 +454,15 @@ internal class ControlLockStore(
          * and a genuine touch right after resuming would be ignored.
          */
         const val RESUME_GRACE_MS = 3_000L
+
+        /**
+         * The real-touch path's resume grace: only the finger lifting off Resume. A real touch is
+         * never a self-animating screen, so the long [RESUME_GRACE_MS] would only hide a person.
+         */
+        const val RESUME_TOUCH_GRACE_MS = 400L
+
+        /** How soon after a dispatch an injected touch reaches the watcher. Fallback rule only. */
+        const val DISPATCH_TOUCH_MS = 300L
 
         /**
          * How long after a remote tool call the phone still counts as being driven.
