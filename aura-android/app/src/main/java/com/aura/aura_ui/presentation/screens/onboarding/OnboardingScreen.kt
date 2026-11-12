@@ -131,7 +131,6 @@ import com.aura.aura_ui.remote.AuraSignIn
 import com.aura.aura_ui.remote.AuthState
 import com.aura.aura_ui.remote.SignInOutcome
 import com.aura.aura_ui.agent.conversation.CompanionConfig
-import com.aura.aura_ui.agent.conversation.LiveModelResolver
 import com.aura.aura_ui.agent.llm.LlmEndpointCatalog
 import com.aura.aura_ui.agent.llm.ModelCatalog
 import com.aura.aura_ui.agent.llm.RestrictedAppClassifier
@@ -1499,9 +1498,7 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
     var keyText by remember { mutableStateOf(keyStore.getKey(LlmEndpointCatalog.GEMINI_ID).orEmpty()) }
     var revealed by remember { mutableStateOf(false) }
     var brainModel by remember { mutableStateOf(LlmEndpointCatalog.GEMINI_DEFAULT_MODEL_ID) }
-    var liveModel by remember { mutableStateOf(CompanionConfig.LIVE_MODEL) }
     var brainModels by remember { mutableStateOf<List<String>>(listOf(LlmEndpointCatalog.GEMINI_DEFAULT_MODEL_ID)) }
-    var liveModels by remember { mutableStateOf<List<String>>(listOf(CompanionConfig.LIVE_MODEL)) }
     var verifying by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var verified by remember { mutableStateOf(keyStore.isConfigured(LlmEndpointCatalog.GEMINI_ID)) }
@@ -1612,14 +1609,6 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
                     stripPrefix = false,
                     onSelect = { brainModel = it },
                 )
-                Spacer(modifier = Modifier.height(10.dp))
-                ModelDropdown(
-                    label = "Gemini Live Voice Model",
-                    selected = liveModel,
-                    options = liveModels,
-                    stripPrefix = true,
-                    onSelect = { liveModel = it },
-                )
                 Spacer(modifier = Modifier.height(14.dp))
 
                 OutlinedButton(
@@ -1630,7 +1619,6 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
                             error = null
                             val trimmed = keyText.trim()
                             val brainResult = ModelCatalog.fetch(gemini, trimmed)
-                            val liveResult = LiveModelResolver.listLiveModels(trimmed)
                             val brainOk = brainResult.isSuccess && brainResult.getOrNull()?.isNotEmpty() == true
                             if (!brainOk) {
                                 error = brainResult.exceptionOrNull()?.message ?: "Key rejected — check it and try again."
@@ -1639,8 +1627,6 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
                             } else {
                                 brainModels = brainResult.getOrNull().orEmpty().map { it.id }
                                     .let { if (it.contains(brainModel)) it else listOf(brainModel) + it }
-                                liveModels = liveResult.ifEmpty { listOf(liveModel) }
-                                    .let { if (it.contains(liveModel)) it else listOf(liveModel) + it }
 
                                 keyStore.setKey(LlmEndpointCatalog.GEMINI_ID, trimmed)
                                 keyStore.setSelectedEndpointId(LlmEndpointCatalog.GEMINI_ID)
@@ -1655,7 +1641,6 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
                                     brainInfo?.visionCapable,
                                 )
                                 val companion = CompanionConfig(context)
-                                companion.liveModel = liveModel
                                 companion.enabled = true
                                 companion.useGeminiLive = true
 

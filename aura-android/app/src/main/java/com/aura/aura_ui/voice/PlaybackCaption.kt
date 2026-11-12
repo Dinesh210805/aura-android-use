@@ -1,7 +1,5 @@
 package com.aura.aura_ui.voice
 
-import com.aura.aura_ui.agent.conversation.CaptionReveal
-
 /**
  * The caption for a Piper reply at a given speaker playback head: the sentence being heard, up to
  * and including the word being spoken.
@@ -34,6 +32,27 @@ internal object PlaybackCaption {
         val heard = if (seg.frames == 0) seg.chars else (played.toLong() * seg.chars / seg.frames).toInt()
         val pos = (seg.charStart + heard).coerceAtMost(full.length)
         val wordEnd = full.indexOf(' ', pos).let { if (it < 0) full.length else it + 1 }
-        return CaptionReveal.sentence(full, wordEnd)
+        return sentence(full, wordEnd)
     }
+
+    /**
+     * The sentence containing the [spoken]th character, cut back to whole words.
+     * - Why whole words: [spoken] usually lands mid-word, and a half word on screen reads as a
+     *   typo; once everything has been heard the last word is whole by definition and shown.
+     */
+    fun sentence(full: String, spoken: Int): String {
+        if (full.isEmpty() || spoken <= 0) return ""
+        val end = if (spoken >= full.length) full.length else full.lastIndexOf(' ', spoken - 1).coerceAtLeast(0)
+        if (end == 0) return ""
+        val head = full.take(end).trimEnd()
+        val startOfSentence = SENTENCE_START.findAll(head).lastOrNull()?.range?.last?.plus(1) ?: 0
+        return head.substring(startOfSentence).trim()
+    }
+
+    /**
+     * Where the next sentence starts: `.!?` followed by whitespace, or a newline. A dot inside
+     * `nasa.gov` or `.75` is not a sentence end.
+     * - Change together: `SpeechChunker.SENTENCE_END` (same rule for where speech chunks split).
+     */
+    private val SENTENCE_START = Regex("[.!?]\\s+|\\n")
 }

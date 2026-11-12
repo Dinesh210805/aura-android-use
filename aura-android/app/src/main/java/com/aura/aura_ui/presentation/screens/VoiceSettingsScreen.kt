@@ -53,7 +53,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aura.aura_ui.agent.conversation.CompanionConfig
-import com.aura.aura_ui.agent.conversation.LiveModelResolver
 import com.aura.aura_ui.audio.AuraTTSManager
 import com.aura.aura_ui.presentation.components.ColumnScopeMarker
 import com.aura.aura_ui.presentation.components.MonoCardGroup
@@ -103,8 +102,7 @@ private val GEMINI_LIVE_VOICES = listOf(
 /**
  * Voice settings, split by engine: on-device (Moonshine recognition + Piper voices) and Gemini Live.
  *
- * - Reads/Writes: prefs `aura_voice_settings` keys `selected_voice_id`, `gemini_live_voice`;
- *   `CompanionConfig.liveModel`.
+ * - Reads/Writes: prefs `aura_voice_settings` keys `selected_voice_id`, `gemini_live_voice`.
  * - Why the tab opens on the active mode: the mode switch itself lives on the Companion screen;
  *   this screen only configures each engine.
  */
@@ -341,7 +339,7 @@ private fun GeminiLiveTab(scheme: MonoScheme, companion: CompanionConfig) {
         item {
             MonoSectionLabel("Model", scheme)
             MonoCardGroup(scheme) {
-                LiveModelPicker(scheme, companion, Modifier.padding(16.dp))
+                LiveModelRow(scheme, Modifier.padding(16.dp))
             }
         }
         item {
@@ -399,103 +397,15 @@ private fun Hint(text: String, scheme: MonoScheme) {
     )
 }
 
-/**
- * Picks which Gemini Live model drives the conversation. Lists only bidiGenerateContent-capable models
- * via [LiveModelResolver.listLiveModels] — the same filter the Live controller auto-resolves with — so it
- * can never offer a model Live can't connect to. "Auto" (null) lets [LiveModelResolver] choose at connect.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+/** The Live model, which is fixed: AURA's voice is tuned for Gemini 3.8 Live and nothing else. */
 @Composable
-private fun LiveModelPicker(scheme: MonoScheme, cfg: CompanionConfig, modifier: Modifier = Modifier) {
-    val scope = rememberCoroutineScope()
-    var selected by remember { mutableStateOf(cfg.liveModel) }
-    var models by remember { mutableStateOf<List<String>>(emptyList()) }
-    var fetching by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var expanded by remember { mutableStateOf(false) }
-    val hasKey = remember { cfg.byokKey() != null }
-
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (!hasKey) {
-            Text(
-                text = "Add a Gemini key in Settings → Brain to use Gemini Live.",
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.textSecondary,
-            )
-            return@Column
-        }
-
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-            OutlinedTextField(
-                value = selected?.removePrefix("models/") ?: "Auto (recommended)",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Live model") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-            )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "Auto (recommended)",
-                            fontWeight = if (selected == null) FontWeight.SemiBold else FontWeight.Normal,
-                        )
-                    },
-                    onClick = { selected = null; cfg.liveModel = null; expanded = false },
-                )
-                if (models.isNotEmpty()) HorizontalDivider(color = scheme.divider)
-                models.forEach { m ->
-                    DropdownMenuItem(
-                        text = {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    m.removePrefix("models/"),
-                                    fontWeight = if (m == selected) FontWeight.SemiBold else FontWeight.Normal,
-                                )
-                                if (m.contains("translate")) {
-                                    Text("translation", style = MaterialTheme.typography.labelSmall, color = scheme.textSecondary)
-                                }
-                            }
-                        },
-                        onClick = { selected = m; cfg.liveModel = m; expanded = false },
-                    )
-                }
-            }
-        }
-
-        TextButton(
-            enabled = !fetching,
-            onClick = {
-                scope.launch {
-                    fetching = true
-                    error = null
-                    val key = cfg.byokKey()
-                    if (key == null) {
-                        error = "No Gemini key configured."
-                    } else {
-                        val live = LiveModelResolver.listLiveModels(key)
-                        if (live.isEmpty()) error = "Couldn't fetch Live models. Check your key."
-                        models = live
-                    }
-                    fetching = false
-                }
-            },
-        ) {
-            if (fetching) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Mono.Ink)
-                Spacer(Modifier.width(8.dp))
-            }
-            Text(
-                if (models.isEmpty()) "Fetch Live models" else "Refresh (${models.size})",
-                color = scheme.textPrimary,
-            )
-        }
-        error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Mono.Blood) }
+private fun LiveModelRow(scheme: MonoScheme, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text("Gemini 3.8 Live", style = MaterialTheme.typography.bodyLarge, color = scheme.textPrimary)
+        Text(
+            "Speech in and out only; AURA's agent does the thinking.",
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.textSecondary,
+        )
     }
 }

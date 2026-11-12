@@ -606,7 +606,7 @@ class AgentStatusOverlay(private val context: Context) {
             // with the audio; the pacer was correct the whole time and the view was throwing
             // its output away.
             //
-            // Unbounded is safe here because of what is handed in: `CaptionReveal.sentence`
+            // Unbounded is safe here because of what is handed in: `PlaybackCaption.sentence`
             // gives ONE sentence, cut at the last `.!?` — not the running reply. The card is
             // WRAP_CONTENT, so it grows to hold that sentence and shrinks back on the next.
             // One card that changes height, never a second card and never a hidden tail.

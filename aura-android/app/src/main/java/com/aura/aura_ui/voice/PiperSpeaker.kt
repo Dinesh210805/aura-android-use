@@ -5,7 +5,6 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.util.Log
-import com.aura.aura_ui.agent.conversation.CaptionReveal
 import com.aura.aura_ui.services.AgentStatusRegistry
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
@@ -147,7 +146,7 @@ object PiperSpeaker {
                 if (chunk === END) {
                     val t = out ?: break
                     drain(t, written, gen) { follow(t) }
-                    if (gen == generation.get()) publish(CaptionReveal.sentence(full, full.length))
+                    if (gen == generation.get()) publish(PlaybackCaption.sentence(full, full.length))
                     break
                 }
                 val t = out ?: newTrack(chunk.sampleRate, usage).also { out = it; track = it; it.play(); onStart() }

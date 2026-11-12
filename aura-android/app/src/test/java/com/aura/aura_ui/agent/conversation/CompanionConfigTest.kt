@@ -38,21 +38,4 @@ class CompanionConfigTest {
     @Test fun `default voice is Achird`() {
         assertEquals("Achird", CompanionConfig(ctx).voice())
     }
-
-    @Test fun `live model defaults to null (auto)`() {
-        assertNull(CompanionConfig(ctx).liveModel)
-    }
-
-    @Test fun `live model choice round-trips`() {
-        val c = CompanionConfig(ctx)
-        c.liveModel = "models/gemini-2.5-flash-native-audio-latest"
-        assertEquals("models/gemini-2.5-flash-native-audio-latest", CompanionConfig(ctx).liveModel)
-    }
-
-    @Test fun `blank live model is stored as null (auto)`() {
-        val c = CompanionConfig(ctx)
-        c.liveModel = "models/gemini-2.5-flash-native-audio-latest"
-        c.liveModel = ""
-        assertNull(CompanionConfig(ctx).liveModel)
-    }
 }

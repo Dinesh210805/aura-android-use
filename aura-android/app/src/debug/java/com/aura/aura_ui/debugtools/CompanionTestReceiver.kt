@@ -7,20 +7,9 @@ import android.util.Log
 import com.aura.aura_ui.agent.AuraAgent
 import com.aura.aura_ui.agent.AgentStreamEvent
 import com.aura.aura_ui.agent.conversation.AuraAgentPhoneRunner
-import com.aura.aura_ui.agent.conversation.AuraBrainLane
-import com.aura.aura_ui.agent.conversation.CompanionConfig
-import com.aura.aura_ui.agent.conversation.CompanionPromptAssembler
-import com.aura.aura_ui.agent.conversation.CompanionToolCall
 import com.aura.aura_ui.agent.conversation.CompanionTestReport
-import com.aura.aura_ui.agent.conversation.CompanionTools
-import com.aura.aura_ui.agent.conversation.LiveModelResolver
-import com.aura.aura_ui.agent.conversation.LiveSession
-import com.aura.aura_ui.agent.conversation.LiveSessionListener
-import com.aura.aura_ui.agent.conversation.LiveSessionConfig
-import com.aura.aura_ui.agent.conversation.LiveToolDeclarations
 import com.aura.aura_ui.agent.ledger.RunLedgerStore
 import com.aura.aura_ui.agent.memory.EncryptedJsonStore
-import com.aura.aura_ui.agent.memory.EncryptedMemoryService
 import com.aura.aura_ui.agent.llm.LlmEndpointCatalog
 import com.aura.aura_ui.agent.llm.ModelCatalog
 import com.aura.aura_ui.accessibility.AccessibilityCapturePolicy
@@ -37,8 +26,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
 import java.io.File
 
 /**
@@ -49,21 +36,8 @@ import java.io.File
  * and the result file appears when the run completes, so a long drive_phone agent run is not bounded
  * by the receiver's callback budget.
  *
- *   # L1 -- dispatch ONE companion tool directly (no key, no network). Proves drive_phone -> the
- *   #        unchanged gate, and memory save/recall/commitments wiring:
- *   adb shell am broadcast \
- *     -n com.aura.aura_ui.feature.debug/com.aura.aura_ui.debugtools.CompanionTestReceiver \
- *     -a com.aura.aura_ui.debug.COMPANION_TEST \
- *     --es mode tool --es tool drive_phone --es args '{"task":"open Spotify and play jazz"}'
- *
- *   # L2 -- connect to Gemini Live with the saved BYOK key and drive a TEXT turn (no mic, no speaker,
- *   #        no overlay). Proves V-1 (setup accepted + fixed-tool call), persona (spoken text has no
- *   #        markdown), and the full text->toolCall->drive_phone->gate loop over the real transport:
- *   adb shell am broadcast \
- *     -n com.aura.aura_ui.feature.debug/com.aura.aura_ui.debugtools.CompanionTestReceiver \
- *     -a com.aura.aura_ui.debug.COMPANION_TEST \
- *     --es mode live --es text "open Spotify and play jazz" --ei window_ms 90000 \
- *     [--es model models/gemini-live-2.5-flash-preview]   # optional: force the V-2 half-cascade fallback
+ *   # run one task on the on-device agent:
+ *   adb shell am broadcast  *     -n com.aura.aura_ui.feature.debug/com.aura.aura_ui.debugtools.CompanionTestReceiver  *     -a com.aura.aura_ui.debug.COMPANION_TEST  *     --es mode agent --es text "open Spotify and play jazz"
  *
  *   # read the newest result back:
  *   adb exec-out run-as com.aura.aura_ui.feature.debug \
@@ -72,25 +46,19 @@ import java.io.File
 class CompanionTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
-        val mode = intent.getStringExtra("mode") ?: "tool"
+        val mode = intent.getStringExtra("mode") ?: "agent"
         // Snapshot extras now; the Intent must not be touched after onReceive returns.
         // *_b64 variants are base64 of the value -- the robust way to pass JSON / spaced text through
         // the host-shell -> adb -> device-shell -> am gauntlet without quoting corruption.
         val tool = intent.getStringExtra("tool")
-        val args = b64(intent.getStringExtra("args_b64")) ?: intent.getStringExtra("args")
         val text = b64(intent.getStringExtra("text_b64")) ?: intent.getStringExtra("text")
-        val model = intent.getStringExtra("model")
-        val windowMs = intent.getIntExtra("window_ms", DEFAULT_WINDOW_MS).toLong()
         Log.i(TAG, "trigger mode=$mode tool=$tool text=$text")
 
         scope.launch {
             val report = runCatching {
                 when (mode) {
-                    "tool" -> runTool(app, tool, args)
-                    "live" -> runLive(app, text, model, windowMs)
                     "agent" -> runAgent(app, text)
                     "keyboard" -> runKeyboard(intent.getStringExtra("op"))
-                    "models" -> runModels(app)
                     "appscan" -> runAppScan(app)
                     "brainmodels" -> runBrainModels(app, intent.getStringExtra("endpoint"))
                     "pause" -> runPause(intent.getStringExtra("op"))
@@ -105,20 +73,13 @@ class CompanionTestReceiver : BroadcastReceiver() {
                     )
                     else -> report(
                         mode, mode, false,
-                        "unknown mode '$mode' (use tool|live|agent|keyboard|models|appscan|" +
+                        "unknown mode '$mode' (use agent|keyboard|appscan|" +
                             "brainmodels|pause|ledger|screenshot|capture)",
                     )
                 }
             }.getOrElse { report(mode, text ?: tool ?: "", false, "harness crashed: ${it.message}") }
             write(app, report)
         }
-    }
-
-    /** Dump every bidiGenerateContent-capable model the key exposes (to choose the right default). */
-    private suspend fun runModels(app: Context): String {
-        val key = CompanionConfig(app).byokKey() ?: return report("models", "", false, "no BYOK Gemini key")
-        val live = LiveModelResolver.listLiveModels(key)
-        return report("models", "listLiveModels", live.isNotEmpty(), live.joinToString(", "), live)
     }
 
     /**
@@ -242,85 +203,6 @@ class CompanionTestReceiver : BroadcastReceiver() {
             "sample=${launchable.take(8).joinToString(", ") { it.packageName }}"
         return report("appscan", "scan", !report.degraded, summary, emptyList(), now() - start)
     }
-
-    /** L1: dispatch a single tool through the real CompanionTools -> MemoryService / gate. */
-    private suspend fun runTool(app: Context, tool: String?, argsRaw: String?): String {
-        if (tool == null) return report("tool", "", false, "missing --es tool")
-        val tools = CompanionTools(
-            memory(app),
-            AuraAgentPhoneRunner(app),
-            // The REAL brain lane, not a stub: the whole value of this harness is exercising the
-            // production routing decision with a keyboard instead of a microphone, so that a
-            // wrong route can be blamed on the prompt rather than on speech recognition.
-            brain = AuraBrainLane(app, memory(app)),
-        )
-        val start = now()
-        val res = tools.handle(CompanionToolCall(tool, parseArgs(argsRaw)))
-        return report("tool", tool, !res.isError, res.text, listOf(tool), now() - start)
-    }
-
-    /** L2: real Gemini Live transport, driven by a text turn instead of audio. */
-    private suspend fun runLive(app: Context, text: String?, modelOverride: String?, windowMs: Long): String {
-        if (text == null) return report("live", "", false, "missing --es text")
-        val key = CompanionConfig(app).byokKey()
-            ?: return report("live", text, false, "no BYOK Gemini key saved (Settings -> Companion)")
-        val memory = memory(app)
-        val tools = CompanionTools(
-            memory,
-            AuraAgentPhoneRunner(app),
-            brain = AuraBrainLane(app, memory),
-        )
-        // Mirror production CompanionLiveController: resolve the real model from the key, and OMIT
-        // thinkingConfig for native-audio models (they reject it → silent setup failure).
-        val model = modelOverride ?: LiveModelResolver.resolve(key) ?: CompanionConfig.LIVE_MODEL
-        val config = LiveSessionConfig(
-            model = model,
-            voice = CompanionConfig(app).voice(),
-            systemInstruction = CompanionPromptAssembler(memory).assemble(now()),
-            tools = LiveToolDeclarations.functionDeclarations(),
-            triggerTokens = CompanionConfig.TRIGGER_TOKENS,
-            slidingWindow = CompanionConfig.SLIDING_WINDOW,
-            languageCode = if (model.contains("native-audio")) "" else CompanionConfig.DEFAULT_LANGUAGE,
-            thinkingLevel = if (model.contains("native-audio")) "" else CompanionConfig.THINKING_LEVEL,
-        )
-        val transcript = StringBuilder()
-        val toolCalls = mutableListOf<String>()
-        val diag = StringBuilder()
-        val audioChunks = java.util.concurrent.atomic.AtomicInteger(0)
-        val setupOk = java.util.concurrent.atomic.AtomicBoolean(false)
-        val start = now()
-        val session = LiveSession(
-            connectKey = key, config = config, tools = tools,
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-            listener = object : LiveSessionListener {
-                override fun onSetupComplete() { setupOk.set(true); synchronized(diag) { diag.append("[setupComplete] ") } }
-                override fun onModelTranscript(text: String) { synchronized(transcript) { transcript.append(text) } }
-                override fun onAudio(pcm: ByteArray) { audioChunks.incrementAndGet() }
-                override fun onTurnComplete() { synchronized(diag) { diag.append("[turnComplete] ") } }
-                override fun onGenerationComplete() { synchronized(diag) { diag.append("[genComplete] ") } }
-                override fun onToolStarted(name: String) { synchronized(toolCalls) { toolCalls.add(name) } }
-                override fun onUnparsed(raw: String) { synchronized(diag) { diag.append("[unparsed] ${raw.take(300)} ") } }
-                override fun onGoAway() { synchronized(diag) { diag.append("[goAway] ") } }
-            },
-        )
-        if (!session.connect()) return report("live", text, false, "connect() returned false", model = model)
-        delay(SETTLE_MS) // let setupComplete arrive before the first turn
-        session.sendText(text)
-        delay(windowMs) // collect the response + any tool round-trips
-        session.close()
-        val spoken = synchronized(transcript) { transcript.toString() }.trim()
-        val calls = synchronized(toolCalls) { toolCalls.toList() }
-        val diagnostics = synchronized(diag) { diag.toString() }.trim()
-        val ok = calls.isNotEmpty() || spoken.isNotEmpty()
-        val summary = "model=$model | setup=${setupOk.get()} | audioChunks=${audioChunks.get()} | " +
-            "spoken=\"${spoken.take(400)}\" | diag=$diagnostics"
-        return report("live", text, ok, summary, calls, now() - start)
-    }
-
-    private fun memory(app: Context) = EncryptedMemoryService(EncryptedJsonStore(app, "aura_memory"))
-
-    private fun parseArgs(raw: String?): JsonObject =
-        raw?.let { runCatching { JSON.parseToJsonElement(it).jsonObject }.getOrNull() } ?: JsonObject(emptyMap())
 
     /** Decode a base64 extra, or null if absent/garbage (caller falls back to the plain extra). */
     private fun b64(raw: String?): String? = raw?.let {
@@ -729,7 +611,6 @@ class CompanionTestReceiver : BroadcastReceiver() {
     private companion object {
         const val TAG = "CompanionTest"
         const val SETTLE_MS = 1_500L
-        const val DEFAULT_WINDOW_MS = 90_000
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val JSON = Json { ignoreUnknownKeys = true }
     }

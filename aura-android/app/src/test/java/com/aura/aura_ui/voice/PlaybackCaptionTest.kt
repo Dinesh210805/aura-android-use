@@ -49,4 +49,45 @@ class PlaybackCaptionTest {
     @Test fun `offsets match the joined text`() {
         assertEquals(chunks[1], full.substring(offsets[1], offsets[1] + chunks[1].length))
     }
+
+    @Test fun `a partially revealed word is held back until it is whole`() {
+        assertEquals("Only", PlaybackCaption.sentence("Only one thing", spoken = 7))
+    }
+
+    @Test fun `the reveal advances a whole word at a time`() {
+        assertEquals("Only one", PlaybackCaption.sentence("Only one thing", spoken = 11))
+    }
+
+    @Test fun `the last word is never held back once everything has arrived`() {
+        val full = "Only one"
+        assertEquals(full, PlaybackCaption.sentence(full, spoken = full.length))
+    }
+
+    @Test fun `nothing shows before the first word is complete`() {
+        assertEquals("", PlaybackCaption.sentence("Only one thing", spoken = 2))
+    }
+
+    @Test fun `the caption restarts at the sentence being spoken`() {
+        val full = "Hey there. This is AURA speaking"
+        assertEquals("This is AURA", PlaybackCaption.sentence(full, spoken = 27))
+    }
+
+    @Test fun `a reply ending in a full stop shows its last word`() {
+        val full = "I use your phone."
+        assertEquals(full, PlaybackCaption.sentence(full, spoken = full.length))
+    }
+
+    @Test fun `a sentence keeps its last word until the next one starts`() {
+        assertEquals("Hey there.", PlaybackCaption.sentence("Hey there. This is AURA", spoken = 11))
+    }
+
+    @Test fun `a closing quote does not start a new sentence`() {
+        val full = "\"This is why people come to NASA.\" - @nasaadmin"
+        assertEquals(full, PlaybackCaption.sentence(full, spoken = full.length))
+    }
+
+    @Test fun `dots inside a word or number do not start a new sentence`() {
+        val full = "Cruise at Mach .75, details at nasa.gov/aero now"
+        assertEquals(full, PlaybackCaption.sentence(full, spoken = full.length))
+    }
 }
