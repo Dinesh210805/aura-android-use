@@ -35,7 +35,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Why Piper: on phone CPUs it synthesizes at roughly 0.1–0.2× real time, so it keeps ahead of
  *   playback even on low-end chips; larger neural voices (82M-param Kokoro) run slower than real time there.
  * - Why `USAGE_MEDIA`: speaker output at media volume, full band. Call audio is quiet, narrowband
- *   and follows the call volume. Must match `AuraTTSManager.applyAudioRouting`.
+ *   and follows the call volume. Must match `AuraTTSManager.applyAudioRouting`. The exception is a
+ *   voice conversation (`voiceChat`): there AURA must hear the person over itself, which needs its
+ *   voice on the call path where the echo canceller can remove it.
  */
 object PiperSpeaker {
     private const val TAG = "PiperSpeaker"
@@ -78,6 +80,8 @@ object PiperSpeaker {
         text: String,
         voice: LocalVoices.Voice,
         cache: Boolean = false,
+        /** True in a voice conversation: plays as call audio so the echo canceller can hear it. */
+        voiceChat: Boolean = false,
         onStart: () -> Unit = {},
         onDone: () -> Unit,
     ): Boolean {
@@ -105,7 +109,8 @@ object PiperSpeaker {
             }
         }
         player.execute {
-            val finished = runCatching { play(queue, gen, full, offsets, onStart) }
+            val usage = if (voiceChat) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_MEDIA
+            val finished = runCatching { play(queue, gen, full, offsets, usage, onStart) }
                 .onFailure { Log.e(TAG, "Piper playback failed: ${it.message}", it) }
                 .getOrDefault(false)
             if (finished && gen == generation.get()) onDone()
@@ -124,6 +129,7 @@ object PiperSpeaker {
         gen: Int,
         full: String,
         offsets: IntArray,
+        usage: Int,
         onStart: () -> Unit,
     ): Boolean {
         var out: AudioTrack? = null
@@ -144,7 +150,7 @@ object PiperSpeaker {
                     if (gen == generation.get()) publish(CaptionReveal.sentence(full, full.length))
                     break
                 }
-                val t = out ?: newTrack(chunk.sampleRate).also { out = it; track = it; it.play(); onStart() }
+                val t = out ?: newTrack(chunk.sampleRate, usage).also { out = it; track = it; it.play(); onStart() }
                 segments += PlaybackCaption.Segment(written, chunk.samples.size, offsets[segments.size], chunk.text.length)
                 val slice = chunk.sampleRate * SLICE_MS / 1000
                 var offset = 0
@@ -248,14 +254,14 @@ object PiperSpeaker {
         }
     }
 
-    private fun newTrack(sampleRate: Int): AudioTrack {
+    private fun newTrack(sampleRate: Int, usage: Int): AudioTrack {
         val minBuf = AudioTrack.getMinBufferSize(
             sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT,
         )
         return AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setUsage(usage)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build(),
             )

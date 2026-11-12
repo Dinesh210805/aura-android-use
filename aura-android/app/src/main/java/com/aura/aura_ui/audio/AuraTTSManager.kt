@@ -74,7 +74,7 @@ class AuraTTSManager(context: Context) {
         tts?.stop()
         // PiperSpeaker publishes its own caption, word by word as it plays.
         val voice = LocalVoices.byId(voiceId)
-        if (PiperSpeaker.speak(appContext, text, voice, cache, onStart) { onComplete?.invoke() }) return
+        if (PiperSpeaker.speak(appContext, text, voice, cache, onStart = onStart) { onComplete?.invoke() }) return
         // System TTS starts within a few ms of the request, so "started" is signalled up front.
         onStart()
         if (!isReady || tts == null) {
