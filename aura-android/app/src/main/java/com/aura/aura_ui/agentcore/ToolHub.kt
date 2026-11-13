@@ -111,6 +111,10 @@ class TurnState(
     /** Names this turn in the run log ([RunJournal]). */
     val runId: String = UUID.randomUUID().toString()
 
+    /** The user's own words for this turn. A link may carry only these off to an app; see `ToolHub`. */
+    @Volatile
+    var request: String = ""
+
     /** Set when the turn asked for the screen and [handsOffScreen] is true. */
     @Volatile
     var handedOff: Boolean = false
@@ -525,8 +529,12 @@ class ToolHub(
             // needs its own Send. A URL anywhere must land in an installed, non-browser app, or a
             // browser could carry private text off the phone in the address.
             if (urls.isEmpty()) return if (spec.name in OPENS_LOCALLY) false else spec.egress || "://" in argsText
+            // An app can report the link it was opened with to its own servers, so a link counts
+            // as staying on the phone only when its query and fragment hold nothing but the
+            // user's own words: "send hi to Amma" may open wa.me/<number>?text=hi; text read off a
+            // screen or notification may not ride along unchecked.
             val local = spec.name == OPEN_DEEPLINK || spec.name in OPENS_LOCALLY
-            return !(local && urls.all { runCatching { opensInstalledApp(it) }.getOrDefault(false) })
+            return !(local && urls.all { url -> dictatedOnly(url, turn.request) && runCatching { opensInstalledApp(url) }.getOrDefault(false) })
         }
 
         override fun decodeResult(rawResult: JSONElement, serializer: JSONSerializer): ToolOutcome =
@@ -549,6 +557,19 @@ class ToolHub(
         private const val READ_SCREEN = "read_screen"
         private const val LOAD_TOOLSET = "load_toolset"
         private const val OPEN_DEEPLINK = "open_deeplink"
+
+        /**
+         * True when every query and fragment value of [url] (percent-decoded) appears in [request].
+         * Numbers count as dictated too when the request has none: they are routing (a phone number,
+         * an id), and the commit card at the app's Send shows the user where it goes.
+         */
+        internal fun dictatedOnly(url: String, request: String): Boolean {
+            val tail = url.substringAfter('?', "") + "&" + url.substringAfter('#', "")
+            val said = request.lowercase()
+            return tail.split('&', ';').mapNotNull { it.substringAfter('=', "").takeIf(String::isNotBlank) }
+                .map { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it).trim().lowercase() }
+                .all { value -> value.isEmpty() || value in said || value.all { c -> c.isDigit() || c == '+' } }
+        }
 
         /** A URL or intent link inside JSON text: up to the next quote, backslash or space. */
         private val URL = Regex("""(?i)(?:[a-z][a-z0-9+.\-]*://|intent:)[^\s"\\]+""")

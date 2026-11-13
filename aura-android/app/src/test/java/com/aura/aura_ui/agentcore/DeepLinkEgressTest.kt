@@ -1,0 +1,21 @@
+package com.aura.aura_ui.agentcore
+
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class DeepLinkEgressTest {
+
+    @Test
+    fun `a link carrying only the user's words stays on the phone`() {
+        assertTrue(ToolHub.dictatedOnly("https://wa.me/919876543210?text=hi%20amma", "send hi amma to Amma on WhatsApp"))
+        assertTrue(ToolHub.dictatedOnly("https://wa.me/919876543210", "message Amma"))
+        assertTrue(ToolHub.dictatedOnly("spotify://search?q=lofi", "play lofi on spotify"))
+    }
+
+    @Test
+    fun `a link carrying text the user did not say counts as sending out`() {
+        assertFalse(ToolHub.dictatedOnly("https://wa.me/919876543210?text=OTP%20is%20482910", "reply to the last message"))
+        assertFalse(ToolHub.dictatedOnly("myapp://open#token=abc123secret", "open my app"))
+    }
+}

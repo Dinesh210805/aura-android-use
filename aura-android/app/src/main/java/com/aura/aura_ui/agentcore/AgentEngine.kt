@@ -138,6 +138,7 @@ class AgentEngine(
             record(threadId, event)
             send(event)
         }
+        turn.request = text
         if (continuesHandOff) turn.load(ToolHub.SCREEN)
         journal?.start(turn.runId, text, main.label)
         val run = TurnRun(stored.messages)
