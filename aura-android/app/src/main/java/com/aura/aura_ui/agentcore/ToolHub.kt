@@ -450,7 +450,7 @@ class ToolHub(
             val label = if (spec.risk == ToolRisk.ACT) targetLabel(spec.name, args) else null
             val argsText = args.toString()
             val request = ToolCallRequest(
-                spec.name, spec.risk, spec.origin, argsText, sendsOut(args, argsText), label,
+                spec.name, spec.risk, spec.origin, argsText, sendsOut(argsText), label,
                 appLabel = if (label != null && CommitLabels.isCommit(label)) runCatching { appLabel() }.getOrNull() else null,
             )
             if (turn.failuresOf(callKey(args)) >= BLOCK_AFTER_FAILURES) {
@@ -514,8 +514,9 @@ class ToolHub(
          * classified as, except a link or intent that lands in an installed app: that app's own
          * Send is the commit, and it is gated there.
          */
-        private fun sendsOut(args: JsonObject, argsText: String): Boolean {
-            val urls = args.values.mapNotNull { v -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { "://" in it || it.startsWith("intent:") } }
+        private fun sendsOut(argsText: String): Boolean {
+            // Found in the serialised arguments, so a URL nested in an object or array counts too.
+            val urls = URL.findAll(argsText).map { it.value }.toList()
             // No URL: an intent or file opened on this phone hands its text to an app that still
             // needs its own Send. A URL anywhere must land in an installed, non-browser app, or a
             // browser could carry private text off the phone in the address.
@@ -544,6 +545,9 @@ class ToolHub(
         private const val READ_SCREEN = "read_screen"
         private const val LOAD_TOOLSET = "load_toolset"
         private const val OPEN_DEEPLINK = "open_deeplink"
+
+        /** A URL or intent link inside JSON text: up to the next quote, backslash or space. */
+        private val URL = Regex("""(?i)(?:[a-z][a-z0-9+.\-]*://|intent:)[^\s"\\]+""")
 
         /** Open something on this phone; their text reaches an app that still needs its own Send. */
         private val OPENS_LOCALLY = setOf("system_intent", "open_file", "launch_app")
