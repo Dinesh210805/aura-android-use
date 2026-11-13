@@ -51,6 +51,8 @@ class SourceResult(
     val isError: Boolean = false,
     /** A screenshot to show the model on the next request, or null. */
     val imagePng: ByteArray? = null,
+    /** For the run log: what a gesture pressed. Never shown to the model. */
+    val shot: StepShot? = null,
 )
 
 /** Everything the hub knows about one tool. */
@@ -105,6 +107,9 @@ class TurnState(
     val handsOffScreen: Boolean = false,
     private val sink: suspend (AgentEvent) -> Unit,
 ) {
+    /** Names this turn in the run log ([RunJournal]). */
+    val runId: String = UUID.randomUUID().toString()
+
     /** Set when the turn asked for the screen and [handsOffScreen] is true. */
     @Volatile
     var handedOff: Boolean = false
@@ -190,7 +195,10 @@ class UserBroker(
         { _, _, _ -> null },
 ) {
 
-    data class Pending(val id: String, val question: String, val options: List<String>)
+    data class Pending(val id: String, val question: String, val options: List<String>) {
+        /** True for an Allow or Deny prompt in front of a step that commits the user. */
+        val isConfirm: Boolean get() = options == listOf(ALLOW, DENY)
+    }
 
     private val waiting = ConcurrentHashMap<String, CompletableDeferred<String?>>()
     private val _pending = MutableStateFlow<List<Pending>>(emptyList())
@@ -242,6 +250,8 @@ class ToolHub(
     private val settings: () -> SafetySettings = { SafetySettings() },
     /** Label of the element a gesture call targets, read from the last screen. Null when unknown. */
     private val targetLabel: suspend (tool: String, args: JsonObject) -> String? = { _, _ -> null },
+    /** The readable run log. Null in tests. */
+    private val journal: RunJournal? = null,
 ) {
     private val control = NativeToolSource("control", listOf(loadToolsetTool(), askUserTool(), updatePlanTool()))
 
@@ -351,6 +361,7 @@ class ToolHub(
         val question = args["question"]?.jsonPrimitive?.contentOrNull.orEmpty()
         val options = runCatching { args["options"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } }
             .getOrNull().orEmpty().take(MAX_OPTIONS)
+        journal?.ask(turn.runId, question)
         when (val answer = broker.ask(turn, question, options)) {
             null -> SourceResult("The user did not answer. Do not take the step you asked about.", isError = true)
             else -> SourceResult("The user answered: $answer")
@@ -396,12 +407,18 @@ class ToolHub(
         descriptor = spec.descriptor,
         metadata = emptyMap(),
     ) {
+        /** What the call now running pressed. Calls in a turn run one at a time. */
+        private var shot: StepShot? = null
+
         override suspend fun execute(args: JSONObject): ToolOutcome {
             val json = args.toKotlinxJsonObject()
             val callId = UUID.randomUUID().toString()
             val started = System.nanoTime()
+            shot = null
             turn.emit(AgentEvent.ToolStarted(callId, spec.name, SecretPatterns.redact(json.toString()).take(PREVIEW_CHARS)))
             val outcome = gated(json)
+            val tookMs = (System.nanoTime() - started) / 1_000_000
+            journal?.tool(turn.runId, spec.name, json.toString(), outcome.text, !outcome.isError, tookMs, shot)
             turn.emit(
                 AgentEvent.ToolFinished(
                     callId = callId,
@@ -427,19 +444,25 @@ class ToolHub(
             val egress = spec.egress || "://" in argsText
             val request = ToolCallRequest(spec.name, spec.risk, spec.origin, argsText, egress, label)
             if (turn.failuresOf(callKey(args)) >= BLOCK_AFTER_FAILURES) {
+                journal?.note(turn.runId, "Blocked a repeated call to ${spec.name}", argsText, ok = false)
                 return ToolOutcome(
                     "This exact call has failed $BLOCK_AFTER_FAILURES times. Stop repeating it: try something " +
                         "different or tell the user.",
                     isError = true,
                 )
             }
-            return when (val verdict = SafetyGate.evaluate(request, turn.mode, turn.taint, settings())) {
+            val verdict = SafetyGate.evaluate(request, turn.mode, turn.taint, settings())
+            if (verdict !is Verdict.Allow) journal?.note(turn.runId, gateTitle(verdict), gateDetail(request, verdict, turn.taint.origins), ok = verdict !is Verdict.Deny)
+            return when (verdict) {
                 is Verdict.Deny -> ToolOutcome(verdict.modelMessage, isError = true)
                 is Verdict.Ask -> {
                     // The model is told to say what a commit will do; the user reads that here.
                     val said = turn.saying.takeIf { it.isNotBlank() && !verdict.unlocksEgress }
                         ?.let { SecretPatterns.redact(it).take(MAX_SAID_IN_QUESTION) + "\n\n" }.orEmpty()
-                    if (!broker.confirm(turn, said + verdict.question)) {
+                    journal?.ask(turn.runId, said + verdict.question)
+                    val allowed = broker.confirm(turn, said + verdict.question)
+                    journal?.note(turn.runId, if (allowed) "You allowed ${spec.name}" else "You declined ${spec.name}, or did not answer", ok = allowed)
+                    if (!allowed) {
                         ToolOutcome("The user declined: ${verdict.question} Do not retry or look for another way.", isError = true)
                     } else {
                         if (verdict.unlocksEgress) turn.taint.allowEgress()
@@ -457,9 +480,13 @@ class ToolHub(
                 throw e
             } catch (e: Exception) {
                 SourceResult("${spec.name} failed: ${e.message ?: e::class.simpleName}", isError = true)
-            }
+            }.let { if (it.isError && PhoneAccess.OFF_ERROR in it.text) SourceResult(PhoneAccess.MODEL_MESSAGE, isError = true) else it }
             spec.resultOrigin?.let(turn.taint::mark)
             result.imagePng?.let(turn::stashImage)
+            shot = result.shot
+            if (!result.isError && turn.mode == RunMode.FOREGROUND) {
+                ChatCard.fromToolResult(spec.name, result.text)?.let { turn.emit(AgentEvent.Card(it)) }
+            }
             if (!result.isError && spec.risk != ToolRisk.READ && spec.origin == ToolOrigin.PHONE) turn.noteAction()
             val repeat = if (result.isError) turn.noteFailure(callKey(args)) else 0
             val hint = if (repeat >= WARN_AFTER_FAILURES) "\nThis exact call has now failed $repeat times. Do not repeat it." else ""
@@ -496,5 +523,30 @@ class ToolHub(
         private const val WARN_AFTER_FAILURES = 2
         private const val BLOCK_AFTER_FAILURES = 4
         private val json = Json { ignoreUnknownKeys = true }
+
+        /** The run log's one-line title for a gate verdict that was not a plain allow. */
+        internal fun gateTitle(verdict: Verdict): String = when (verdict) {
+            is Verdict.Deny -> "Safety gate refused this call"
+            is Verdict.Ask -> if (verdict.unlocksEgress) "Safety gate asked you: private data read, now sending out" else "Safety gate asked you before a commit"
+            Verdict.Allow -> "Safety gate allowed this call"
+        }
+
+        /** Everything the gate decided on, for the run log: the call as classified, the turn's taint, the verdict. */
+        internal fun gateDetail(request: ToolCallRequest, verdict: Verdict, taint: Set<Origin>): String = buildString {
+            appendLine("tool: ${request.tool}")
+            appendLine("risk: ${request.risk} (effective ${SafetyGate.effectiveRisk(request)})")
+            appendLine("origin: ${request.origin}")
+            appendLine("sends data out: ${request.egress}")
+            request.targetLabel?.let { appendLine("pressed label: $it") }
+            appendLine("private or untrusted content this turn: ${taint.joinToString().ifEmpty { "none" }}")
+            appendLine(
+                when (verdict) {
+                    is Verdict.Deny -> "told the model: ${verdict.modelMessage}"
+                    is Verdict.Ask -> "asked: ${verdict.question}"
+                    Verdict.Allow -> "allowed"
+                },
+            )
+            append("arguments: ${request.argsText}")
+        }
     }
 }

@@ -3,7 +3,7 @@
 > **Keep this file current.** If you add, remove, rename or repurpose anything in this folder,
 > update this README in the same commit. A stale map is worse than no map.
 >
-> **Last reviewed:** 2026-11-12.
+> **Last reviewed:** 2026-11-13.
 
 Everything the user sees in the AURA **app** (Settings, onboarding, the MCP centre, traces, eval),
 plus the **overlay UI** the assistant draws on top of other apps. All of it is Jetpack Compose.
@@ -49,7 +49,7 @@ presentation/
 ### Routes → screens
 | Route | Screen |
 |---|---|
-| `home` | `agentcore/ChatUi.kt` (outside this folder): the chat with the agent. The bottom bar is hidden here; the chat's drawer links to the other screens |
+| `home` | `agentcore/ChatUi.kt` (outside this folder): the chat with the agent, with its own light and dark theme (`agentcore/ChatTheme.kt`). The bottom bar is hidden here; the chat's drawer links to the other screens |
 | `home/dashboard` | `screens/home/AuraHomeScreen.kt` (+ `AppPromptMarquee.kt`, the scrolling example prompts): the status dashboard, opened from the chat's drawer |
 | `agent` | `screens/agent/AgentHubScreen.kt`, the hub linking to everything below |
 | `agent/brain` | `ProviderSettingsScreen.kt`: LLM provider, model and keys |
@@ -81,9 +81,9 @@ story view). Every build records, shows and exports the same full log.
 |---|---|
 | `screens/VoiceAssistantOverlay.kt` | The floating prompt box: close, text field (Enter sends), AURA button; while listening, the white voice ribbon and a "Type" button. Lifted above Resume/Cancel while a run is paused. |
 | `overlay/QuestionCardOverlay.kt` | The question card at the top when AURA's agent or an MCP client calls `ask_user`: choices, Type (opens the prompt box), Speak, Skip. Answers go to `AskUserBroker.shared`; voice conversations also ask it aloud. |
-| `overlay/AgentStatusOverlay.kt` | The status strip during a run: what the person said and what AURA is saying (`services/AgentStatusRegistry`) |
+| `overlay/AgentStatusOverlay.kt` | The strip at the top (`services/AgentStatusRegistry`): a small centered "Thinking…" pill while the model thinks, nothing while a task drives the phone, and a rounded glass card for what the person said and what AURA is saying |
 | `overlay/PausePillOverlay.kt` | Pause/stop controls for a running task. The browser window reads its geometry. |
-| `overlay/RunReportOverlay.kt` | The report card when a run ends (done, partial, failed, stopped, or a remote client went quiet) or the user presses Pause on a remote run. Draws the `end_session` `report` markdown via `overlay/ReportMarkdown.kt`, else AURA's reply, else the last steps. State comes from `services/RemoteRun.kt`, which also puts remote runs on the status strip and run controls. On-device runs reach it through `agent/OnDeviceReport.kt`: from `AuraAgent.runSpike`, and from the overlay when a task it ran drove the phone (`OnDeviceReport.forTurn`, steps in the cursor's words from `services/StepPill`). AURA's own reports are drawn on the prompt box in `VoiceAssistantOverlay` (this window is for remote runs). Benchmark runs get none. The next task closes it. |
+| `overlay/RunReportOverlay.kt` | The report card when a run ends (done, partial, failed, stopped, or a remote client went quiet) or the user presses Pause on a remote run. Draws the `end_session` `report` markdown via `overlay/ReportMarkdown.kt`, else AURA's reply, else the last steps. State comes from `services/RemoteRun.kt`, which also puts remote runs on the status strip and run controls. On-device runs reach it through `agent/OnDeviceReport.kt`: from `AuraAgent.runSpike`, and from the overlay when a task it ran drove the phone (`OnDeviceReport.forTurn`, steps in the cursor's words from `services/StepPill`). AURA's own reports are drawn on the prompt box in `VoiceAssistantOverlay` (this window is for remote runs). Tasks the chat handed off get a chat card instead, and benchmark runs none. The next task closes it. |
 | `overlay/OverlayOpenCue.kt` | One-shot sound (`res/raw/overlay_open_chime.mp3`) + haptic when the overlay opens |
 
 ### `components/`
@@ -100,8 +100,9 @@ story view). Every build records, shows and exports the same full log.
 ### `permissions/`
 `PermissionRegistry.kt` is the single catalogue of every permission AURA asks for (runtime vs.
 special). `PermissionSystemLauncher.kt` opens the right system settings page, and
-`PermissionToggleModel.kt` maps state to toggle UI. **Adding a permission means editing the
-registry and `AndroidManifest.xml` together.**
+`PermissionToggleModel.kt` maps state to toggle UI. Turning a granted runtime permission off opens
+AURA's App info page, because Android gives apps no way to revoke their own grant immediately.
+**Adding a permission means editing the registry and `AndroidManifest.xml` together.**
 
 ---
 
@@ -112,8 +113,9 @@ registry and `AndroidManifest.xml` together.**
   permissions, the active-run dot. Never decorative.
 - One radius language, from `Mono`: `ShapeCard` 24dp, `ShapeCardSmall` 16dp, `ShapeChip` 12dp,
   `ShapePill`. (`Capsule` has its own `ShapeCard` at 22dp, for Capsule cards only.)
-- The app is light-only. The overlay has its own fixed colour scheme at the top of
-  `VoiceAssistantOverlay.kt`.
+- Every overlay window (prompt box, strip, question card, report card) follows the user's light or
+  dark mode in the Classic style, never the sky: `overlayIsDark` / `overlayColors` /
+  `rememberOverlayDark` in `../ui/theme/AuraTheme.kt`. A theme change applies when a window is next shown.
 
 ## How to add a screen
 1. Create `screens/<area>/<Name>Screen.kt` (a ViewModel next to it only if it owns state).

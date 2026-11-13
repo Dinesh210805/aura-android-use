@@ -9,6 +9,12 @@ import android.view.View
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -111,7 +117,9 @@ class QuestionCardOverlay(
     }
 }
 
-private val Ui = Mono.scheme(dark = true)
+/** The card's colours: the user's light or dark mode, as in the rest of the overlay. */
+private val Ui: com.aura.aura_ui.ui.theme.MonoScheme
+    @Composable get() = Mono.scheme(dark = com.aura.aura_ui.ui.theme.rememberOverlayDark())
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -151,19 +159,37 @@ private fun QuestionCard(question: PendingQuestion, onType: () -> Unit, onSpeak:
     }
 }
 
+/**
+ * One answer bubble. A [filled] chip is an answer: ink on the card's opposite colour, so it reads as
+ * a button on both the white light card and the near-black dark one. An outlined chip is a way to
+ * answer (Type, Speak).
+ *
+ * - Why theme colours and not white: a white chip on the light theme's white card is invisible, and
+ *   the options read as plain text.
+ * - Why the press scale: the overlay has no ripple theme, so without it a tap gives no feedback
+ *   before the card closes.
+ */
 @Composable
 private fun Chip(label: String, filled: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(percent = 50)
+    val ui = Ui
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, label = "chipPress")
     Text(
         text = label,
-        color = if (filled) Color.Black else Ui.textPrimary,
+        color = if (filled) ui.card else ui.textPrimary,
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(shape)
-            .background(if (filled) Color.White else Color.Transparent)
-            .border(1.dp, Color.White.copy(alpha = if (filled) 0f else 0.4f), shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 9.dp),
+            .background(if (filled) ui.textPrimary else ui.chip)
+            .border(1.dp, if (filled) Color.Transparent else ui.textSecondary.copy(alpha = 0.35f), shape)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 11.dp),
     )
 }

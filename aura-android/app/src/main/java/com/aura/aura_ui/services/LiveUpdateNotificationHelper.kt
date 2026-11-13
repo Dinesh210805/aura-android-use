@@ -51,7 +51,6 @@ object LiveUpdateNotificationHelper {
      */
     private const val CHANNEL_ID_QUIET = "aura_live_update_quiet_v3"
     private const val CHANNEL_NAME = "AURA Status"
-    private const val NOTIFICATION_ID = 9_001
 
     /** Mono's only accent (`ui/theme/Mono.kt`) — semantic attention, never decoration. */
     private const val MONO_BLOOD = 0xFFA31621.toInt()
@@ -63,67 +62,22 @@ object LiveUpdateNotificationHelper {
         get() = if (supportsPromotedChip) CHANNEL_ID else CHANNEL_ID_QUIET
 
     /**
-     * Post or update the status-bar chip with a short verb (e.g. "Ready", "Thinking").
-     *
-     * NOTE: this path uses `nm.notify()` and so will NOT be promoted to the status-bar chip
-     * because Android 16 requires the FOREGROUND_SERVICE flag on the notification, which
-     * only `startForeground()` sets. Use [buildNotification] from inside a foreground
-     * service instead and post it via `startForeground(id, notification, type)`.
-     */
-    fun show(context: Context, status: AuraStatus = AuraStatus.Idle) {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        ensureChannel(nm)
-        nm.notify(NOTIFICATION_ID, buildNotification(context, status))
-        Log.d(TAG, "Live update notification posted (shade-only): ${status.verb}")
-    }
-
-    /** Update the chip mid-execution. */
-    fun update(context: Context, status: AuraStatus) = show(context, status)
-
-    /** Back-compat string overload used by old call sites. Treated as the [AuraStatus.Idle] verb. */
-    @Deprecated("Pass AuraStatus", ReplaceWith("show(context, AuraStatus.Idle)"))
-    fun show(context: Context, taskDescription: String) =
-        show(context, AuraStatus.Idle)
-
-    /** Cancel the chip. */
-    fun cancel(context: Context) {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(NOTIFICATION_ID)
-        Log.d(TAG, "Live update notification cancelled")
-    }
-
-    /**
-     * Build a chip-style notification suitable for posting via `startForeground()`.
-     * The caller is responsible for calling [ensureChannelCreated] once before first use.
+     * Build the working chip for `startForeground()`. Android 16 promotes only a notification
+     * that carries the FOREGROUND_SERVICE flag, which `notify()` does not set.
      */
     fun buildNotification(context: Context, status: AuraStatus): Notification {
         ensureChannel(context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-        return if (Build.VERSION.SDK_INT >= 36) {
+        return if (supportsPromotedChip) {
             buildPromotedNotification(context, status.verb)
         } else {
             buildCompatNotification(context, status.verb)
         }
     }
 
-    /** Back-compat string overload — old call sites passing a raw verb string. */
-    @Deprecated("Pass AuraStatus", ReplaceWith("buildNotification(context, AuraStatus.Idle)"))
-    fun buildNotification(context: Context, verb: String): Notification {
-        ensureChannel(context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-        return if (Build.VERSION.SDK_INT >= 36) {
-            buildPromotedNotification(context, verb)
-        } else {
-            buildCompatNotification(context, verb)
-        }
-    }
-
-    /** Public channel-id accessor for callers that need to reference the channel directly. */
-    val channelId: String get() = activeChannelId
-
     /**
-     * Invisible IMPORTANCE_MIN placeholder — keeps the foreground service alive
-     * with NO pill/chip/card. Used when [ChipVisibilityPolicy] decides the
-     * status surface should not render (app backgrounded + idle, or the
-     * overlay's automation pill owns the notch).
+     * IMPORTANCE_MIN placeholder that keeps the foreground service alive while the agent is idle:
+     * no status-bar icon, collapsed at the bottom of the shade. Used whenever
+     * [ChipVisibilityPolicy] says [ChipVisibilityPolicy.Mode.SILENT].
      */
     fun buildSilentNotification(context: Context): Notification {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -180,33 +134,8 @@ object LiveUpdateNotificationHelper {
             setStyledByProgress(false)
         }
 
-        // Mirror AuraOverlayService.promoteIfSupported (lines 974-1003) byte-for-byte.
-        // Key choices known to produce PROMOTED_ONGOING flag on OxygenOS / Android 16:
-        //   - color = white (0xFFFFFFFF), NOT brand purple
-        //   - NO setColorized() — system rejects the chip if colorized is requested
-        //     without an FGS attachment at build time
-        //   - FOREGROUND_SERVICE_DEFAULT behavior
-        //   - At least one Action
-        // BROKEN — see REVIEW_LOG OV3. This is an *implicit* service intent (action
-        // string + setPackage, no component). Nothing in AndroidManifest.xml declares
-        // an intent-filter for "com.aura.aura_ui.STOP_OVERLAY", so it resolves to no
-        // service and tapping "Hide" does nothing. It has never worked; the handler it
-        // aimed at (AssistantForegroundService.handleStopOverlay) drove the legacy
-        // FloatingMicOverlay stack and was itself unreachable — deleted 2026-08-16.
-        //
-        // The working idiom in this codebase is an EXPLICIT intent, as used by the
-        // sibling chip: Intent(this, AuraOverlayService::class.java).apply { action = … }
-        // (AuraOverlayService:1696, :1883). Fixing this means picking the real hide
-        // target — AuraOverlayService.hide(context) at :269 — which is a behaviour
-        // change, so it is recorded rather than done here.
-        val hidePi = PendingIntent.getService(
-            context, 10,
-            android.content.Intent("com.aura.aura_ui.STOP_OVERLAY").apply {
-                setPackage(context.packageName)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val hideAction = Notification.Action.Builder(null, "Hide", hidePi).build()
+        // Same recipe as AuraOverlayService.promoteIfSupported, which is known to promote on
+        // OxygenOS / Android 16: white color, no setColorized(), FOREGROUND_SERVICE_DEFAULT.
         val openAction = Notification.Action.Builder(null, "Open", openPi).build()
 
         val builder = Notification.Builder(context, CHANNEL_ID)
@@ -222,7 +151,6 @@ object LiveUpdateNotificationHelper {
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_DEFAULT)
             .setStyle(progressStyle)
             .setShortCriticalText(verb)
-            .addAction(hideAction)
             .addAction(openAction)
 
         // Belt + suspenders: the framework recognises this extras key directly.

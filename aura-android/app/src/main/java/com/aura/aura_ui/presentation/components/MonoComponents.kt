@@ -32,8 +32,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.aura.aura_ui.R
+import androidx.compose.foundation.clickable
+import com.aura.aura_ui.ui.theme.LocalAura
 import com.aura.aura_ui.ui.theme.Mono
+import com.aura.aura_ui.ui.theme.auraCard
 
 // ============================================================================
 // MONO COMPONENTS — shared building blocks of the production design language.
@@ -56,9 +58,9 @@ fun MonoPillButton(
     enabled: Boolean = true,
     content: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val scheme = rememberMonoScheme()
-    val bg = if (scheme.isDark) Color.White else Mono.Ink
-    val fg = if (scheme.isDark) Mono.Ink else Mono.TextOnInk
+    val aura = LocalAura.current
+    val bg = aura.accent
+    val fg = aura.onAccent
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -146,59 +148,23 @@ fun MonoInkCard(
     }
 }
 
-/** Plain surface card with a hairline outline — for content sitting on the canvas. */
+/** A bordered surface card for content sitting on the canvas. */
 @Composable
 fun MonoCanvasCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val scheme = rememberMonoScheme()
-    if (onClick != null) {
-        Surface(
-            onClick = onClick,
-            shape = Mono.ShapeCard,
-            color = scheme.card,
-            border = BorderStroke(1.dp, scheme.outline),
-            modifier = modifier,
-            content = content,
-        )
-    } else {
-        Surface(
-            shape = Mono.ShapeCard,
-            color = scheme.card,
-            border = BorderStroke(1.dp, scheme.outline),
-            modifier = modifier,
-            content = content,
-        )
-    }
+    Box(modifier.auraCard().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)) { content() }
 }
 
-/**
- * The AURA mark drawn in a single tint (default white). ONLY place this on ink
- * surfaces — the white mark never sits on the white canvas (spec §2, logo usage).
- */
+/** The AURA mark in one colour, white by default for ink surfaces. */
 @Composable
 fun MonoLogoMark(
     modifier: Modifier = Modifier,
     size: Dp = 24.dp,
     tint: Color = Color.White,
-) {
-    val logo = ImageBitmap.imageResource(R.mipmap.ic_launcher_foreground)
-    Canvas(modifier = modifier.size(size)) {
-        // The launcher foreground carries transparent safe-zone padding; scale up
-        // ~1.28x so the mark reads at small sizes (same treatment as AuraLogoButton).
-        val scale = 1.28f
-        val w = this.size.width * scale
-        val h = this.size.height * scale
-        drawImage(
-            image = logo,
-            dstOffset = IntOffset(((this.size.width - w) / 2f).toInt(), ((this.size.height - h) / 2f).toInt()),
-            dstSize = IntSize(w.toInt(), h.toInt()),
-            colorFilter = ColorFilter.tint(tint),
-        )
-    }
-}
+) = AuraMark(modifier, size, tint)
 
 /** Scope badge for tool listings: READ = outlined, WRITE = filled ink, SENSITIVE = blood. */
 @Composable

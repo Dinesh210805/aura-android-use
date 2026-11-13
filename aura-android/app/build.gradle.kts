@@ -379,6 +379,9 @@ dependencies {
     // Animation
     implementation("com.airbnb.android:lottie:6.1.0")
     implementation("com.valentinilk.shimmer:compose-shimmer:1.3.3")
+    // Backdrop blur for the chat's glass panels. 1.6.x is the line built on Compose 1.8, which
+    // this app resolves; 1.7+ needs Compose 1.9.
+    implementation("dev.chrisbanes.haze:haze:1.6.10")
 
     // Phase 5 — on-device perception (Microsoft OmniParser via ONNX Runtime).
     // Standard package: ships CPU + NNAPI + XNNPACK, so per-device calibration can

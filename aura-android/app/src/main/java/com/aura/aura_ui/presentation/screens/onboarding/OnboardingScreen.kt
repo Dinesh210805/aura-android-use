@@ -358,24 +358,24 @@ fun OnboardingScreen(
                 3 -> RestrictedSettingsStep()
                 4 -> AccessibilityPermissionStep(
                     refreshTrigger = refreshPermissions,
-                    onOpenSystem = { openPermissionSystemPage(context, it, onScreenCapture = {}) },
+                    onOpenSystem = { openPermissionSystemPage(context, it) },
                     onAutoAdvance = { if (step == 4) step = 5 },
                 )
                 5 -> VoiceAndOverlayPermissionStep(
                     refreshTrigger = refreshPermissions,
                     onRequestRuntime = { runtimeLauncher.launch(it.toTypedArray()) },
-                    onOpenSystem = { openPermissionSystemPage(context, it, onScreenCapture = {}) },
+                    onOpenSystem = { openPermissionSystemPage(context, it) },
                     onAutoAdvance = { if (step == 5) step = 6 },
                 )
                 6 -> KeyboardPermissionStep(
                     refreshTrigger = refreshPermissions,
-                    onOpenSystem = { openPermissionSystemPage(context, it, onScreenCapture = {}) },
+                    onOpenSystem = { openPermissionSystemPage(context, it) },
                     onAutoAdvance = { if (step == 6) step = 7 },
                 )
                 7 -> NotificationsPermissionStep(
                     refreshTrigger = refreshPermissions,
                     onRequestRuntime = { runtimeLauncher.launch(it.toTypedArray()) },
-                    onOpenSystem = { openPermissionSystemPage(context, it, onScreenCapture = {}) },
+                    onOpenSystem = { openPermissionSystemPage(context, it) },
                     onAutoAdvance = { if (step == 7) step = 8 },
                 )
                 8 -> GeminiKeyStep(onVerifiedChanged = { keyVerified = it })

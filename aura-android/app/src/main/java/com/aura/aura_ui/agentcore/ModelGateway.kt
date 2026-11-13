@@ -12,6 +12,7 @@ import com.aura.aura_ui.agent.llm.GenerationConfig
 import com.aura.aura_ui.agent.llm.LlmEndpoint
 import com.aura.aura_ui.agent.llm.LlmEndpointCatalog
 import com.aura.aura_ui.agent.llm.ProviderRegistry
+import com.aura.aura_ui.agent.llm.ThinkingSupport
 import com.aura.aura_ui.agent.memory.EncryptedJsonStore
 import com.aura.aura_ui.mcp.bridge.CustomEndpointStore
 import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
@@ -38,6 +39,11 @@ class ResolvedModel(
     /** The model's input limit in tokens, or null when the provider does not publish one. */
     val contextWindow: Int?,
     val vision: Boolean,
+    /**
+     * Request settings for every prompt sent to this model. Empty on the OpenAI-compatible wire
+     * (the HTTP shims carry the user's settings); on the native Claude wire they hold the output
+     * cap, thinking and caching, so every prompt must be built with them.
+     */
     val params: LLMParams,
 ) {
     fun executor(): PromptExecutor = MultiLLMPromptExecutor(model.provider to client)
@@ -48,7 +54,7 @@ class ResolvedModel(
      */
     suspend fun ask(instruction: String, input: String): String? = runCatching {
         val reply = client.execute(
-            prompt("aura-aux") {
+            prompt("aura-aux", params) {
                 system(instruction)
                 user { text(input) }
             },
@@ -65,7 +71,7 @@ interface ModelProvider {
 /**
  * Resolves models from what the user saved in Settings.
  *
- * - Contract: [ModelRole.FAST] resolves to the main model until the user picks a cheaper one;
+ * - Contract: [ModelRole.FAST] resolves to the main model at its cheapest thinking level;
  *   [ModelRole.LOCAL] resolves to null until an on-device runtime is wired in ([LocalModel] covers
  *   the background jobs that must work without one).
  */
@@ -73,29 +79,39 @@ class SavedSettingsModelProvider(context: Context) : ModelProvider {
     private val app = context.applicationContext
 
     override fun resolve(role: ModelRole): ResolvedModel? = when (role) {
-        ModelRole.MAIN, ModelRole.FAST -> runCatching { main() }.getOrNull()
+        ModelRole.MAIN -> runCatching { saved(sideJob = false) }.getOrNull()
+        ModelRole.FAST -> runCatching { saved(sideJob = true) }.getOrNull()
         ModelRole.LOCAL -> null
     }
 
-    private fun main(): ResolvedModel? {
+    /**
+     * The saved model. [sideJob] runs it at its cheapest thinking level: a chat title or a summary
+     * must not pay for the reasoning the user chose for tasks.
+     */
+    private fun saved(sideJob: Boolean): ResolvedModel? {
         val keys = ProviderKeyStore(app)
         val endpointId = keys.getSelectedEndpointId()
         val endpoint = endpointFor(endpointId) ?: return null
         val apiKey = if (endpoint.requiresKey) keys.getKey(endpointId) ?: return null else ""
         val modelId = keys.getSelectedModel(endpointId) ?: endpoint.defaultModelId.ifBlank { return null }
-        val generation: GenerationConfig = keys.getGeneration(endpointId)
         val vision = keys.getSelectedModelVisionCapable(endpointId)
+        val reasoning = keys.getSelectedModelReasoning(endpointId)
+        val canDisable = keys.getSelectedModelCanDisableThinking(endpointId)
+        val saved: GenerationConfig = keys.getGeneration(endpointId)
+        val generation = if (sideJob) {
+            saved.copy(reasoning = ThinkingSupport.lightest(ThinkingSupport.levelsFor(endpoint, modelId, reasoning, canDisable)))
+        } else {
+            saved
+        }
+        val chat = ProviderRegistry.chatModel(endpoint, apiKey, modelId, vision, generation, reasoning, canDisable)
         return ResolvedModel(
-            model = ProviderRegistry.modelFor(endpoint, modelId, vision),
-            // Temperature and thinking level travel inside the client, mapped to each provider's wire.
-            client = ProviderRegistry.clientFor(endpoint, apiKey, modelId, generation),
+            model = chat.model,
+            client = chat.client,
             label = "${endpoint.displayName} / $modelId",
             contextWindow = keys.getSelectedModelContextWindow(endpointId),
             // Unknown means "send images": withholding them from a model that can see is the worse error.
             vision = vision != false,
-            // No output cap by default: on a thinking model the cap also counts reasoning tokens,
-            // and a reply cut mid tool call is unusable.
-            params = LLMParams(),
+            params = chat.params,
         )
     }
 

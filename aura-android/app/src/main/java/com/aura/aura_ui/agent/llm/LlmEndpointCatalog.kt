@@ -106,10 +106,9 @@ object LlmEndpointCatalog {
      * Anthropic — **two different surfaces, verified live 2026-09-22** (the piece-1 note said
      * "confirm before release"; it never was, and both halves were wrong).
      *
-     *  - Chat rides their OpenAI-compat layer at `/v1/chat/completions` with Bearer. Correct as
-     *    shipped. Note their docs call that layer "not a long-term or production-ready solution":
-     *    it never returns `prompt_tokens_details` (so no cache accounting), drops thinking output,
-     *    and ignores `reasoning_effort` — which is why [ProviderProfile.ANTHROPIC] sends none.
+     *  - Chat goes through Koog's native Anthropic client ([ChatWire.ANTHROPIC_NATIVE]): their
+     *    OpenAI-compatible layer drops thinking output, ignores `reasoning_effort` and reports no
+     *    cache use. [chatCompletionsPath] is unused on that wire.
      *  - `/v1/models` is a **native** endpoint and ignores Bearer entirely — hence
      *    [AuthScheme.ANTHROPIC_X_API_KEY]. It also spells the context window `max_input_tokens`,
      *    which `ModelCatalog.parseOpenAiShape` now falls back to.
@@ -123,6 +122,8 @@ object LlmEndpointCatalog {
         authScheme = AuthScheme.ANTHROPIC_X_API_KEY,
         modelListStyle = ModelListStyle.OPENAI_DATA,
         visionInference = VisionInference.ALL_MODELS,
+        reasoningInference = ReasoningInference.ANTHROPIC_FAMILY,
+        wire = ChatWire.ANTHROPIC_NATIVE,
         profile = ProviderProfile.ANTHROPIC,
         isBuiltIn = true,
         keyHint = "sk-ant-...",

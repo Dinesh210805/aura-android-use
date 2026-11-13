@@ -301,8 +301,6 @@ class AuraAccessibilityService : AccessibilityService() {
             }
         }
 
-        startForegroundService()
-
         // The system rebinds this service right after a swipe-from-recents kills the process, and a
         // system-bound accessibility service is the state most likely to be allowed the background
         // microphone foreground service on Android 14+. Idempotent if the wake word is already up.
@@ -376,32 +374,6 @@ class AuraAccessibilityService : AccessibilityService() {
         backendCommunicator.updateBackendUrl(url)
         // Command polling removed - all commands now use WebSocket
         AgentLogger.Auto.i("All components updated with new backend URL", mapOf("url" to url))
-    }
-
-    private fun startForegroundService() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channelId = "aura_accessibility"
-                val channelName = "AURA Accessibility"
-                val importance = android.app.NotificationManager.IMPORTANCE_LOW
-
-                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                val channel = android.app.NotificationChannel(channelId, channelName, importance)
-                notificationManager.createNotificationChannel(channel)
-
-                val notification =
-                    android.app.Notification.Builder(this, channelId)
-                        .setContentTitle("AURA Active")
-                        .setContentText("Screen capture enabled")
-                        .setSmallIcon(R.drawable.ic_notification)
-                        .build()
-
-                startForeground(1, notification)
-                AgentLogger.UI.i("Started foreground service for MediaProjection")
-            }
-        } catch (e: Exception) {
-            AgentLogger.UI.e("Failed to start foreground service", e)
-        }
     }
 
     @SuppressLint("SwitchIntDef")

@@ -142,10 +142,13 @@ class RunReportOverlay(
 
 // ── Card ───────────────────────────────────────────────────────────────────
 
-private val Ui = Mono.scheme(dark = true)
+/** The card's colours: the user's light or dark mode, as in the rest of the overlay. */
+private val Ui: com.aura.aura_ui.ui.theme.MonoScheme
+    @Composable get() = Mono.scheme(dark = com.aura.aura_ui.ui.theme.rememberOverlayDark())
 private val Amber = Color(0xFFE0A43A)
 
-private data class Status(val title: String, val badge: String, val dot: Color)
+/** [dot] null means the theme's neutral ink, resolved where it is drawn. */
+private data class Status(val title: String, val badge: String, val dot: Color?)
 
 private fun statusOf(outcome: Outcome): Status = when (outcome) {
     Outcome.DONE -> Status("Task complete", "Done", Mono.ToggleGreen)
@@ -153,7 +156,7 @@ private fun statusOf(outcome: Outcome): Status = when (outcome) {
     Outcome.FAILED -> Status("Couldn't finish", "Failed", Mono.Blood)
     Outcome.STOPPED -> Status("Stopped", "Stopped", Mono.Blood)
     Outcome.PAUSED -> Status("Paused", "Paused", Amber)
-    Outcome.WENT_QUIET -> Status("Run ended", "Ended", Ui.textSecondary)
+    Outcome.WENT_QUIET -> Status("Run ended", "Ended", null)
 }
 
 @Composable
@@ -238,7 +241,7 @@ private fun Header(status: Status, onClose: () -> Unit) {
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(status.dot))
+            Box(Modifier.size(7.dp).clip(CircleShape).background(status.dot ?: Ui.textSecondary))
             Spacer(Modifier.width(6.dp))
             Text(status.badge, color = Ui.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
@@ -372,6 +375,7 @@ private fun TableRow(cells: List<String>, fixed: Boolean, header: Boolean, shade
     }
 }
 
+@Composable
 private fun inline(text: String): AnnotatedString = buildAnnotatedString {
     ReportMarkdown.spans(text).forEach { span ->
         when {

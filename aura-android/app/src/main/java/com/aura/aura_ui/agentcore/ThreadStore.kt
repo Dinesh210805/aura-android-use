@@ -191,6 +191,9 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         dao.deleteThread(threadId)
     }
 
+    /** Empty the visible transcript and keep the model's context. */
+    suspend fun clearItems(threadId: String) = dao.deleteItems(threadId)
+
     suspend fun append(
         threadId: String,
         kind: ItemKind,

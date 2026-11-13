@@ -10,22 +10,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Process-global "is the AURA app currently on screen?" signal, set by
- * MainActivity's onStart/onStop. Drives [ChipVisibilityPolicy]: the status
- * pill shows while the user is in the app and disappears when they leave or
- * swipe it away — the keep-alive service stays up, just invisibly.
- * Same pattern as [VoiceStatusRegistry].
- */
-object AppVisibilityRegistry {
-    private val _appInForeground = MutableStateFlow(false)
-    val appInForeground: StateFlow<Boolean> = _appInForeground.asStateFlow()
-
-    fun set(foreground: Boolean) {
-        _appInForeground.value = foreground
-    }
-}
-
-/**
  * Process-global "the overlay's automation pill (progress + Cancel) is
  * currently posted" signal. While true, the AssistantForegroundService chip
  * yields (goes silent) so the notch never shows two AURA pills at once.
@@ -103,15 +87,55 @@ object AgentStatusRegistry {
     }
 
 
+    /** The only status line the strip shows during a run: the model is working out what to do. */
+    const val THINKING = "Thinking…"
+
+    /** True once the run has acted on the phone; from then on the strip stays off until the run ends. */
+    @Volatile
+    private var acting = false
+
     /**
-     * First line of a run, replaced by the model's narration or the first tool's line.
-     *
-     * Only ever set while a run is actually starting — never during conversation, where
-     * "Working…" would be a claim about automation that is not happening. Does not overwrite
-     * a line that is already there.
+     * An on-device run is starting: forget the last run's line and that it acted, so
+     * [seedThinking] can show. Called by the agent before it marks the run, so the overlay never
+     * sees the run before this.
      */
-    fun seedWorking() {
-        if (_status.value.isBlank()) setStatus("Getting started…")
+    fun startRun() {
+        acting = false
+        _status.value = ""
+        _beat.value = null
+    }
+
+    /**
+     * The overlay saw a run begin: drop a line left over from an earlier run, so [seedThinking]
+     * is not blocked by it. Keeps the state of a run that is already acting.
+     */
+    fun clearStaleLine() {
+        if (acting || _status.value == THINKING) return
+        _status.value = ""
+        _beat.value = null
+    }
+
+    /**
+     * Shows [THINKING] while a run has not yet acted on the phone: a spoken question being
+     * answered, or a task being planned. Does nothing once the run acts ([noteActing]) or when a
+     * line is already up.
+     */
+    fun seedThinking() {
+        if (!acting && _status.value.isBlank()) setStatus(THINKING)
+    }
+
+    /** The run ended: [THINKING] is no longer true, so it comes down before the reply's caption. */
+    fun endRun() {
+        if (_status.value == THINKING) setStatus("")
+    }
+
+    /**
+     * The run has started driving the phone. Takes [THINKING] down: while a task runs the
+     * screen belongs to the task, and the Pause pill is the only AURA surface on it.
+     */
+    fun noteActing() {
+        acting = true
+        if (_status.value == THINKING) setStatus("")
     }
 
     /**
@@ -136,6 +160,7 @@ object AgentStatusRegistry {
     }
 
     fun clear() {
+        acting = false
         _status.value = ""
         _beat.value = null
         _speech.value = null

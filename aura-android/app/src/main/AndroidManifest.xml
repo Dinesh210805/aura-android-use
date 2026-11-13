@@ -59,18 +59,11 @@
     <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- system_intent set_alarm/set_timer — lets the clock app apply them
          directly (AlarmClock.EXTRA_SKIP_UI), the Google Assistant model. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
-    <!-- Accessibility Service Permissions -->
-    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
-    
-    <!-- Screenshot Permissions -->  
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    
     <!-- Optional: For better battery optimization handling -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     
@@ -99,17 +92,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     
-    <!-- Additional System Control Permissions (Google Assistant/Siri parity) -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" 
-        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".AuraApplication"
@@ -141,7 +127,8 @@
             android:excludeFromRecents="false"
             android:launchMode="singleTask"
             android:showWhenLocked="true"
-            android:turnScreenOn="true">
+            android:turnScreenOn="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -225,7 +212,6 @@
             android:name=".accessibility.AuraAccessibilityService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

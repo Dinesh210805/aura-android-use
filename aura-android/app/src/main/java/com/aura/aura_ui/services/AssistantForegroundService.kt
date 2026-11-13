@@ -38,7 +38,6 @@ import com.aura.aura_ui.mcp.bridge.AppWebSearchBridge
 import com.aura.aura_ui.mcp.bridge.TavilyKeyStore
 import com.aura.aura_ui.network.ConnectionManager
 import com.aura.mcp.McpServerController
-import com.aura.mcp.McpServerHealth
 import com.aura.aura_ui.network.ConnectionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
@@ -662,41 +661,22 @@ class AssistantForegroundService : LifecycleService() {
         // on Android 16+; calling it repeatedly on the same id updates the
         // notification in place — no flicker, no duplicate posts.
         lifecycleScope.launch {
-            // Activity signals (3) folded first, then combined with visibility
-            // signals — the chip renders only when ChipVisibilityPolicy says so:
-            // app open, client connected, or a live flow; and NEVER while the
-            // overlay's automation pill owns the notch (double-pill fix). In
-            // SILENT mode the FGS stays alive behind an invisible placeholder.
-            val activity = combine(
-                statusController.state,
-                VoiceStatusRegistry.status,
-                AutomationPillRegistry.active,
-            ) { toolStatus, voiceStatus, automation -> Triple(toolStatus, voiceStatus, automation) }
+            // The chip shows only while an MCP client is making the phone do something, and
+            // never while the overlay's own automation chip is up. Otherwise the service stays
+            // alive behind an IMPORTANCE_MIN placeholder.
             combine(
                 mcpServerController.health,
-                activity,
-                AppVisibilityRegistry.appInForeground,
-                com.aura.aura_ui.mcp.McpConnectionRegistry.clients,
-            ) { health, (toolStatus, voiceStatus, automation), appForeground, clients ->
-                val mode = ChipVisibilityPolicy.decide(
-                    automationPillActive = automation,
-                    appInForeground = appForeground,
-                    connectedClients = clients.size,
-                    toolStatus = toolStatus,
-                    voiceStatus = voiceStatus,
-                )
-                // Health is no longer allowed to become an activity verb, so it gets
-                // its own surface here. Without this a crash while the app is
-                // backgrounded is completely silent — worse than the wrong verb.
-                // Decision logic is in the pure HealthAlertPolicy; only a crash
-                // alerts, and reaching Listening clears it.
+                statusController.state,
+                AutomationPillRegistry.active,
+            ) { health, toolStatus, automation ->
+                // Server health has its own alert; only a crash alerts, and Listening clears it.
                 McpHealthNotifier.onHealth(this@AssistantForegroundService, health)
-
-                if (mode == ChipVisibilityPolicy.Mode.CHIP) {
-                    buildChipStatus(health, toolStatus, voiceStatus)
-                } else {
-                    null // silent keep-alive
-                }
+                val status = ChipStatusPolicy.decide(
+                    health,
+                    toolStatus,
+                    pausedByHuman = ControlLockStore.shared.isPausedByHuman,
+                )
+                status.takeIf { ChipVisibilityPolicy.decide(automation, it) == ChipVisibilityPolicy.Mode.CHIP }
             }.collect { status ->
                 val notification = if (status != null) {
                     LiveUpdateNotificationHelper.buildNotification(this@AssistantForegroundService, status)
@@ -722,38 +702,6 @@ class AssistantForegroundService : LifecycleService() {
             }
         }
     }
-
-    /**
-     * Compose the [AuraStatus] the chip should show right now.
-     *
-     * [AuraStatus] describes **activity only**. Server health is deliberately NOT
-     * mapped into it: a stopped or booting MCP server is infrastructure state, not
-     * something the agent is doing, and the old mapping produced the plainly wrong
-     * "Stuck" verb while the server was merely *starting*. Health has its own
-     * surface (the MCP screen); the chip stays honest about activity.
-     *
-     * When the server is not Listening, no tool can be dispatched, so there is by
-     * definition no tool activity — but voice runs entirely on-device and is
-     * unaffected, so it still shows.
-     *
-     * Priority between the two live sources: voice (overlay) over tool dispatches
-     * (MCP). They are mutually exclusive in practice — the user cannot speak a
-     * command while a remote agent is running tools — so whichever is non-Idle
-     * wins, with voice taking precedence on a tie.
-     */
-    private fun buildChipStatus(
-        health: McpServerHealth,
-        toolStatus: AuraStatus,
-        voiceStatus: AuraStatus,
-    ): AuraStatus = ChipStatusPolicy.decide(
-        health,
-        toolStatus,
-        voiceStatus,
-        // Spec 2026-07-31 — the status pill and the Pause pill are mutually exclusive
-        // in time. Read directly rather than mirrored into a field: one source of truth
-        // for "is the human driving", and no second copy to drift out of sync.
-        pausedByHuman = ControlLockStore.shared.isPausedByHuman,
-    )
 
     /**
      * Fallback handler for messages not handled by [MCPCommandRouter].
@@ -998,7 +946,13 @@ class AssistantForegroundService : LifecycleService() {
     private fun deleteOrphanChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            listOf("AuraAssistantChannel", "aura_live_update").forEach { id ->
+            listOf(
+                "AuraAssistantChannel",
+                "aura_live_update",
+                "aura_accessibility",
+                "aura_overlay_channel",
+                "aura_reminders",
+            ).forEach { id ->
                 runCatching { nm.deleteNotificationChannel(id) }
                     .onSuccess { Log.d("AssistantService", "Deleted orphan channel: $id") }
                     .onFailure { Log.w("AssistantService", "Could not delete channel $id: ${it.message}") }

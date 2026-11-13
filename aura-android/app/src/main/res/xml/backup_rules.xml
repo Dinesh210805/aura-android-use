@@ -3,4 +3,6 @@
      change together with AppTrustedClients and data_extraction_rules.xml. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="aura_mcp_trust.xml" />
+    <!-- API keys: encrypted with a Keystore key that never leaves this phone. -->
+    <exclude domain="sharedpref" path="aura_secure_keys.xml" />
 </full-backup-content>

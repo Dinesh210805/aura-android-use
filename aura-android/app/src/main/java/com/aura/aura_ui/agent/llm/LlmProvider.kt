@@ -2,6 +2,7 @@ package com.aura.aura_ui.agent.llm
 
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.params.LLMParams
 import com.aura.aura_ui.agent.strategy.AgentContextConfig
 
 /**
@@ -15,6 +16,49 @@ import com.aura.aura_ui.agent.strategy.AgentContextConfig
  * change.
  */
 object ProviderRegistry {
+
+    /** A model ready to call: the definition, the client that serves it and the request settings to send. */
+    class ChatModel(val model: LLModel, val client: LLMClient, val params: LLMParams)
+
+    /**
+     * The model the agent chats with, on the endpoint's own wire ([LlmEndpoint.wire]).
+     *
+     * - Contract: the thinking level is clamped to what this model accepts
+     *   ([ThinkingSupport.levelsFor]) and a temperature the model would reject is dropped, so a
+     *   setting saved for another model can never fail a call. On the OpenAI-compatible wire the
+     *   settings ride the HTTP shims and [ChatModel.params] is empty; on the native Claude wire they
+     *   are [ChatModel.params], which the caller must put on its prompt.
+     * - Why separate from [clientFor]: the native client must be built from the same [LLModel] it
+     *   serves (see [AnthropicNative]). [clientFor] and [modelFor] stay on the compatible wire for the
+     *   older callers that build the two apart.
+     */
+    fun chatModel(
+        endpoint: LlmEndpoint,
+        apiKey: String,
+        modelId: String,
+        visionCapable: Boolean?,
+        generation: GenerationConfig,
+        reasoning: Boolean? = null,
+        canDisableThinking: Boolean? = null,
+        contextConfig: AgentContextConfig = AgentContextConfig.DEFAULT,
+    ): ChatModel {
+        val level = ThinkingSupport.clamp(generation.reasoning, ThinkingSupport.levelsFor(endpoint, modelId, reasoning, canDisableThinking))
+        val settled = generation.copy(
+            reasoning = level,
+            temperature = generation.temperature.takeIf { ThinkingSupport.temperatureAllowed(endpoint, modelId, level) },
+        )
+        return when (endpoint.wire) {
+            ChatWire.ANTHROPIC_NATIVE -> {
+                val model = AnthropicNative.model(modelId, visionCapable)
+                ChatModel(model, AnthropicNative.client(apiKey, endpoint.baseUrl, model, contextConfig), AnthropicNative.params(model, settled))
+            }
+            ChatWire.OPENAI_COMPAT -> ChatModel(
+                modelFor(endpoint, modelId, visionCapable),
+                OpenAiCompatProvider.client(apiKey, endpoint.baseUrl, endpoint.chatCompletionsPath, endpoint.profile, settled, contextConfig),
+                LLMParams(),
+            )
+        }
+    }
 
     fun clientFor(
         endpoint: LlmEndpoint,

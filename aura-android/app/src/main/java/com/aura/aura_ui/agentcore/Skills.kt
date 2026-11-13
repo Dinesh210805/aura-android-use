@@ -64,12 +64,35 @@ class SkillStore(private val dir: File) {
 
     fun delete(name: String): Boolean = File(dir, name.filter { it.isLetterOrDigit() || it == '-' }).deleteRecursively()
 
+    /**
+     * Install the skills that ship in the APK, once each.
+     * - Contract: [bundled] maps a skill name to its markdown file (YAML frontmatter with
+     *   `description` and optional `whenToUse`, then the body). A skill is installed only the first
+     *   time its name is seen, so one the user deleted or edited is never put back.
+     * - Fails: a file that cannot be read or does not pass [SkillPolicy] is skipped.
+     */
+    fun seed(bundled: Map<String, () -> String>) {
+        val seen = File(dir, SEEDED)
+        val done = runCatching { seen.readLines().toSet() }.getOrDefault(emptySet())
+        val added = bundled.filterKeys { it !in done }.mapNotNull { (name, read) ->
+            val text = runCatching(read).getOrNull() ?: return@mapNotNull null
+            val description = listOfNotNull(frontmatter(text, "description"), frontmatter(text, "whenToUse")?.let { "Use $it" })
+                .joinToString(". ").take(SkillPolicy.MAX_DESCRIPTION)
+            val body = text.substringAfter("\n---\n", "").trim()
+            if (File(dir, name).exists() || save(name, description, body) == null) name else null
+        }
+        if (added.isNotEmpty()) runCatching { dir.mkdirs(); seen.appendText(added.joinToString("\n", postfix = "\n")) }
+    }
+
     private fun frontmatter(text: String, key: String): String? =
         text.substringAfter("---\n", "").substringBefore("\n---").lineSequence()
             .firstOrNull { it.startsWith("$key:") }?.substringAfter(':')?.trim()?.takeIf { it.isNotEmpty() }
 
     private companion object {
         const val FILE = "SKILL.md"
+
+        /** Names of bundled skills already installed once. A file, not a folder, so [list] skips it. */
+        const val SEEDED = ".seeded"
     }
 }
 

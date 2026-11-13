@@ -65,8 +65,6 @@ object RestrictedAppAccessibilityGate {
     private const val NOTIFICATION_ID = 8001
     private const val TAG = "RestrictedAppGate"
 
-    /** `Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS` — API 31+, not in our compileSdk. */
-    private const val ACTION_ACCESSIBILITY_DETAILS = "android.settings.ACCESSIBILITY_DETAILS_SETTINGS"
 
     /**
      * Cheap de-dupe so the per-event hot path costs one reference compare for
@@ -157,33 +155,20 @@ object RestrictedAppAccessibilityGate {
     }
 
     /**
-     * Whether the OS can deep-link to AURA's own accessibility entry rather
-     * than the generic services list.
-     * [Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS] landed in API 31.
-     * Pure — unit-tested.
+     * The accessibility list, scrolled to AURA's row with it highlighted where Settings supports it.
+     * Why not `ACCESSIBILITY_DETAILS_SETTINGS`: it resolves, but starting it needs the system-only
+     * `OPEN_ACCESSIBILITY_DETAILS_SETTINGS` permission, so it throws for every third-party app.
      */
-    internal fun supportsDetailsDeepLink(sdkInt: Int): Boolean =
-        sdkInt >= Build.VERSION_CODES.S
-
-    /**
-     * Recovery intent. Prefers AURA's own toggle so re-enabling is one tap
-     * instead of a hunt through every installed service; falls back to the
-     * top-level list on older OS versions and on any OEM that does not honour
-     * the details action.
-     */
-    private fun reEnableIntent(context: Context): Intent {
-        val fallback = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        if (!supportsDetailsDeepLink(Build.VERSION.SDK_INT)) return fallback
-
-        val component = ComponentName(context, AuraAccessibilityService::class.java)
-        // Literal action rather than Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS:
-        // the constant is not exposed in our compileSdk, but the action itself has
-        // existed since API 31. resolveActivity below makes this safe — any OEM
-        // that does not honour it falls back to the generic list.
-        return Intent(ACTION_ACCESSIBILITY_DETAILS).apply {
-            putExtra(Intent.EXTRA_COMPONENT_NAME, component.flattenToString())
-        }.takeIf { it.resolveActivity(context.packageManager) != null } ?: fallback
+    internal fun reEnableIntent(context: Context): Intent {
+        val component = ComponentName(context, AuraAccessibilityService::class.java).flattenToString()
+        return Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            .putExtra(FRAGMENT_ARGS_KEY, component)
+            .putExtra(SHOW_FRAGMENT_ARGS, android.os.Bundle().apply { putString(FRAGMENT_ARGS_KEY, component) })
     }
+
+    /** Settings' own extras for highlighting one row; ignored where unsupported. */
+    private const val FRAGMENT_ARGS_KEY = ":settings:fragment_args_key"
+    private const val SHOW_FRAGMENT_ARGS = ":settings:show_fragment_args"
 
     private fun postReEnableNotification(context: Context, appName: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

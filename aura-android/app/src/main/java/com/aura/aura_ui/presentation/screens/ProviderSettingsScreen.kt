@@ -41,6 +41,7 @@ import com.aura.aura_ui.agent.llm.ModelInfo
 import com.aura.aura_ui.agent.llm.ModelListStyle
 import com.aura.aura_ui.agent.llm.ProviderProfile
 import com.aura.aura_ui.agent.llm.ReasoningLevel
+import com.aura.aura_ui.agent.llm.ThinkingSupport
 import com.aura.aura_ui.agent.llm.ReasoningRequestStyle
 import com.aura.aura_ui.agent.llm.VisionInference
 import com.aura.aura_ui.agent.mcpbridge.client.McpUrlValidator
@@ -48,6 +49,13 @@ import com.aura.aura_ui.agent.memory.EncryptedJsonStore
 import com.aura.aura_ui.mcp.bridge.CustomEndpointStore
 import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
 import com.aura.aura_ui.presentation.components.AuraScreenScaffold
+import com.aura.aura_ui.presentation.components.AuraButton
+import com.aura.aura_ui.presentation.components.AuraDivider
+import com.aura.aura_ui.presentation.components.AuraPage
+import com.aura.aura_ui.presentation.components.AuraRow
+import com.aura.aura_ui.presentation.components.AuraSection
+import com.aura.aura_ui.ui.theme.AuraType
+import androidx.compose.material.icons.filled.Key
 import com.aura.aura_ui.presentation.components.MonoSegmented
 import com.aura.aura_ui.presentation.components.MonoSwitch
 import com.aura.aura_ui.presentation.components.rememberMonoScheme
@@ -74,17 +82,11 @@ private const val TAG = "ProviderSettings"
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProviderSettingsScreen(
-    onNavigateBack: () -> Unit,
-    onOpenTrustedDevices: () -> Unit = {},
-    onOpenRestrictedApps: () -> Unit = {},
-    onOpenActivityLog: () -> Unit = {},
-    onOpenRetention: () -> Unit = {},
-) {
+fun ProviderSettingsScreen(onOpenApiKeys: (endpointId: String) -> Unit) {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val cs = Capsule.scheme()
+    val aura = com.aura.aura_ui.ui.theme.LocalAura.current
     val keyStore = remember { ProviderKeyStore(context.applicationContext) }
     val customStore = remember {
         CustomEndpointStore(EncryptedJsonStore(context.applicationContext, CustomEndpointStore.STORE_NAME))
@@ -95,8 +97,6 @@ fun ProviderSettingsScreen(
         val id = keyStore.getSelectedEndpointId()
         mutableStateOf(allEndpoints.firstOrNull { it.id == id } ?: allEndpoints.first())
     }
-    var keyText by remember { mutableStateOf(keyStore.getKey(endpoint.id).orEmpty()) }
-    var revealed by remember { mutableStateOf(false) }
     var selectedModel by remember { mutableStateOf(keyStore.getSelectedModel(endpoint.id)) }
     var models by remember { mutableStateOf<List<ModelInfo>>(emptyList()) }
     var fetching by remember { mutableStateOf(false) }
@@ -105,23 +105,49 @@ fun ProviderSettingsScreen(
     var showEditor by remember { mutableStateOf(false) }
     val monoScheme = rememberMonoScheme()
 
-    // Generation controls (D2 piece 2): thinking level + temperature, per endpoint.
+    // Generation controls: thinking level + temperature, per endpoint.
     var reasoning by remember { mutableStateOf(keyStore.getGeneration(endpoint.id).reasoning) }
     var temperature by remember { mutableStateOf(keyStore.getGeneration(endpoint.id).temperature) }
     // Opt-in per-run request cap. Held as text so a half-typed number is not silently a cap.
     var runCapText by remember { mutableStateOf(keyStore.getRunMaxRequests(endpoint.id)?.toString().orEmpty()) }
 
-    // Model-list filters (D2 truthful picker): vision-only by default, with escape hatches.
+    // Model-list filters: vision-only by default, with escape hatches.
     var showAllModels by remember { mutableStateOf(false) }
     var freeOnly by remember { mutableStateOf(false) }
     var modelQuery by remember { mutableStateOf("") }
 
-    // Switch the active endpoint: reload ITS saved key + model + generation, drop the fetched list
-    // (model ids are endpoint-specific), and clear transient banners.
+    val key = remember(endpoint.id) { keyStore.getKey(endpoint.id) }
+    val keyRequired = endpoint.requiresKey
+    val hasKey = !keyRequired || key != null
+
+    fun fetch() {
+        if (!hasKey) return
+        scope.launch {
+            fetching = true
+            fetchError = null
+            ModelCatalog.fetch(endpoint, key.orEmpty())
+                .onSuccess { list ->
+                    models = list
+                    if (list.isEmpty()) {
+                        fetchError = "The provider returned no models. Check this endpoint's models URL."
+                    } else if (selectedModel == null || list.none { it.id == selectedModel }) {
+                        selectedModel = list.firstOrNull()?.id
+                    }
+                }
+                .onFailure { t ->
+                    models = emptyList()
+                    fetchError = (t as? ModelCatalog.ModelFetchError)?.userMessage ?: "Couldn't list the models. Try again."
+                    Log.w(TAG, "Model fetch failed for ${endpoint.id}", t)
+                }
+            fetching = false
+        }
+    }
+
+    // Switch the active endpoint: reload ITS model and generation settings, drop the fetched list
+    // (model ids are endpoint-specific).
     fun switchEndpoint(next: LlmEndpoint) {
         if (next.id == endpoint.id) return
         endpoint = next
-        keyText = keyStore.getKey(next.id).orEmpty()
         selectedModel = keyStore.getSelectedModel(next.id)
         val gen = keyStore.getGeneration(next.id)
         reasoning = gen.reasoning
@@ -130,327 +156,129 @@ fun ProviderSettingsScreen(
         models = emptyList()
         fetchError = null
         savedAt = null
-        revealed = false
         showAllModels = false
         freeOnly = false
         modelQuery = ""
     }
 
+    // The models list loads by itself whenever a provider with a key is shown.
+    LaunchedEffect(endpoint.id, hasKey) { if (hasKey) fetch() }
+
     val selectedModelInfo = models.firstOrNull { it.id == selectedModel }
     val selectedIsNonVision = selectedModelInfo != null && !selectedModelInfo.visionCapable
-
-    // Per-model thinking gate: the control shows only when the SELECTED model actually reasons AND
-    // the endpoint's wire can carry a thinking level. "Off" is offered only when it can truly disable.
-    val showThinking = selectedModelInfo?.reasoningCapable == true &&
-        endpoint.profile.reasoningRequestStyle != ReasoningRequestStyle.NONE
-    val canDisableThinking = selectedModelInfo?.canDisableThinking == true
-
-    // Model-list filtering: vision-first by default, free-only where pricing is known, plus search.
+    // The same rule as the chat's thinking menu, so the two never offer different levels.
+    val thinkingLevels = selectedModel?.takeIf { it.isNotBlank() }?.let {
+        ThinkingSupport.levelsFor(endpoint, it, selectedModelInfo?.reasoningCapable, selectedModelInfo?.canDisableThinking)
+    } ?: listOf(ReasoningLevel.DEFAULT)
+    val showThinking = thinkingLevels.size > 1
+    val showTemperature = selectedModel.isNullOrBlank() || ThinkingSupport.temperatureAllowed(endpoint, selectedModel.orEmpty(), reasoning)
     val anyPricingKnown = models.any { it.isFree != null }
     val displayedModels = models
         .filter { showAllModels || it.visionCapable }
         .filter { !freeOnly || it.isFree == true }
         .filter { modelQuery.isBlank() || it.id.contains(modelQuery.trim(), ignoreCase = true) }
 
-    // Keep the saved thinking level truthful to the selected model: a non-reasoning model can't carry
-    // a level, and a model that can't be disabled can't stay "Off". Runs on both dropdown-select and
-    // fetch auto-select.
-    LaunchedEffect(selectedModel, models) {
-        val info = models.firstOrNull { it.id == selectedModel } ?: return@LaunchedEffect
-        if (!info.reasoningCapable && reasoning != ReasoningLevel.DEFAULT) {
-            reasoning = ReasoningLevel.DEFAULT
-        } else if (info.reasoningCapable && reasoning == ReasoningLevel.OFF && !info.canDisableThinking) {
-            reasoning = ReasoningLevel.DEFAULT
-        }
-    }
-    val keyRequired = endpoint.requiresKey
-    val canSave = (!keyRequired || keyText.isNotBlank()) && !selectedModel.isNullOrBlank()
-    val host = remember(endpoint.baseUrl) {
-        runCatching { URI(endpoint.baseUrl).host }.getOrNull() ?: endpoint.baseUrl
-    }
+    // Keep the saved thinking level truthful to the selected model.
+    LaunchedEffect(thinkingLevels) { reasoning = ThinkingSupport.clamp(reasoning, thinkingLevels) }
+    val canSave = hasKey && !selectedModel.isNullOrBlank()
 
-    AuraScreenScaffold(
-        title = "Brain",
-        subtitle = "Provider, API key & model",
-        onBack = onNavigateBack,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            StatusBanner(
-                cs = cs,
-                providerName = endpoint.displayName,
-                isConfigured = canSave && keyStore.getSelectedModel(endpoint.id) == selectedModel,
-            )
-
-            // B2 — the Android Keystore was unavailable, so keys are stored UNENCRYPTED. Don't report
-            // silent success: warn, so the user can decide whether to trust this device with a real key.
-            if (keyRequired && !keyStore.isEncrypted) {
-                AttentionBanner(
-                    message = "Secure storage is unavailable on this device — API keys are saved " +
-                        "unencrypted. Avoid storing a sensitive key here.",
+    AuraPage("Model") {
+        AuraSection(title = "Provider") {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                EndpointDropdown(
                     cs = cs,
+                    endpoints = allEndpoints,
+                    selected = endpoint,
+                    onSelect = ::switchEndpoint,
+                    onAddCustom = { showEditor = true },
                 )
-            }
-
-            EyebrowLabel("PROVIDER", cs)
-            EndpointDropdown(
-                cs = cs,
-                endpoints = allEndpoints,
-                selected = endpoint,
-                onSelect = ::switchEndpoint,
-                onAddCustom = { showEditor = true },
-            )
-            InfoNote(GEMINI_PRESET_NOTE, cs)
-
-            if (!endpoint.isBuiltIn) {
-                DestructivePill(
-                    text = "Remove this endpoint",
-                    cs = cs,
-                    onClick = {
+                if (!endpoint.isBuiltIn) {
+                    AuraButton("Remove this endpoint", {
                         customStore.remove(endpoint.id)
                         keyStore.clearKey(endpoint.id)
                         allEndpoints = customStore.allEndpoints()
                         switchEndpoint(allEndpoints.first())
-                    },
-                )
+                    }, Modifier.fillMaxWidth(), destructive = true)
+                }
             }
-
-            if (keyRequired) {
-                OutlinedTextField(
-                    value = keyText,
-                    onValueChange = { keyText = it; savedAt = null },
-                    label = { Text("${endpoint.displayName} API key") },
-                    singleLine = true,
-                    visualTransformation = if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    trailingIcon = {
-                        IconButton(onClick = { revealed = !revealed }) {
-                            Icon(
-                                imageVector = if (revealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (revealed) "Hide key" else "Show key",
-                                tint = cs.sub,
-                            )
-                        }
-                    },
-                    placeholder = { Text(endpoint.keyHint) },
-                    colors = capsuleFieldColors(cs),
-                    shape = Capsule.ShapeChipWell,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = "Your key is sent only inside the HTTPS request to $host.",
-                    fontSize = 12.sp,
-                    color = cs.sub,
-                )
-            }
-
-            // Fetch models — uses the LIVE field text (not the stored key) so the user can fetch
-            // before saving. /models is auth-gated, so a 401 here is a free key check.
-            PrimaryPill(
-                text = if (models.isEmpty()) "Fetch models" else "Refresh models (${models.size})",
-                cs = cs,
-                enabled = (!keyRequired || keyText.isNotBlank()) && !fetching,
-                loading = fetching,
-                loadingText = "Fetching…",
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    scope.launch {
-                        fetching = true
-                        fetchError = null
-                        ModelCatalog.fetch(endpoint, keyText.trim())
-                            .onSuccess { list ->
-                                models = list
-                                Log.i(TAG, "Fetched ${list.size} models for ${endpoint.id} (${list.count { it.visionCapable }} vision)")
-                                if (list.isEmpty()) {
-                                    // 200 but nothing parsed — usually a wrong models URL for this endpoint.
-                                    fetchError = "The provider returned no models. Double-check the models URL for this endpoint."
-                                } else if (selectedModel == null || list.none { it.id == selectedModel }) {
-                                    selectedModel = list.firstOrNull()?.id
-                                }
-                            }
-                            .onFailure { t ->
-                                models = emptyList()
-                                fetchError = (t as? ModelCatalog.ModelFetchError)?.userMessage
-                                    ?: "Couldn't fetch models. Try again."
-                                Log.w(TAG, "Model fetch failed for ${endpoint.id}", t)
-                            }
-                        fetching = false
-                    }
+            AuraDivider()
+            AuraRow(
+                "API key",
+                icon = Icons.Filled.Key,
+                value = when {
+                    !keyRequired -> "Not needed"
+                    key != null -> "Saved"
+                    else -> "Add"
                 },
+                onClick = if (keyRequired) ({ onOpenApiKeys(endpoint.id) }) else null,
             )
+        }
 
-            fetchError?.let { AttentionBanner(message = it, cs = cs) }
-
-            if (models.isNotEmpty()) {
-                ModelFilterBar(
-                    cs = cs,
-                    scheme = monoScheme,
-                    visionOnly = !showAllModels,
-                    onVisionOnly = { showAllModels = !it },
-                    freeOnly = freeOnly,
-                    onFreeOnly = { freeOnly = it },
-                    showFreeFilter = anyPricingKnown,
-                    query = modelQuery,
-                    onQuery = { modelQuery = it },
-                    shown = displayedModels.size,
-                    total = models.size,
-                )
-                if (displayedModels.isEmpty()) {
-                    Text(
-                        text = "No models match these filters. Turn off a filter or clear the search.",
-                        fontSize = 13.sp,
-                        color = cs.sub,
-                    )
-                } else {
-                    ModelDropdown(
-                        cs = cs,
-                        models = displayedModels,
-                        selectedModel = selectedModel,
-                        onSelect = { selectedModel = it; savedAt = null },
-                    )
-                }
-                if (selectedIsNonVision) {
-                    AttentionBanner(
-                        message = "This model has no vision support. AURA can't read the " +
-                            "screen with it — pick a model marked with the eye icon.",
-                        cs = cs,
-                    )
+        if (hasKey) {
+            AuraSection(title = "Model") {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    when {
+                        fetching -> Text("Listing models…", style = AuraType.callout, color = aura.secondary)
+                        fetchError != null -> {
+                            Text(fetchError.orEmpty(), style = AuraType.callout, color = aura.danger)
+                            AuraButton("Try again", ::fetch, Modifier.fillMaxWidth(), primary = false)
+                        }
+                        models.isNotEmpty() -> {
+                            ModelFilterBar(
+                                cs = cs,
+                                scheme = monoScheme,
+                                visionOnly = !showAllModels,
+                                onVisionOnly = { showAllModels = !it },
+                                freeOnly = freeOnly,
+                                onFreeOnly = { freeOnly = it },
+                                showFreeFilter = anyPricingKnown,
+                                query = modelQuery,
+                                onQuery = { modelQuery = it },
+                                shown = displayedModels.size,
+                                total = models.size,
+                            )
+                            if (displayedModels.isEmpty()) {
+                                Text("No models match these filters.", style = AuraType.callout, color = aura.secondary)
+                            } else {
+                                ModelDropdown(cs = cs, models = displayedModels, selectedModel = selectedModel, onSelect = { selectedModel = it; savedAt = null })
+                            }
+                            if (selectedIsNonVision) {
+                                Text("This model can't see the screen, so AURA can't use apps with it.", style = AuraType.callout, color = aura.danger)
+                            }
+                        }
+                    }
                 }
             }
 
-            GenerationControls(
-                cs = cs,
-                monoScheme = monoScheme,
-                showThinking = showThinking,
-                canDisableThinking = canDisableThinking,
-                reasoning = reasoning,
-                onReasoning = { reasoning = it; savedAt = null },
-                temperature = temperature,
-                onTemperature = { temperature = it; savedAt = null },
-                runCapText = runCapText,
-                onRunCapText = { runCapText = it.filter(Char::isDigit).take(4); savedAt = null },
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                PrimaryPill(
-                    text = "Save",
-                    cs = cs,
-                    enabled = canSave,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (keyRequired) keyStore.setKey(endpoint.id, keyText.trim())
-                        keyStore.setSelectedEndpointId(endpoint.id)
-                        selectedModel?.let { keyStore.setSelectedModel(endpoint.id, it) }
-                        // Capture the model's context window while we still have it: this is the
-                        // only moment it is in hand (it came from the provider's /models listing),
-                        // and the agent scales its compaction threshold to it. Writing null when
-                        // the list was never fetched is deliberate — "unknown" falls back to the
-                        // historical fixed threshold, whereas a stale number would mis-tune the run.
-                        keyStore.setSelectedModelContextWindow(endpoint.id, selectedModelInfo?.contextWindow)
-                        // P1: same capture, same reason — this is the only moment the model's
-                        // vision capability is in hand, and the agent now gates the declared
-                        // capability (and whether it re-injects screenshots) on it. Null when the
-                        // listing was never fetched, which means "declare vision anyway".
-                        keyStore.setSelectedModelVisionCapable(endpoint.id, selectedModelInfo?.visionCapable)
-                        keyStore.setGeneration(endpoint.id, GenerationConfig(reasoning = reasoning, temperature = temperature))
-                        // Blank (or an unparseable leftover) means no cap, which is the default and
-                        // the right answer for a paid key. Only a real number becomes a ceiling.
-                        keyStore.setRunMaxRequests(endpoint.id, runCapText.toIntOrNull())
-                        savedAt = System.currentTimeMillis()
-                        Log.i(TAG, "Saved ${endpoint.id} / $selectedModel / reasoning=$reasoning temp=$temperature cap=${runCapText.ifBlank { "none" }}")
-                    },
-                )
-                SecondaryPill(
-                    text = "Clear",
-                    cs = cs,
-                    enabled = keyText.isNotBlank(),
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        keyStore.clearKey(endpoint.id)
-                        keyText = ""
-                        selectedModel = null
-                        models = emptyList()
-                        fetchError = null
-                        savedAt = null
-                    },
-                )
-            }
-
-            if (savedAt != null) {
-                Text(
-                    text = "Saved — agent will use ${endpoint.displayName} / $selectedModel.",
-                    color = cs.ok,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-
-            if (endpoint.keyUrl.isNotBlank()) {
-                TextButton(
-                    onClick = { uriHandler.openUri(endpoint.keyUrl) },
-                    colors = ButtonDefaults.textButtonColors(contentColor = cs.accent),
-                ) {
-                    Text("Get a ${endpoint.displayName} key →")
-                }
-            }
-
-            Text(
-                text = "Storage: encrypted with the Android Keystore (AES-256 GCM). Keys " +
-                    "never leave this device except inside the HTTPS request to the provider.",
-                fontSize = 12.sp,
-                color = cs.sub,
-            )
-
-            EyebrowLabel("MORE", cs)
-            Surface(
-                shape = Capsule.ShapeCard,
-                color = cs.card,
-                border = BorderStroke(1.dp, cs.line),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column {
-                    CapsuleNavRow(
-                        icon = Icons.Filled.Security,
-                        title = "Trusted Devices",
-                        subtitle = "Computers allowed to connect — revoke access",
+            AuraSection(title = "Behaviour") {
+                Column(Modifier.padding(16.dp)) {
+                    GenerationControls(
                         cs = cs,
-                        onClick = onOpenTrustedDevices,
-                    )
-                    HorizontalDivider(color = cs.line, modifier = Modifier.padding(start = 56.dp))
-                    CapsuleNavRow(
-                        icon = Icons.Filled.Block,
-                        title = "Restricted Apps",
-                        subtitle = "Apps AURA declines to act in — banking, payments, auth",
-                        cs = cs,
-                        onClick = onOpenRestrictedApps,
-                    )
-                    HorizontalDivider(color = cs.line, modifier = Modifier.padding(start = 56.dp))
-                    CapsuleNavRow(
-                        icon = Icons.Filled.History,
-                        title = "Activity Log",
-                        subtitle = "Tool calls, connections, screenshots",
-                        cs = cs,
-                        onClick = onOpenActivityLog,
-                    )
-                    HorizontalDivider(color = cs.line, modifier = Modifier.padding(start = 56.dp))
-                    CapsuleNavRow(
-                        icon = Icons.Filled.Schedule,
-                        title = "Log Retention",
-                        subtitle = "How long to keep session logs",
-                        cs = cs,
-                        onClick = onOpenRetention,
+                        monoScheme = monoScheme,
+                        showThinking = showThinking,
+                        levels = thinkingLevels,
+                        showTemperature = showTemperature,
+                        reasoning = reasoning,
+                        onReasoning = { reasoning = it; savedAt = null },
+                        temperature = temperature,
+                        onTemperature = { temperature = it; savedAt = null },
+                        runCapText = runCapText,
+                        onRunCapText = { runCapText = it.filter(Char::isDigit).take(4); savedAt = null },
                     )
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
+            AuraButton(if (savedAt != null) "Saved" else "Save", {
+                keyStore.setSelectedEndpointId(endpoint.id)
+                // The listing is the only moment the model's context window and vision flag are
+                // in hand; null (never fetched) means "unknown", not a stale value.
+                selectedModel?.let { keyStore.saveModelChoice(endpoint.id, it, selectedModelInfo) }
+                keyStore.setGeneration(endpoint.id, GenerationConfig(reasoning = reasoning, temperature = temperature))
+                // Blank means no cap, the default and the right answer for a paid key.
+                keyStore.setRunMaxRequests(endpoint.id, runCapText.toIntOrNull())
+                savedAt = System.currentTimeMillis()
+            }, Modifier.fillMaxWidth(), enabled = canSave)
         }
     }
 
@@ -955,7 +783,8 @@ private fun GenerationControls(
     cs: CapsuleScheme,
     monoScheme: MonoScheme,
     showThinking: Boolean,
-    canDisableThinking: Boolean,
+    levels: List<ReasoningLevel>,
+    showTemperature: Boolean,
     reasoning: ReasoningLevel,
     onReasoning: (ReasoningLevel) -> Unit,
     temperature: Double?,
@@ -964,16 +793,8 @@ private fun GenerationControls(
     onRunCapText: (String) -> Unit,
 ) {
     if (showThinking) {
-        // Per-model option set: "Off" appears only when this model can truly disable thinking, so no
-        // segment is ever a lie. The index↔level map is explicit (not ReasoningLevel.ordinal) because
-        // the option list is variable-length.
-        val options = buildList {
-            add("Auto" to ReasoningLevel.DEFAULT)
-            if (canDisableThinking) add("Off" to ReasoningLevel.OFF)
-            add("Low" to ReasoningLevel.LOW)
-            add("Med" to ReasoningLevel.MEDIUM)
-            add("High" to ReasoningLevel.HIGH)
-        }
+        // Exactly the levels this model accepts (ThinkingSupport), so no segment is ever a lie.
+        val options = levels.map { (if (it == ReasoningLevel.MEDIUM) "Med" else ThinkingSupport.label(it)) to it }
         val selectedIndex = options.indexOfFirst { it.second == reasoning }.coerceAtLeast(0)
         EyebrowLabel("THINKING", cs)
         MonoSegmented(
@@ -983,16 +804,37 @@ private fun GenerationControls(
             scheme = monoScheme,
         )
         Text(
-            text = if (canDisableThinking) {
-                "Auto uses the model's default. Off turns thinking off; Low/Med/High set how hard it thinks."
-            } else {
-                "This model always thinks — you can only set how hard (Auto uses its default)."
-            },
+            text = if (ReasoningLevel.OFF in levels) "Also in the chat box." else "This model always thinks. Also in the chat box.",
             fontSize = 12.sp,
             color = cs.sub,
         )
     }
 
+    if (showTemperature) TemperatureControl(cs, temperature, onTemperature)
+
+    EyebrowLabel("STEP LIMIT PER TASK", cs)
+    OutlinedTextField(
+        value = runCapText,
+        onValueChange = onRunCapText,
+        singleLine = true,
+        placeholder = { Text("No limit", color = cs.sub) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        colors = capsuleFieldColors(cs),
+        shape = Capsule.ShapeChipWell,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        text = "Leave blank unless your key has a daily request allowance. A free tier that gives " +
+            "you, say, 500 requests a day is spent by roughly six 80-step tasks — a limit here " +
+            "stops one confused run from using the lot. Paid keys don't need it.",
+        fontSize = 12.sp,
+        color = cs.sub,
+    )
+}
+
+/** The temperature slider: Auto until moved. Hidden where the model rejects a custom temperature. */
+@Composable
+private fun TemperatureControl(cs: CapsuleScheme, temperature: Double?, onTemperature: (Double) -> Unit) {
     EyebrowLabel("TEMPERATURE", cs)
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1017,25 +859,6 @@ private fun GenerationControls(
     }
     Text(
         text = "Lower is steadier. Higher makes the agent's taps more random — keep it low for reliable automation.",
-        fontSize = 12.sp,
-        color = cs.sub,
-    )
-
-    EyebrowLabel("STEP LIMIT PER TASK", cs)
-    OutlinedTextField(
-        value = runCapText,
-        onValueChange = onRunCapText,
-        singleLine = true,
-        placeholder = { Text("No limit", color = cs.sub) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        colors = capsuleFieldColors(cs),
-        shape = Capsule.ShapeChipWell,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Text(
-        text = "Leave blank unless your key has a daily request allowance. A free tier that gives " +
-            "you, say, 500 requests a day is spent by roughly six 80-step tasks — a limit here " +
-            "stops one confused run from using the lot. Paid keys don't need it.",
         fontSize = 12.sp,
         color = cs.sub,
     )

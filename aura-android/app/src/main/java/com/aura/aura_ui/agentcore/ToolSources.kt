@@ -2,6 +2,8 @@ package com.aura.aura_ui.agentcore
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Base64
 import com.aura.aura_ui.agent.mcpbridge.McpToolSchemaParser
 import com.aura.aura_ui.data.deeplink.DeepLinkManager
@@ -19,12 +21,16 @@ import com.aura.aura_ui.mcp.bridge.AppUiTreeBridge
 import com.aura.aura_ui.mcp.bridge.AppWebSearchBridge
 import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
 import com.aura.aura_ui.mcp.bridge.TavilyKeyStore
+import com.aura.aura_ui.data.preferences.ReadScreenImageStore
 import com.aura.aura_ui.services.ControlLockStore
+import com.aura.mcp.bridge.BBox
+import com.aura.mcp.bridge.CaptureResult
 import com.aura.mcp.bridge.McpScope
 import com.aura.mcp.server.ActionGuard
 import com.aura.mcp.server.InProcessMcpHandle
 import com.aura.mcp.server.InProcessMcpServer
 import com.aura.mcp.server.McpToolScopes
+import com.aura.mcp.server.SensitivePolicy
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -33,10 +39,12 @@ import io.modelcontextprotocol.kotlin.sdk.client.mcpStreamableHttpTransport
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -62,12 +70,17 @@ class PhoneToolSource(context: Context) : ToolSource {
 
     private val app = context.applicationContext
     private val guard = ActionGuard()
+    private val device = AppDeviceBridge(app)
+    private val screenshots = AppScreenshotBridge(app)
     private val connecting = Mutex()
     private var handle: InProcessMcpHandle? = null
     private var client: Client? = null
 
     @Volatile
     private var labelOf: (Int) -> String? = { null }
+
+    @Volatile
+    private var boundsOf: (Int) -> BBox? = { null }
 
     /**
      * The visible label of the element a gesture is about to press, from the latest screen read.
@@ -90,14 +103,56 @@ class PhoneToolSource(context: Context) : ToolSource {
         }
 
     override suspend fun call(name: String, args: JsonObject, turn: TurnState): SourceResult {
-        val result = connected().callTool(name = name, arguments = args)
+        val client = connected()
+        val shot = shotFor(args)
+        val result = client.callTool(name = name, arguments = args)
         val content = result?.content.orEmpty()
         return SourceResult(
+            shot = shot,
             text = content.filterIsInstance<TextContent>().joinToString("\n") { it.text.orEmpty() },
             isError = result?.isError == true,
             imagePng = content.filterIsInstance<ImageContent>().firstOrNull()
                 ?.let { runCatching { Base64.decode(it.data, Base64.DEFAULT) }.getOrNull() },
         )
+    }
+
+    /**
+     * For the run log: the element a gesture is about to press, and a small picture of the screen
+     * taken before the press.
+     * - Contract: null when the call names no `som_id`. The picture is left out when screen
+     *   capture is not granted, the capture takes longer than [SHOT_TIMEOUT_MS], or the app in
+     *   front is one `SensitivePolicy` keeps AURA out of.
+     */
+    private suspend fun shotFor(args: JsonObject): StepShot? {
+        val somId = (args["som_id"] as? JsonPrimitive)?.intOrNull ?: return null
+        val label = labelOf(somId)
+        val bounds = boundsOf(somId)
+        val front = runCatching { device.foregroundPackage() }.getOrNull()
+        val hidden = front != null && SensitivePolicy.screenPackage(front) is SensitivePolicy.Decision.Block
+        if (hidden || !runCatching { screenshots.isReady() }.getOrDefault(false)) return StepShot(null, label)
+        // Only the capture happens before the press; decoding and shrinking wait for the journal.
+        val capture = withTimeoutOrNull(SHOT_TIMEOUT_MS) {
+            runCatching { screenshots.captureBase64Png() as? CaptureResult.Success }.getOrNull()
+        } ?: return StepShot(null, label)
+        // Element bounds come from accessibility, in real screen pixels; the capture is the whole
+        // screen at that resolution, so its own size is the denominator.
+        val width = capture.widthPx.toFloat()
+        val height = capture.heightPx.toFloat()
+        val box = bounds?.takeIf { width > 0 && height > 0 }?.let {
+            listOf(it.x1 / width, it.y1 / height, it.x2 / width, it.y2 / height).map { edge -> edge.coerceIn(0f, 1f) }
+        }
+        return StepShot(box, label) { smallJpeg(capture.base64Png) }
+    }
+
+    private fun smallJpeg(base64Png: String): ByteArray? {
+        val bytes = Base64.decode(base64Png, Base64.DEFAULT)
+        val full = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        val small = if (full.width > SHOT_WIDTH) {
+            Bitmap.createScaledBitmap(full, SHOT_WIDTH, (full.height.toFloat() * SHOT_WIDTH / full.width).toInt(), true)
+        } else {
+            full
+        }
+        return ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, SHOT_QUALITY, it) }.toByteArray()
     }
 
     /** Forget the last task's screen state. Call at the start of every turn. */
@@ -120,8 +175,8 @@ class PhoneToolSource(context: Context) : ToolSource {
     private suspend fun connected(): Client = connecting.withLock {
         client ?: run {
             val server = InProcessMcpServer.connect(
-                deviceBridge = AppDeviceBridge(app),
-                screenshotBridge = AppScreenshotBridge(app),
+                deviceBridge = device,
+                screenshotBridge = screenshots,
                 uiTreeBridge = AppUiTreeBridge(),
                 perceptionBridge = AppPerceptionBridge(app),
                 webSearchBridge = AppWebSearchBridge(TavilyKeyStore(app)),
@@ -134,8 +189,10 @@ class PhoneToolSource(context: Context) : ToolSource {
                 browserBridge = AppBrowserBridge.shared(app),
                 ownPackageName = app.packageName,
                 pausedByHuman = { ControlLockStore.shared.isPausedByHuman },
+                readScreenImage = { ReadScreenImageStore.enabled.value },
                 actionGuard = guard,
                 labelLookup = { labelOf = it },
+                boundsLookup = { boundsOf = it },
             )
             Client(clientInfo = Implementation(name = "aura-agentcore", version = "1")).also {
                 it.connect(server.clientTransport)
@@ -152,10 +209,20 @@ class PhoneToolSource(context: Context) : ToolSource {
         /** Not offered to the model: a chat turn ends by replying, and `run_steps` is off. */
         private val HIDDEN = setOf("end_session", "run_steps")
 
-        /** Direct verbs a chat needs without loading anything. */
+        /**
+         * The direct routes, loaded from the first request: one call that does the job without
+         * driving the screen. Deep links, contacts and files are here because a task that could
+         * be one `open_deeplink` otherwise becomes ten taps.
+         */
         private val CORE_TOOLS = setOf(
-            "system_intent", "web_search", "launch_app", "media_control", "read_notifications", "get_device_status",
+            "system_intent", "web_search", "launch_app", "lookup_app", "media_control", "read_notifications",
+            "get_device_status", "resolve_contact", "find_files", "open_file",
+            "list_app_deeplinks", "open_deeplink",
         )
+
+        private const val SHOT_WIDTH = 540
+        private const val SHOT_QUALITY = 72
+        private const val SHOT_TIMEOUT_MS = 1_500L
 
         private val SCREEN_TOOLS = setOf(
             "read_screen", "perceive_screen", "get_screenshot", "request_screen_capture_permission",

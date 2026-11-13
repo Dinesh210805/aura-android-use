@@ -25,9 +25,8 @@ class AmbientAndPolicyTest {
         NotificationTriage.classify(n, prefs) { it == "com.bank" }
 
     @Test
-    fun `messages wait for the digest and priority people do not`() {
+    fun `messages wait for the digest`() {
         assertEquals(Urgency.DIGEST, classify(signal()))
-        assertEquals(Urgency.NOW, classify(signal(), TriagePrefs(priorityPeople = setOf("priya"))))
     }
 
     @Test
@@ -91,7 +90,11 @@ class AmbientAndPolicyTest {
         assertEquals(ToolHub.CORE, PhoneToolSource.toolsetOf("system_intent"))
         assertEquals(ToolHub.SCREEN, PhoneToolSource.toolsetOf("tap"))
         assertEquals("browser", PhoneToolSource.toolsetOf("browser_open"))
-        assertEquals("phone", PhoneToolSource.toolsetOf("resolve_contact"))
+        // The direct routes load from the first request, so a call never starts by tapping.
+        assertEquals(ToolHub.CORE, PhoneToolSource.toolsetOf("resolve_contact"))
+        assertEquals(ToolHub.CORE, PhoneToolSource.toolsetOf("open_deeplink"))
+        assertEquals(ToolHub.CORE, PhoneToolSource.toolsetOf("find_files"))
+        assertEquals("phone", PhoneToolSource.toolsetOf("clipboard"))
 
         assertEquals(Origin.WEB, PhoneToolSource.resultOriginOf("web_search"))
         assertEquals(Origin.SCREEN, PhoneToolSource.resultOriginOf("tap"))

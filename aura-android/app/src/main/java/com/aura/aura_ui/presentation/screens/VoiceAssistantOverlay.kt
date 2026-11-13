@@ -89,15 +89,15 @@ import kotlinx.coroutines.flow.first
 // ============================================================================
 
 /**
- * The overlay's fixed color scheme. The app itself is light-only (dark mode was
- * removed as a user setting), but the overlay is DELIBERATELY always dark: it
- * floats over arbitrary apps, so a charcoal surface reads as "AURA's own layer"
- * regardless of what's beneath it. The palette is the app's own Capsule charcoal
- * tokens ([Mono.scheme] dark) — the same warm near-black used by the app's dark
- * surfaces — so the overlay and the app share one design language.
+ * The overlay's colours: the app's own glass in the user's light or dark mode ([overlayColors]),
+ * never the sky. White glass and ink in light mode, charcoal glass and white in dark.
  */
 @Composable
-private fun rememberOverlayColors(): OverlayColorScheme = OverlayColors
+private fun rememberOverlayColors(): OverlayColorScheme {
+    val accent by AppearanceStore.accent.collectAsState()
+    val dark = rememberOverlayDark()
+    return remember(dark, accent) { overlayScheme(overlayColors(dark)) }
+}
 
 /**
  * Color scheme interface for overlay
@@ -120,38 +120,35 @@ internal data class OverlayColorScheme(
     val micPulseGlow: Color,
     val userBubbleColor: Color,
     val assistantBubbleColor: Color,
+    /** The glass rim. */
+    val edge: Color,
+    /** Text and icons on [accentBlue]. */
+    val onAccent: Color,
 )
 
-/**
- * Charcoal overlay palette — built from the app's Capsule dark tokens so it can
- * never drift from the app's own dark surfaces. `canvas`/`card`/`chip` are the
- * three warm-charcoal elevations; text is the warm off-white pair.
- */
-private val OverlayColors: OverlayColorScheme = run {
-    val cap = Mono.scheme(dark = true)
-    OverlayColorScheme(
-        // Dim the app behind so the dark overlay reads as a distinct layer.
-        scrim = Color.Black.copy(alpha = 0.32f),
-        // Pill = the most-raised surface (chip); sheet = the card elevation.
-        inputBarBackground = cap.chip.copy(alpha = 0.98f),
-        responseSheetBackground = cap.card.copy(alpha = 0.98f),
-        surface = cap.card,
-        surfaceVariant = cap.chip,
-        dragHandle = cap.textSecondary.copy(alpha = 0.5f),
-        iconBackground = cap.chip,
-        // Neutral warm greys for cursor / shimmer / secondary accents.
-        accentGreen = cap.textPrimary.copy(alpha = 0.8f),
-        accentBlue = Color(0xFF57534A),
-        accentPurple = cap.textSecondary,
-        textPrimary = cap.textPrimary,
-        textSecondary = cap.textSecondary,
-        textTertiary = cap.textSecondary.copy(alpha = 0.55f),
-        micActiveGlow = cap.textPrimary,
-        micPulseGlow = Color(0xFFBBBBBB),
-        userBubbleColor = Color(0xFF33302A),
-        assistantBubbleColor = cap.chip,
-    )
-}
+/** The overlay palette from the app's colours [aura]: glass for the prompt box, wells for the round buttons. */
+private fun overlayScheme(aura: AuraColors): OverlayColorScheme = OverlayColorScheme(
+    scrim = Color.Black.copy(alpha = 0.32f),
+    // Near-opaque glass: the prompt box sits over any app, and its text must read on all of them.
+    inputBarBackground = aura.surfaceStrong.copy(alpha = 0.94f),
+    responseSheetBackground = aura.surfaceStrong.copy(alpha = 0.96f),
+    surface = aura.surfaceStrong,
+    surfaceVariant = aura.well,
+    dragHandle = aura.secondary.copy(alpha = 0.5f),
+    iconBackground = aura.well,
+    accentGreen = aura.label.copy(alpha = 0.8f),
+    accentBlue = aura.accent,
+    accentPurple = aura.secondary,
+    textPrimary = aura.label,
+    textSecondary = aura.secondary,
+    textTertiary = aura.tertiary,
+    micActiveGlow = aura.label,
+    micPulseGlow = aura.secondary,
+    userBubbleColor = aura.well,
+    assistantBubbleColor = aura.surfaceStrong,
+    edge = aura.glassEdge,
+    onAccent = aura.onAccent,
+)
 
 /**
  * State holder for the Voice Assistant Overlay
@@ -485,7 +482,7 @@ private fun InputBar(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(percent = 50),
         color = colors.inputBarBackground,
-        tonalElevation = 4.dp,
+        border = BorderStroke(1.dp, colors.edge),
         shadowElevation = 8.dp
     ) {
         Row(
@@ -525,6 +522,7 @@ private fun InputBar(
                     VoiceWaveformVisualizer(
                         // The user's voice only: AURA's playback must not move it.
                         amplitude = if (state.isListening) state.audioAmplitude else 0f,
+                        ink = colors.textPrimary,
                         modifier = Modifier.fillMaxWidth()
                     )
                     // Phase verb shown beneath the waveform.
@@ -535,7 +533,7 @@ private fun InputBar(
                         state.isListening && state.partialTranscript.isNotBlank() ->
                             state.partialTranscript
                         state.isListening -> ""
-                        state.isProcessing -> if (state.isGeminiLiveSession) "Executing task..." else "Thinking..."
+                        state.isProcessing -> "Thinking…"
                         state.isResponding -> "Speaking..."
                         else -> ""
                     }
@@ -682,7 +680,7 @@ private fun InputBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
-                        tint = Color.White,
+                        tint = colors.onAccent,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -696,7 +694,7 @@ private fun InputBar(
 // ============================================================================
 
 /**
- * The voice as a white ribbon: three sine strands that breathe with the mic level and drift
+ * The voice as a ribbon in [ink]: three sine strands that breathe with the mic level and drift
  * sideways, tapering to nothing at both ends. Calm and nearly flat in silence.
  *
  * - Contract: [amplitude] is linear RMS as a fraction of full scale (0..1), the scale every
@@ -709,6 +707,7 @@ private fun InputBar(
 @Composable
 private fun VoiceWaveformVisualizer(
     amplitude: Float,
+    ink: Color,
     modifier: Modifier = Modifier,
 ) {
     val level by animateFloatAsState(
@@ -743,7 +742,7 @@ private fun VoiceWaveformVisualizer(
                 if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
                 x += 3f
             }
-            drawPath(path, Color.White.copy(alpha = alpha), style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(path, ink.copy(alpha = alpha), style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
         }
     }
 }

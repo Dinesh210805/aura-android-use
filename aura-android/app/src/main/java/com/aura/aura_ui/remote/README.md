@@ -51,7 +51,7 @@ The project runs on the free Firebase plan, shared by every install. Per install
 ## Firebase state this folder depends on
 | Where | Keys / paths | Written by |
 |---|---|---|
-| Remote Config | `kill_switch_enabled`, `kill_switch_message`, `min_supported_version_code`, `version_gate_message`, `latest_version_code`, `update_url` | owner (Firebase console) |
+| Remote Config | `kill_switch_enabled`, `kill_switch_message`, `min_supported_version_code`, `version_gate_message`, `latest_version_code`, `update_url`, `latest_version_name`, `release_notes` (the update pop-up; blank hides each) | owner (Firebase console) |
 | Firestore `devices/{uid}` | the registry row, plus `blocked` / `blocked_message` (a suspension; ends if app data is cleared) | app (the row), owner (`blocked`) |
 | Firestore `blocklist/{hash}` | document existence, optional `message` | owner only |
 

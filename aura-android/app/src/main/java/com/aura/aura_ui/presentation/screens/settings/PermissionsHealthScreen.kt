@@ -38,7 +38,6 @@ import com.aura.aura_ui.presentation.permissions.openPermissionSystemPage
 @Composable
 fun PermissionsHealthScreen(
     onNavigateBack: () -> Unit,
-    onRequestScreenCapture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = rememberMonoScheme()
@@ -60,7 +59,7 @@ fun PermissionsHealthScreen(
     ) { refresh++ }
 
     fun openSystemFor(p: AuraPermission) =
-        openPermissionSystemPage(context, p, onScreenCapture = onRequestScreenCapture)
+        openPermissionSystemPage(context, p)
 
     AuraScreenScaffold(
         title = "Permissions",
@@ -85,12 +84,8 @@ fun PermissionsHealthScreen(
 
         Spacer(Modifier.height(8.dp))
         MonoSectionLabel("Capabilities — asked when first needed", scheme)
-        // Screen capture is managed from the Settings screen (its own working
-        // MediaProjection control); the row here never worked, so it's filtered
-        // out. Registry entry is intentionally left intact.
-        val capabilities = PermissionRegistry.tier2.filter { it.id != "screen_capture" }
         MonoCardGroup(scheme) {
-            capabilities.forEachIndexed { index, p ->
+            PermissionRegistry.tier2.forEachIndexed { index, p ->
                 if (index > 0) MonoDivider()
                 val granted = remember(refresh) { p.isGranted(context) }
                 PermissionToggleRow(

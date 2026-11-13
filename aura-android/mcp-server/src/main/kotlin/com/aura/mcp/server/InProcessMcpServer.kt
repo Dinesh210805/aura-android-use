@@ -167,6 +167,8 @@ object InProcessMcpServer {
         sessionLogSink: SessionLogSink = NoOpSessionLogSink,
         /** Forwarded to [McpServerBuilder.build]. */
         labelLookup: ((somId: Int) -> String?) -> Unit = {},
+        /** Forwarded to [McpServerBuilder.build]. */
+        boundsLookup: ((somId: Int) -> com.aura.mcp.bridge.BBox?) -> Unit = {},
     ): InProcessMcpHandle {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -193,6 +195,7 @@ object InProcessMcpServer {
             actionGuard = actionGuard,
             sessionLogSink = sessionLogSink,
             labelLookup = labelLookup,
+            boundsLookup = boundsLookup,
         )
 
         // Client end runs in a plain context; server end carries the principal

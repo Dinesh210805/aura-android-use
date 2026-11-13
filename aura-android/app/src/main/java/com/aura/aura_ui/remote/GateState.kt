@@ -11,7 +11,8 @@ sealed interface GateState {
     data object Allowed : GateState
     data class KillSwitchBlocked(val message: String) : GateState
     data class VersionBlocked(val message: String, val updateUrl: String) : GateState
-    data class UpdateAvailable(val updateUrl: String) : GateState
+    /** [versionName] and [notes] are blank when the owner has not set them. */
+    data class UpdateAvailable(val updateUrl: String, val versionName: String = "", val notes: String = "") : GateState
 }
 
 /**
@@ -29,11 +30,13 @@ fun evaluateGate(
     versionGateMessage: String,
     latestVersionCode: Long,
     updateUrl: String,
+    latestVersionName: String = "",
+    releaseNotes: String = "",
 ): GateState = when {
     killSwitchEnabled -> GateState.KillSwitchBlocked(killSwitchMessage)
     minSupportedVersionCode > 0L && currentVersionCode < minSupportedVersionCode ->
         GateState.VersionBlocked(versionGateMessage, updateUrl)
-    latestVersionCode > currentVersionCode -> GateState.UpdateAvailable(updateUrl)
+    latestVersionCode > currentVersionCode -> GateState.UpdateAvailable(updateUrl, latestVersionName, releaseNotes)
     else -> GateState.Allowed
 }
 
@@ -62,6 +65,8 @@ data class GateInputs(
     val versionGateMessage: String = "",
     val latestVersionCode: Long = 0L,
     val updateUrl: String = "",
+    val latestVersionName: String = "",
+    val releaseNotes: String = "",
 )
 
 /**
@@ -80,4 +85,6 @@ fun evaluateGate(inputs: GateInputs, block: Blocklist.Verdict, currentVersionCod
         versionGateMessage = inputs.versionGateMessage,
         latestVersionCode = inputs.latestVersionCode,
         updateUrl = inputs.updateUrl,
+        latestVersionName = inputs.latestVersionName,
+        releaseNotes = inputs.releaseNotes,
     )

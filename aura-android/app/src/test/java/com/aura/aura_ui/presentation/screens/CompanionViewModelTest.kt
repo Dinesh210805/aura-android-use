@@ -22,11 +22,10 @@ class CompanionViewModelTest {
         assertFalse(vm.state.value.liveMode)
     }
 
-    @Test fun `saveKey persists to the gemini slot and updates hasKey`() {
+    @Test fun `a gemini key saved on the API keys page shows as hasKey`() {
+        ProviderKeyStore(ctx).setKey(LlmEndpointCatalog.GEMINI_ID, "AIza-xyz")
         val vm = CompanionViewModel(ctx)
-        vm.saveKey("AIza-xyz")
         assertTrue(vm.state.value.hasKey)
-        assertTrue(ProviderKeyStore(ctx).isConfigured(LlmEndpointCatalog.GEMINI_ID))
     }
 
     @Test fun `setLiveMode requires a key`() {
@@ -38,8 +37,8 @@ class CompanionViewModelTest {
     }
 
     @Test fun `setLiveMode engages live once a key exists`() {
+        ProviderKeyStore(ctx).setKey(LlmEndpointCatalog.GEMINI_ID, "AIza-xyz")
         val vm = CompanionViewModel(ctx)
-        vm.saveKey("AIza-xyz")
         vm.setLiveMode(true)
         assertTrue(vm.state.value.liveMode)
         // Turning it back off returns to classic mode (one mode is always active).

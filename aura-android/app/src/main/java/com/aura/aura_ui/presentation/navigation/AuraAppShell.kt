@@ -72,14 +72,10 @@ import com.aura.aura_ui.presentation.screens.RestrictedAppsScreen
 import com.aura.aura_ui.presentation.screens.McpLogRetentionScreen
 import com.aura.aura_ui.BuildConfig
 import com.aura.aura_ui.presentation.screens.eval.EvalSuiteScreen
-import com.aura.aura_ui.presentation.screens.McpServersScreen
 import com.aura.aura_ui.presentation.screens.McpSessionDetailScreen
 import com.aura.aura_ui.presentation.screens.McpSessionLogScreen
 import com.aura.aura_ui.presentation.screens.TrustedDevicesScreen
-import com.aura.aura_ui.presentation.screens.MemoryScreen
 import com.aura.aura_ui.presentation.screens.ProviderSettingsScreen
-import com.aura.aura_ui.presentation.screens.SkillsScreen
-import com.aura.aura_ui.presentation.screens.TavilyKeyScreen
 import com.aura.aura_ui.presentation.screens.VoiceSettingsScreen
 import com.aura.aura_ui.presentation.screens.agent.AgentHubScreen
 import com.aura.aura_ui.presentation.screens.agent.HooksScreen
@@ -91,18 +87,33 @@ import com.aura.aura_ui.presentation.screens.legal.LicensesScreen
 import com.aura.aura_ui.presentation.screens.legal.PrivacyPolicyScreen
 import com.aura.aura_ui.presentation.screens.legal.TermsScreen
 import com.aura.aura_ui.presentation.screens.settings.MonoSettingsScreen
+import com.aura.aura_ui.presentation.screens.settings.ApiKeysScreen
+import com.aura.aura_ui.presentation.screens.settings.AppearanceScreen
 import com.aura.aura_ui.presentation.screens.settings.PermissionsHealthScreen
 import com.aura.aura_ui.ui.theme.Mono
+import com.aura.aura_ui.ui.theme.LocalAura
+import com.aura.aura_ui.presentation.components.LocalBack
+import com.aura.aura_ui.agentcore.AgentCore
+import com.aura.aura_ui.agentcore.AllChatsPage
+import com.aura.aura_ui.agentcore.ConnectorsPage
+import com.aura.aura_ui.agentcore.MemoryPage
+import com.aura.aura_ui.agentcore.RunLogsPage
+import com.aura.aura_ui.agentcore.RunDetailPage
+import com.aura.aura_ui.agentcore.LogKeepPage
+import com.aura.aura_ui.agentcore.RunDetailPage
+import com.aura.aura_ui.agentcore.LogKeepPage
+import com.aura.aura_ui.agentcore.SchedulesPage
+import com.aura.aura_ui.agentcore.SkillsPage
+import androidx.compose.runtime.CompositionLocalProvider
 import com.aura.aura_ui.ui.theme.MonoScheme
 
-// ============================================================================
-// APP SHELL — the single-activity navigation host that replaces both the old
-// auto-overlay entry and MainActivity's hand-rolled settings state machine.
-//
-// Four top-level tabs (Home · Agent · Activity · Settings); every pre-existing
-// screen is REHOMED here, not rewritten. Spec §3 rule: agent-behavior screens
-// live under Agent, app-behavior screens under Settings.
-// ============================================================================
+/**
+ * The app's routes. Home is the chat; everything else is opened from the chat's drawer or from
+ * another page, and goes back with the page's own back button ([LocalBack]).
+ *
+ * - Contract: agent-behaviour screens live under `agent/`, app-behaviour screens under
+ *   `settings/`. The chat agent's own pages (chats, run logs, schedules) sit at the top level.
+ */
 
 object AuraRoutes {
     const val HOME = "home"
@@ -115,14 +126,29 @@ object AuraRoutes {
     const val AGENT_HOOKS = "agent/hooks"
     const val AGENT_SKILLS = "agent/skills"
     const val AGENT_MEMORY = "agent/memory"
-    const val AGENT_MCP_SERVERS = "agent/mcp_servers"
+    const val AGENT_CONNECTORS = "agent/connectors"
+
+    /** The chat agent's pages, opened from the chat's drawer. */
+    const val CHATS = "chats"
+    const val RUN_LOGS = "run_logs"
+    const val RUN_LOG = "run_log/{id}"
+    const val RUN_LOGS_KEEP = "run_logs_keep"
+
+    fun runLog(id: String) = "run_log/$id"
+    const val SCHEDULES = "schedules"
     const val AGENT_COMPANION = "agent/companion"
     const val AGENT_VOICE = "agent/voice"
 
     /** The status dashboard that used to be Home. Reached from the chat drawer. */
     const val HOME_DASHBOARD = "home/dashboard"
 
-    const val SETTINGS_TAVILY = "settings/tavily"
+    const val SETTINGS_APPEARANCE = "settings/appearance"
+
+    /** The one place API keys are entered (besides onboarding). See [apiKeys]. */
+    const val SETTINGS_API_KEYS = "settings/api_keys?provider={provider}"
+
+    /** The API keys page, opening the key editor for [provider] (an endpoint id, or "tavily"). */
+    fun apiKeys(provider: String? = null) = if (provider == null) "settings/api_keys" else "settings/api_keys?provider=$provider"
     const val SETTINGS_MCP_CENTER = "settings/mcp_center"
     const val SETTINGS_TRUSTED_DEVICES = "settings/trusted_devices"
     const val SETTINGS_RESTRICTED_APPS = "settings/restricted_apps"
@@ -142,29 +168,6 @@ object AuraRoutes {
 
     fun sessionDetail(sessionId: String) = "activity/session/$sessionId"
 }
-
-/** Where the chat's drawer can take the user, as label to route. */
-private val chatDrawerLinks = listOf(
-    "Dashboard" to AuraRoutes.HOME_DASHBOARD,
-    "Agent settings" to AuraRoutes.AGENT,
-    "MCP" to AuraRoutes.SETTINGS_MCP_CENTER,
-    "Activity" to AuraRoutes.ACTIVITY,
-    "Settings" to AuraRoutes.SETTINGS,
-)
-
-private data class BottomTab(
-    val route: String,
-    val label: String,
-    val icon: ImageVector,
-    val selectedIcon: ImageVector,
-)
-
-private val bottomTabs = listOf(
-    BottomTab(AuraRoutes.HOME, "Home", Icons.Outlined.Home, Icons.Filled.Home),
-    BottomTab(AuraRoutes.AGENT, "Agent", Icons.Outlined.SmartToy, Icons.Filled.SmartToy),
-    BottomTab(AuraRoutes.SETTINGS_MCP_CENTER, "MCP", Icons.Outlined.Hub, Icons.Filled.Hub),
-    BottomTab(AuraRoutes.SETTINGS, "Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
-)
 
 /**
  * @param onStartChat open the chat overlay (optionally seeded with an example command).
@@ -189,59 +192,26 @@ fun AuraAppShell(
         )
         FirebaseCrashlytics.getInstance().log("nav: $route")
     }
-    val scheme = rememberMonoScheme()
-    val warm = com.aura.aura_ui.ui.theme.rememberWarmScheme()
 
     val gateViewModel: RemoteGateViewModel = hiltViewModel()
     val gateState by gateViewModel.gateState.collectAsState()
 
     when (val state = gateState) {
         is GateState.KillSwitchBlocked ->
-            BlockScreen(title = "AURA is turned off", message = state.message, updateUrl = null, scheme = scheme)
+            BlockScreen(title = "AURA is turned off", message = state.message, updateUrl = null)
         is GateState.VersionBlocked ->
-            BlockScreen(title = "Update required", message = state.message, updateUrl = state.updateUrl, scheme = scheme)
+            BlockScreen(title = "Update required", message = state.message, updateUrl = state.updateUrl)
         else -> {
             // Allowed or UpdateAvailable: render the app; overlay a dismissible
             // update banner above the nav content when an update is available.
             var updateDismissed by remember { mutableStateOf(false) }
-    Scaffold(
-        containerColor = warm.canvasBottom,
-        bottomBar = {
-            // The capsule is the app's ONE navigation element: tab icons on
-            // top-level screens, ‹ back · title on subpages (Capsule design).
-            // Home is the chat, which navigates from its own drawer instead.
-            if (currentRoute != AuraRoutes.HOME) MonoBottomBar(
-                currentRoute = currentRoute,
-                scheme = scheme,
-                onSelect = { route ->
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                onBack = { navController.navigateUp() },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            if (state is GateState.UpdateAvailable && state.updateUrl.isNotBlank() && !updateDismissed) {
-                UpdateBanner(
-                    updateUrl = state.updateUrl,
-                    scheme = scheme,
-                    onDismiss = { updateDismissed = true },
-                )
-            }
+    val aura = LocalAura.current
+    CompositionLocalProvider(LocalBack provides { navController.navigateUp() }) {
+    Box(Modifier.fillMaxSize().background(aura.canvas)) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier = Modifier.fillMaxSize(),
             enterTransition = { fadeIn(tween(Mono.MotionNormal)) },
             exitTransition = { fadeOut(tween(Mono.MotionFast)) },
             popEnterTransition = { fadeIn(tween(Mono.MotionNormal)) },
@@ -250,7 +220,6 @@ fun AuraAppShell(
             // ── Top level ──────────────────────────────────────────────
             composable(AuraRoutes.HOME) {
                 com.aura.aura_ui.agentcore.AgentChatScreen(
-                    links = chatDrawerLinks,
                     onNavigate = { route -> navController.navigate(route) },
                     onVoice = { onStartChat(null) },
                 )
@@ -264,16 +233,25 @@ fun AuraAppShell(
                 )
             }
             composable(AuraRoutes.AGENT) {
-                AgentHubScreen(
-                    onOpenBrain = { navController.navigate(AuraRoutes.AGENT_BRAIN) },
-                    onOpenTools = { navController.navigate(AuraRoutes.AGENT_TOOLS) },
-                    onOpenHooks = { navController.navigate(AuraRoutes.AGENT_HOOKS) },
-                    onOpenSkills = { navController.navigate(AuraRoutes.AGENT_SKILLS) },
-                    onOpenMemory = { navController.navigate(AuraRoutes.AGENT_MEMORY) },
-                    onOpenMcpServers = { navController.navigate(AuraRoutes.AGENT_MCP_SERVERS) },
-                    onOpenVoice = { navController.navigate(AuraRoutes.AGENT_COMPANION) },
-                )
+                AgentHubScreen(onOpen = { route -> navController.navigate(route) })
             }
+            composable(AuraRoutes.CHATS) {
+                AllChatsPage(onOpen = { id ->
+                    AgentCore.openThread.value = id
+                    navController.popBackStack(AuraRoutes.HOME, inclusive = false)
+                })
+            }
+            composable(AuraRoutes.RUN_LOGS) {
+                RunLogsPage(onOpen = { navController.navigate(AuraRoutes.runLog(it)) }, onKeep = { navController.navigate(AuraRoutes.RUN_LOGS_KEEP) })
+            }
+            composable(AuraRoutes.RUN_LOG) { entry ->
+                RunDetailPage(entry.arguments?.getString("id").orEmpty(), onDeleted = { navController.navigateUp() })
+            }
+            composable(AuraRoutes.RUN_LOGS_KEEP) { LogKeepPage() }
+            composable(AuraRoutes.SCHEDULES) { SchedulesPage() }
+            composable(AuraRoutes.AGENT_MEMORY) { MemoryPage() }
+            composable(AuraRoutes.AGENT_SKILLS) { SkillsPage() }
+            composable(AuraRoutes.AGENT_CONNECTORS) { ConnectorsPage() }
             composable(AuraRoutes.ACTIVITY) {
                 McpSessionLogScreen(
                     onNavigateBack = { navController.navigateUp() },
@@ -282,20 +260,14 @@ fun AuraAppShell(
                 )
             }
             composable(AuraRoutes.SETTINGS) {
-                MonoSettingsScreen(
-                    onOpenPermissions = { navController.navigate(AuraRoutes.SETTINGS_PERMISSIONS) },
-                    onOpenTavilyKey = { navController.navigate(AuraRoutes.SETTINGS_TAVILY) },
-                    onRequestScreenCapture = onRequestScreenCapture,
-                    onOpenPrivacy = { navController.navigate(AuraRoutes.SETTINGS_PRIVACY) },
-                    onOpenTerms = { navController.navigate(AuraRoutes.SETTINGS_TERMS) },
-                    onOpenLicenses = { navController.navigate(AuraRoutes.SETTINGS_LICENSES) },
-                    onOpenRestrictedApps = { navController.navigate(AuraRoutes.SETTINGS_RESTRICTED_APPS) },
-                    onOpenEvalSuite = if (BuildConfig.DEBUG) {
-                        { navController.navigate(AuraRoutes.EVAL_SUITE) }
-                    } else {
-                        null
-                    },
-                )
+                MonoSettingsScreen(onOpen = { route -> navController.navigate(route) }, debug = BuildConfig.DEBUG)
+            }
+            composable(AuraRoutes.SETTINGS_APPEARANCE) { AppearanceScreen() }
+            composable(
+                route = AuraRoutes.SETTINGS_API_KEYS,
+                arguments = listOf(navArgument("provider") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { entry ->
+                ApiKeysScreen(preselect = entry.arguments?.getString("provider"))
             }
             // The eval cockpit spends real provider quota driving the agent through the whole task
             // suite, so it is not part of a release graph at all — not merely hidden in one.
@@ -309,13 +281,7 @@ fun AuraAppShell(
 
             // ── Agent sub-screens ─────────────────────────────────────
             composable(AuraRoutes.AGENT_BRAIN) {
-                ProviderSettingsScreen(
-                    onNavigateBack = { navController.navigateUp() },
-                    onOpenTrustedDevices = { navController.navigate(AuraRoutes.SETTINGS_TRUSTED_DEVICES) },
-                    onOpenRestrictedApps = { navController.navigate(AuraRoutes.SETTINGS_RESTRICTED_APPS) },
-                    onOpenActivityLog = { navController.navigate(AuraRoutes.ACTIVITY) },
-                    onOpenRetention = { navController.navigate(AuraRoutes.ACTIVITY_RETENTION) },
-                )
+                ProviderSettingsScreen(onOpenApiKeys = { id -> navController.navigate(AuraRoutes.apiKeys(id)) })
             }
             composable(AuraRoutes.AGENT_TOOLS) {
                 ToolsScreen(onNavigateBack = { navController.navigateUp() })
@@ -323,19 +289,10 @@ fun AuraAppShell(
             composable(AuraRoutes.AGENT_HOOKS) {
                 HooksScreen(onNavigateBack = { navController.navigateUp() })
             }
-            composable(AuraRoutes.AGENT_SKILLS) {
-                SkillsScreen(onNavigateBack = { navController.navigateUp() })
-            }
-            composable(AuraRoutes.AGENT_MEMORY) {
-                MemoryScreen(onNavigateBack = { navController.navigateUp() })
-            }
-            composable(AuraRoutes.AGENT_MCP_SERVERS) {
-                McpServersScreen(onNavigateBack = { navController.navigateUp() })
-            }
             composable(AuraRoutes.AGENT_COMPANION) {
                 CompanionScreen(
-                    onNavigateBack = { navController.navigateUp() },
                     onOpenVoiceSettings = { navController.navigate(AuraRoutes.AGENT_VOICE) },
+                    onOpenApiKeys = { navController.navigate(AuraRoutes.apiKeys(com.aura.aura_ui.agent.llm.LlmEndpointCatalog.GEMINI_ID)) },
                 )
             }
             composable(AuraRoutes.AGENT_VOICE) {
@@ -344,13 +301,7 @@ fun AuraAppShell(
 
             // ── Settings sub-screens ──────────────────────────────────
             composable(AuraRoutes.SETTINGS_PERMISSIONS) {
-                PermissionsHealthScreen(
-                    onNavigateBack = { navController.navigateUp() },
-                    onRequestScreenCapture = onRequestScreenCapture,
-                )
-            }
-            composable(AuraRoutes.SETTINGS_TAVILY) {
-                TavilyKeyScreen(onNavigateBack = { navController.navigateUp() })
+                PermissionsHealthScreen(onNavigateBack = { navController.navigateUp() })
             }
             composable(AuraRoutes.SETTINGS_PRIVACY) {
                 PrivacyPolicyScreen(onNavigateBack = { navController.navigateUp() })
@@ -391,192 +342,11 @@ fun AuraAppShell(
                 McpLogRetentionScreen(onNavigateBack = { navController.navigateUp() })
             }
         }
-        }
-    }
-        }
-    }
-}
-
-/**
- * Human-readable titles the contextual capsule shows on subpages.
- * Fallback: the last route segment, capitalised.
- */
-private val routeTitles = mapOf(
-    AuraRoutes.AGENT_BRAIN to "Brain",
-    AuraRoutes.AGENT_TOOLS to "Tools",
-    AuraRoutes.AGENT_HOOKS to "Hooks",
-    AuraRoutes.AGENT_SKILLS to "Skills",
-    AuraRoutes.AGENT_MEMORY to "Memory",
-    AuraRoutes.AGENT_MCP_SERVERS to "MCP Servers",
-    AuraRoutes.HOME_DASHBOARD to "Dashboard",
-    AuraRoutes.AGENT_COMPANION to "Companion",
-    AuraRoutes.AGENT_VOICE to "Voice",
-    AuraRoutes.ACTIVITY to "Activity",
-    AuraRoutes.ACTIVITY_SESSION to "Session",
-    AuraRoutes.ACTIVITY_RETENTION to "Retention",
-    AuraRoutes.SETTINGS_TAVILY to "Search key",
-    AuraRoutes.SETTINGS_PERMISSIONS to "Permissions",
-    AuraRoutes.SETTINGS_PRIVACY to "Privacy",
-    AuraRoutes.SETTINGS_TERMS to "Terms",
-    AuraRoutes.SETTINGS_LICENSES to "Licences",
-)
-
-private fun titleFor(route: String?): String =
-    routeTitles[route]
-        ?: route?.substringAfterLast('/')?.substringBefore('{')
-            ?.replace('_', ' ')
-            ?.replaceFirstChar { it.uppercase() }
-            .orEmpty()
-
-/**
- * The Capsule nav (2026-07-10 redesign): one BLACK floating capsule strip in
- * both themes — AURA's control element. On top-level tabs it holds the four
- * icons (active = highlight round + vermilion dot); on subpages it MORPHS into
- * ‹ back · title, so the capsule is the only navigation chrome in the app.
- */
-@Composable
-private fun MonoBottomBar(
-    currentRoute: String?,
-    scheme: MonoScheme,
-    onSelect: (String) -> Unit,
-    onBack: () -> Unit,
-) {
-    val capsule = com.aura.aura_ui.ui.theme.Capsule.scheme()
-    val isTabLevel = currentRoute == null || bottomTabs.any { it.route == currentRoute }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 28.dp, vertical = 14.dp)
-            .navigationBarsPadding(),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(percent = 50),
-            color = capsule.capsule,
-            shadowElevation = 14.dp,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            androidx.compose.animation.AnimatedContent(
-                targetState = isTabLevel,
-                transitionSpec = { fadeIn(tween(Mono.MotionNormal)) togetherWith fadeOut(tween(Mono.MotionFast)) },
-                label = "capsuleMode",
-            ) { tabLevel ->
-                if (tabLevel) {
-                    CapsuleTabs(currentRoute = currentRoute, capsule = capsule, onSelect = onSelect)
-                } else {
-                    CapsuleContext(title = titleFor(currentRoute), capsule = capsule, onBack = onBack)
-                }
+            if (state is GateState.UpdateAvailable && state.updateUrl.isNotBlank() && !updateDismissed) {
+                UpdateDialog(state, onDismiss = { updateDismissed = true })
             }
-        }
     }
-}
-
-/** Subpage mode: ‹ back (left) · page title (center) · symmetry spacer (right). */
-@Composable
-private fun CapsuleContext(
-    title: String,
-    capsule: com.aura.aura_ui.ui.theme.CapsuleScheme,
-    onBack: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(58.dp)
-            .padding(horizontal = 7.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(Mono.ShapePill)
-                .background(Color.White.copy(alpha = 0.10f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onBack,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = capsule.onCapsule,
-                modifier = Modifier.size(19.dp),
-            )
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = capsule.onCapsule,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.size(44.dp))
     }
-}
-
-/** Top-level mode: the four tab icons with the sliding highlight. */
-@Composable
-private fun CapsuleTabs(
-    currentRoute: String?,
-    capsule: com.aura.aura_ui.ui.theme.CapsuleScheme,
-    onSelect: (String) -> Unit,
-) {
-    val selectedIndex = bottomTabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
-    BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp)
-                    .padding(horizontal = 7.dp, vertical = 7.dp),
-            ) {
-                val itemWidth = maxWidth / bottomTabs.size
-                val highlightX by animateDpAsState(
-                    targetValue = itemWidth * selectedIndex + (itemWidth - 44.dp) / 2,
-                    animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
-                    label = "navHighlight",
-                )
-
-                // Soft highlight round sliding under the active icon.
-                Box(
-                    modifier = Modifier
-                        .offset(x = highlightX)
-                        .size(44.dp)
-                        .clip(Mono.ShapePill)
-                        .background(Color.White.copy(alpha = 0.10f)),
-                )
-
-                Row(modifier = Modifier.fillMaxSize()) {
-                    bottomTabs.forEach { tab ->
-                        val selected = tab.route == currentRoute
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxSize()
-                                .clip(Mono.ShapePill)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) { onSelect(tab.route) },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-                        ) {
-                            Icon(
-                                imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                contentDescription = tab.label,
-                                tint = if (selected) capsule.onCapsule else capsule.onCapsuleDim,
-                                modifier = Modifier.size(21.dp),
-                            )
-                            Spacer(Modifier.height(3.dp))
-                            // The vermilion presence dot — the capsule's only color.
-                            Box(
-                                modifier = Modifier
-                                    .size(4.dp)
-                                    .clip(Mono.ShapePill)
-                                    .background(if (selected) capsule.accent else Color.Transparent),
-                            )
-                        }
-                    }
-                }
+        }
     }
 }

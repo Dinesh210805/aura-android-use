@@ -5,16 +5,15 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.aura.aura_ui.ui.theme.Mono
+import com.aura.aura_ui.ui.theme.LocalAura
 
-// ============================================================================
-// AURA SWITCH — the ONE toggle used everywhere (settings, permissions, prefs).
-//
-// iOS-green checked track (Mono.ToggleGreen) is the single sanctioned color
-// exception in the mono system: used ONLY as a switch's "on" fill, never as
-// content, canvas, or accent. Defined once so no two toggles drift.
-// ============================================================================
-
+/**
+ * The one switch in the app. On is the accent (ink in light, white in dark by default); off is a
+ * grey track.
+ *
+ * - Contract: null [onCheckedChange] is read-only; its colours match the enabled ones so a
+ *   locked-on switch still reads as on.
+ */
 @Composable
 fun AuraSwitch(
     checked: Boolean,
@@ -22,19 +21,23 @@ fun AuraSwitch(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val scheme = rememberMonoScheme()
+    val aura = LocalAura.current
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         enabled = enabled,
         modifier = modifier,
         colors = SwitchDefaults.colors(
-            checkedThumbColor = Color.White,
-            checkedTrackColor = Mono.ToggleGreen,
+            checkedThumbColor = aura.onAccent,
+            checkedTrackColor = aura.accent,
             checkedBorderColor = Color.Transparent,
             uncheckedThumbColor = Color.White,
-            uncheckedTrackColor = if (scheme.isDark) Mono.ToggleTrackOffDark else Mono.ToggleTrackOff,
-            uncheckedBorderColor = Color.Transparent,
+            uncheckedTrackColor = aura.well,
+            uncheckedBorderColor = aura.hairline,
+            disabledCheckedThumbColor = aura.onAccent,
+            disabledCheckedTrackColor = aura.accent.copy(alpha = 0.6f),
+            disabledUncheckedThumbColor = Color.White,
+            disabledUncheckedTrackColor = aura.well,
         ),
     )
 }

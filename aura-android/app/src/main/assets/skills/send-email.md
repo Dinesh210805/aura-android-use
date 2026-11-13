@@ -34,4 +34,4 @@ whenToUse: when the user asks to email someone or send a message/file by mail
    was ambiguous, ask_user. Then tap Send.
 
 6. perceive_screen once more to verify the message was sent (compose screen gone,
-   "Sent" toast or the inbox visible) before end_session.
+   "Sent" toast or the inbox visible) before you reply.

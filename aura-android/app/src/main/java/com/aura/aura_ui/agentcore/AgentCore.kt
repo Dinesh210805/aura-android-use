@@ -21,19 +21,24 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.aura.aura_ui.BuildConfig
 import com.aura.aura_ui.agent.AgentStreamEvent
+import com.aura.aura_ui.agent.AppLinksPreamble
 import com.aura.aura_ui.agent.DestructiveGoal
 import com.aura.aura_ui.agent.RunKeepAwake
 import com.aura.aura_ui.agent.hitl.AskUserAnswer
 import com.aura.aura_ui.agent.hitl.AskUserBroker
+import com.aura.aura_ui.agent.llm.ToolCallDebris
 import com.aura.aura_ui.agent.memory.profileBlockOrEmpty
 import com.aura.aura_ui.agent.readDeviceFacts
+import com.aura.aura_ui.agent.research.ResearchText
 import com.aura.aura_ui.agent.research.TaskResearch
 import com.aura.aura_ui.agent.research.WebResearch
 import com.aura.aura_ui.mcp.bridge.AppBrowserBridge
+import com.aura.aura_ui.mcp.bridge.AppDeepLinkBridge
 import com.aura.aura_ui.mcp.bridge.AppDeviceBridge
 import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
 import com.aura.aura_ui.notifications.AuraNotificationListenerService
 import com.aura.aura_ui.overlay.AuraOverlayService
+import com.aura.aura_ui.services.ControlLockStore
 import com.aura.mcp.server.SensitivePolicy
 import java.io.File
 import java.util.TimeZone
@@ -41,6 +46,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 
 /**
@@ -51,7 +58,8 @@ import kotlinx.coroutines.withContext
  *   phone's tool server connects on the first turn that lists tools.
  * - Reads/Writes: `agentcore.db`, `files/agentcore/` (skills, traces), prefs file [PREFS] for the
  *   always-on switch. Posts to notification channel [CHANNEL].
- * - Fails: with notifications denied, digests and scheduled results are dropped silently.
+ * - Fails: with notifications denied, a digest or a scheduled result is still saved as a chat
+ *   with a card; only the notification is missing.
  * - Change together: a new tool family is added to the hub's `sources` here and nowhere else.
  */
 class AgentCore private constructor(private val app: Context) {
@@ -64,6 +72,10 @@ class AgentCore private constructor(private val app: Context) {
     private val models = SavedSettingsModelProvider(app)
     private val keepAwake = RunKeepAwake(app)
     private val foregroundTurns = AtomicInteger()
+    private val lock = ControlLockStore.shared
+
+    /** "OnePlus Nord 4, Android 16". Read once: it is part of the system prompt, which must not change. */
+    private val deviceLine by lazy { readDeviceFacts(app).let { "${it.name}, Android ${it.androidRelease}" } }
 
     /** Threads whose running turn was started by the overlay or by voice; their questions go there. */
     private val surfaceThreads = ConcurrentHashMap.newKeySet<String>()
@@ -72,7 +84,7 @@ class AgentCore private constructor(private val app: Context) {
     val memory = MemoryStore(dao, installed = ::installedApp)
     val skills = SkillStore(File(root, "skills"))
     val jobs = JobStore(dao)
-    val telemetry = AgentTelemetry(File(root, "traces"), BuildConfig.VERSION_NAME)
+    val telemetry = AgentTelemetry(File(root, "traces"), BuildConfig.VERSION_NAME, keepDays = { LogKeep.days(app) })
     val broker = UserBroker { turn, question, options ->
         if (turn.threadId !in surfaceThreads) {
             null
@@ -93,6 +105,7 @@ class AgentCore private constructor(private val app: Context) {
         sources = { listOf(native, phone) + connectors.sources() },
         broker = broker,
         targetLabel = phone::targetLabel,
+        journal = telemetry.journal,
     )
 
     val engine = AgentEngine(
@@ -109,16 +122,33 @@ class AgentCore private constructor(private val app: Context) {
         research = ::research,
         refusal = { request -> DestructiveGoal.REFUSAL.takeIf { DestructiveGoal.isBulkDestruction(request) } },
         onTurn = ::onTurn,
+        deviceLine = { deviceLine },
+        preamble = ::preamble,
+        isPaused = { lock.isPausedByHuman },
+        // "drop it" clears the task it was paused on.
+        wasDropped = { lock.activeTask == null },
+        maxRequests = { ProviderKeyStore(app).run { getRunMaxRequests(getSelectedEndpointId()) } },
+        // Arms the pause-on-touch trigger and shows the overlay's Pause pill while AURA drives.
+        onDriving = { driving, request ->
+            if (driving) {
+                if (lock.activeTask == null) lock.noteTaskStarted(request)
+                lock.noteLocalRunStarted()
+                com.aura.aura_ui.services.AgentStatusRegistry.noteActing()
+            } else if (surfaceThreads.isEmpty()) {
+                // A run from the overlay or voice is finished by runTask, which owns the whole run.
+                lock.noteLocalRunFinished()
+            }
+        },
+        tidy = ToolCallDebris::clean,
     )
 
     val ambient = AmbientCoordinator(
         prefs = { TriagePrefs() },
         isSensitivePackage = { SensitivePolicy.screenPackage(it) is SensitivePolicy.Decision.Block },
-        notifyNow = { notify("${it.appLabel}: ${it.title.orEmpty()}", it.text.orEmpty(), it.key.hashCode()) },
-        notifyDigest = { notify(it.title, it.lines.joinToString("\n"), DIGEST_ID) },
+        notifyDigest = ::showDigest,
     )
 
-    private val jobRunner = JobRunner(engine, threads, jobs) { title, text, threadId -> notify(title, text, threadId.hashCode()) }
+    private val jobRunner = JobRunner(engine, threads, jobs) { title, text, threadId -> notify(title, text, threadId.hashCode(), threadId) }
 
     /** Whether AURA watches notifications and sends digests. Off until the user turns it on. */
     var alwaysOn: Boolean
@@ -155,10 +185,13 @@ class AgentCore private constructor(private val app: Context) {
         if (alwaysOn) ambient.onRemoved(key)
     }
 
-    /** Whether the overlay and the voice companion run on this agent instead of the one under `agent/`. */
-    var enabled: Boolean
-        get() = prefs.getBoolean(KEY_ENABLED, ENABLED_BY_DEFAULT)
-        set(value) = prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+    /**
+     * A new request from the chat is the user handing the phone back. A pause with no task left to
+     * protect is cleared, as the overlay does; a pause on an unfinished task is left alone.
+     */
+    fun releaseIdlePause() {
+        if (lock.isPausedByHuman && lock.activeTask == null) lock.resume()
+    }
 
     /** A request the chat handed to the overlay: the thread it belongs to and its exact text. */
     @Volatile
@@ -167,10 +200,9 @@ class AgentCore private constructor(private val app: Context) {
     /**
      * Whether a chat turn should hand screen work to the overlay, where the user sees the
      * transcript and can pause.
-     * - Contract: false when the overlay cannot be drawn or would run the other agent; the
-     *   chat then drives the screen itself.
+     * - Contract: false when the overlay cannot be drawn; the chat then drives the screen itself.
      */
-    fun handsOffScreen(): Boolean = enabled && Settings.canDrawOverlays(app)
+    fun handsOffScreen(): Boolean = Settings.canDrawOverlays(app)
 
     /**
      * Run [text] on the overlay as the continuation of the chat turn in [threadId].
@@ -194,34 +226,65 @@ class AgentCore private constructor(private val app: Context) {
      *   of each other share one thread, so "now send it to mom" has its context. A request made
      *   while a turn is running is handed to that turn. Questions the agent asks go to
      *   `AskUserBroker.shared`, which the overlay shows and the companion speaks.
+     *   With [remember] false (a benchmark or eval task) the request runs in a thread of its
+     *   own that is deleted afterwards, so one task never sees another's history.
+     * - Reads/Writes: `ControlLockStore`: marks a local run for its whole length, which arms
+     *   pause-on-touch and shows the Pause pill, and clears the active task when it ends.
      */
-    suspend fun runTask(text: String, onEvent: (AgentStreamEvent) -> Unit): String {
+    suspend fun runTask(text: String, remember: Boolean = true, onEvent: (AgentStreamEvent) -> Unit): String {
         val fromChat = handedOff?.takeIf { it.second == text }?.first
         handedOff = null
-        val threadId = fromChat ?: surfaceThread()
-        if (fromChat == null && engine.steer(threadId, text)) return "Okay, I'll take that into account."
+        val threadId = fromChat ?: if (remember) surfaceThread() else threads.create().id
+        if (fromChat == null && remember && engine.steer(threadId, text)) return "Okay, I'll take that into account."
         surfaceThreads += threadId
+        if (lock.activeTask == null) lock.noteTaskStarted(text)
+        // Before the run is marked, so the overlay's strip starts on "Thinking…".
+        com.aura.aura_ui.services.AgentStatusRegistry.startRun()
+        lock.noteLocalRunStarted()
         var answer: String? = null
+        var actions = 0
+        var failedActions = 0
+        val startedAtMs = System.currentTimeMillis()
         try {
             engine.runTurn(threadId, text, continuesHandOff = fromChat != null).collect { event ->
                 when (event) {
                     is AgentEvent.ToolStarted -> onEvent(AgentStreamEvent.ToolStarting(event.tool, event.argsPreview))
+                        .also {
+                            if (drivesPhone(event.tool)) {
+                                actions++
+                                // The task is acting now: "Thinking…" leaves the status strip.
+                                com.aura.aura_ui.services.AgentStatusRegistry.noteActing()
+                            }
+                        }
                     is AgentEvent.ToolFinished -> onEvent(
                         if (event.ok) {
                             AgentStreamEvent.ToolCompleted(event.tool, event.resultPreview)
                         } else {
                             AgentStreamEvent.ToolFailed(event.tool, event.resultPreview)
                         },
-                    )
+                    ).also { if (!event.ok && drivesPhone(event.tool)) failedActions++ }
                     is AgentEvent.TurnEnded -> answer = event.message
-                    is AgentEvent.AssistantText, is AgentEvent.PlanUpdated,
-                    is AgentEvent.TurnStarted, is AgentEvent.UserPromptRequested -> Unit
+                    is AgentEvent.AssistantText -> if (!event.final) onEvent(AgentStreamEvent.Narration(event.text))
+                    is AgentEvent.PlanUpdated -> onEvent(AgentStreamEvent.Plan(event.steps, event.done))
+                    is AgentEvent.Card, is AgentEvent.TurnStarted, is AgentEvent.UserPromptRequested -> Unit
                 }
             }
         } finally {
             surfaceThreads -= threadId
+            // A question still on screen belongs to a run that is over.
+            runCatching { AskUserBroker.shared.cancelAll() }
+            lock.noteLocalRunFinished()
+            if (!remember) withContext(NonCancellable) { runCatching { threads.delete(threadId) } }
         }
-        return (answer ?: "I couldn't finish that.").also { onEvent(AgentStreamEvent.Finished(it)) }
+        val reply = answer ?: "I couldn't finish that."
+        if (fromChat != null) {
+            com.aura.aura_ui.agent.OnDeviceReport.forTurn(
+                reply, failed = answer == null, cancelled = false, paused = false,
+                durationMs = System.currentTimeMillis() - startedAtMs, actions = actions, failedActions = failedActions,
+                trail = com.aura.aura_ui.services.StepPill.trail(),
+            )?.let { runCatching { threads.append(fromChat, ItemKind.CARD, reportCard(it).encode()) } }
+        }
+        return reply.also { onEvent(AgentStreamEvent.Finished(it)) }
     }
 
     /**
@@ -230,6 +293,27 @@ class AgentCore private constructor(private val app: Context) {
      *   can say so instead of a second task driving the phone alongside the first.
      */
     suspend fun steerRunning(text: String): Boolean = surfaceThreads.toList().any { engine.steer(it, text) }
+
+    private fun drivesPhone(tool: String) =
+        com.aura.mcp.server.McpToolScopes.requiredScopeFor(tool) == com.aura.mcp.bridge.McpScope.WRITE
+
+    /**
+     * The report of a run the chat handed to the overlay, as a card in that chat.
+     * - Change together: `RunReportOverlay.statusOf`, the same outcomes on the overlay card.
+     */
+    private fun reportCard(report: com.aura.aura_ui.services.RemoteRun.Report): ChatCard.Result {
+        val title = when (report.outcome) {
+            com.aura.aura_ui.services.RemoteRun.Outcome.DONE -> "Task complete"
+            com.aura.aura_ui.services.RemoteRun.Outcome.PARTIAL -> "Partly done"
+            com.aura.aura_ui.services.RemoteRun.Outcome.FAILED -> "Couldn't finish"
+            com.aura.aura_ui.services.RemoteRun.Outcome.STOPPED -> "Stopped"
+            com.aura.aura_ui.services.RemoteRun.Outcome.PAUSED -> "Paused"
+            com.aura.aura_ui.services.RemoteRun.Outcome.WENT_QUIET -> "Run ended"
+        }
+        val seconds = (report.durationMs / 1000).coerceAtLeast(1)
+        val steps = if (report.steps == 1) "1 step" else "${report.steps} steps"
+        return ChatCard.Result(title, report.recent.map { "• $it" }, source = "Report · ${seconds}s · $steps")
+    }
 
     private suspend fun surfaceThread(): String {
         val recent = prefs.getString(KEY_SURFACE_THREAD, null)?.let { threads.thread(it) }
@@ -268,8 +352,38 @@ class AgentCore private constructor(private val app: Context) {
         ).research(request, TaskResearch.launcherApps(app), readDeviceFacts(app))?.let { "${it.source}: ${it.text}" }
     }
 
-    /** Start the periodic worker. Safe to call on every app start. */
+    /**
+     * What the app itself knows that saves the model a step: the direct links AURA's catalog has
+     * for the app the request names, and the pages already open in AURA's browser.
+     * - Contract: trusted text only. Catalog entries ship in the APK (`deeplink_catalog.json`);
+     *   of a tab only its address is given, never its title, which the page controls.
+     * - Fails: returns null on anything.
+     */
+    private suspend fun preamble(request: String): String? = withContext(Dispatchers.IO) {
+        val links = runCatching {
+            ResearchText.matchApp(request, TaskResearch.launcherApps(app))?.let { target ->
+                val catalog = app.assets.open(AppDeepLinkBridge.CATALOG_ASSET).bufferedReader().use { it.readText() }
+                AppLinksPreamble.forApp(target.label, AppLinksPreamble.catalogEntries(catalog, target.packageName))
+            }
+        }.getOrNull()
+        val tabs = runCatching { AppBrowserBridge.shared(app).openTabsForPreamble() }.getOrNull().orEmpty()
+            .take(MAX_TABS)
+            .joinToString("\n") { (_, url, active) -> "- " + url.take(MAX_URL).replace(Regex("[<>\\s]"), "") + if (active) " (in front)" else "" }
+            .takeIf { it.isNotBlank() }
+            ?.let { "Pages already open in AURA's browser. Use one of these instead of opening it again:\n$it" }
+        listOfNotNull(links, tabs).joinToString("\n\n").takeIf { it.isNotBlank() }
+    }
+
+    /** A digest becomes a chat holding one card, and a notification that opens it. */
+    private suspend fun showDigest(digest: Digest) {
+        val thread = threads.create(digest.title)
+        threads.append(thread.id, ItemKind.CARD, ChatCard.Result(digest.title, digest.lines, "Notification digest").encode())
+        notify(digest.title, digest.lines.joinToString("\n"), DIGEST_ID, thread.id)
+    }
+
+    /** Start the periodic worker and install the bundled skills. Safe to call on every app start. */
     fun start() {
+        skills.seed(BUNDLED_SKILLS.associateWith { name -> { app.assets.open("skills/$name.md").bufferedReader().use { it.readText() } } })
         WorkManager.getInstance(app).enqueueUniquePeriodicWork(
             WORK,
             ExistingPeriodicWorkPolicy.KEEP,
@@ -309,12 +423,14 @@ class AgentCore private constructor(private val app: Context) {
         app.contentResolver.openInputStream(android.net.Uri.parse(file.uri))?.use { it.readBytes() }
     }.getOrNull()
 
-    private fun notify(title: String, text: String, id: Int) {
+    /** [threadId] is the chat the notification opens, or null to open the app as it was. */
+    private fun notify(title: String, text: String, id: Int, threadId: String? = null) {
         val manager = NotificationManagerCompat.from(app)
         if (!manager.areNotificationsEnabled()) return
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "AURA assistant", NotificationManager.IMPORTANCE_DEFAULT))
         val open = app.packageManager.getLaunchIntentForPackage(app.packageName)
-            ?.let { PendingIntent.getActivity(app, 0, it, PendingIntent.FLAG_IMMUTABLE) }
+            ?.apply { threadId?.let { putExtra(EXTRA_THREAD, it) } }
+            ?.let { PendingIntent.getActivity(app, id, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT) }
         val notification = NotificationCompat.Builder(app, CHANNEL)
             .setSmallIcon(app.applicationInfo.icon)
             .setContentTitle(title.take(MAX_TITLE))
@@ -329,8 +445,6 @@ class AgentCore private constructor(private val app: Context) {
     companion object {
         private const val PREFS = "agentcore"
         private const val KEY_ALWAYS_ON = "always_on"
-        private const val KEY_ENABLED = "use_for_overlay_and_voice"
-        private const val ENABLED_BY_DEFAULT = true
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
         private const val ASK_TIMEOUT_MS = 120_000L
@@ -340,6 +454,22 @@ class AgentCore private constructor(private val app: Context) {
         private const val MAX_TITLE = 60
         private const val MAX_TEXT = 1_000
         private const val MAX_ATTACHMENT_BYTES = 8L * 1024 * 1024
+        /**
+         * Skills in `assets/skills/` worth installing. `act-without-screen` is left out because its
+         * routes are in the system prompt, and `aura-skill` because it describes the other agent's tools.
+         */
+        private val BUNDLED_SKILLS = listOf("send-email", "whatsapp-message", "text-entry", "research-the-web")
+        private const val MAX_TABS = 6
+        private const val MAX_URL = 120
+        private const val EXTRA_THREAD = "agentcore_thread"
+
+        /** The chat a notification asked to open. The chat screen opens it and sets this back to null. */
+        val openThread = MutableStateFlow<String?>(null)
+
+        /** Call from `MainActivity` with every intent it is started or resumed with. */
+        fun noteLaunch(intent: Intent?) {
+            intent?.getStringExtra(EXTRA_THREAD)?.let { openThread.value = it }
+        }
 
         @Volatile
         private var instance: AgentCore? = null
@@ -353,10 +483,6 @@ class AgentCore private constructor(private val app: Context) {
          * - Why: the notification listener runs for every user; this keeps it from opening the
          *   agent's database for people who never enabled the feature.
          */
-        /** The core, only if the user switched the overlay and voice to it. Cheap to call on every run. */
-        fun ifEnabled(context: Context): AgentCore? =
-            if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, ENABLED_BY_DEFAULT)) get(context) else null
-
         fun ifAlwaysOn(context: Context): AgentCore? =
             if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ALWAYS_ON, false)) get(context) else null
     }

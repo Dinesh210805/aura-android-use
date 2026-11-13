@@ -243,6 +243,7 @@ object ModelCatalog {
             ReasoningInference.OPENAI_OSERIES -> openAiReasoning(id)
             ReasoningInference.GROQ_FAMILY -> groqReasoning(id)
             ReasoningInference.GEMINI_GENERATION -> geminiReasoning(id)
+            ReasoningInference.ANTHROPIC_FAMILY -> anthropicReasoning(id)
         }
 
     /** Whether thinking can be turned fully OFF for [id]. Only consulted when reasoning-capable. */
@@ -259,8 +260,21 @@ object ModelCatalog {
             }
             // OpenAI o-series / Groq gpt-oss+qwen3 always reason — no true off (chat API has none).
             ReasoningInference.OPENAI_OSERIES, ReasoningInference.GROQ_FAMILY -> false
+            // Claude thinks only when asked: off is the API default.
+            ReasoningInference.ANTHROPIC_FAMILY -> true
             ReasoningInference.NONE -> false
         }
+
+    /** Claude models with extended thinking: 3.7, and every model from generation 4 on. */
+    internal fun anthropicReasoning(id: String): Boolean {
+        val match = CLAUDE_VERSION.find(id.lowercase()) ?: return false
+        val major = match.groupValues[1].toIntOrNull() ?: return false
+        val minor = match.groupValues[2].toIntOrNull() ?: 0
+        return major >= 4 || (major == 3 && minor == 7)
+    }
+
+    /** "claude-3-7-sonnet", "claude-sonnet-4-5", "claude-opus-4-1-20250805": the family is optional. */
+    private val CLAUDE_VERSION = Regex("""claude-(?:[a-z]+-)?(\d+)(?:-(\d+))?""")
 
     /** Groq's reasoning models (verified on the live catalog): gpt-oss + qwen3 families. */
     internal fun groqReasoning(id: String): Boolean {

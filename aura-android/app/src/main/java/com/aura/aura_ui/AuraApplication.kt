@@ -21,6 +21,7 @@ class AuraApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.aura.aura_ui.ui.theme.AppearanceStore.hydrate(this)
         instance = this
         // Before anything can log an event: applies the diagnostics switch to Analytics/Crashlytics.
         com.aura.aura_ui.data.preferences.DiagnosticsStore.hydrate(this)
@@ -46,6 +47,11 @@ class AuraApplication : Application() {
         }
         appScope.launch {
             deviceRegistry.reportLaunch()
+        }
+        // Scheduled tasks and digests run from a periodic worker; enqueue it whichever way the
+        // process came up, not only when the chat screen is opened.
+        appScope.launch {
+            runCatching { com.aura.aura_ui.agentcore.AgentCore.get(this@AuraApplication).start() }
         }
         // Firebase's own anonymous per-install ID, attached as a custom key so it's
         // easy to eyeball alongside Analytics data. No new identifier is invented —

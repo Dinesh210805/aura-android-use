@@ -74,6 +74,7 @@ class MainActivity : FragmentActivity() {
          * invisible and the sweep silently stalls.
          */
         const val EXTRA_NAVIGATE_TO_EVAL = "NAVIGATE_TO_EVAL"
+        private const val EXTRA_OPEN_ROUTE = "OPEN_ROUTE"
         private const val EXTRA_REQUEST_SOURCE = "REQUEST_SOURCE"
         private const val EXTRA_FINISH_AFTER_PERMISSION = "FINISH_AFTER_PERMISSION"
         private const val REQUEST_SOURCE_SETTINGS = "settings"
@@ -259,6 +260,7 @@ class MainActivity : FragmentActivity() {
         }
 
         super.onCreate(savedInstanceState)
+        com.aura.aura_ui.agentcore.AgentCore.noteLaunch(intent)
 
         Log.d(TAG, "onCreate: Starting AURA UI")
         
@@ -327,6 +329,15 @@ class MainActivity : FragmentActivity() {
             Log.d(TAG, "Opening the eval cockpit to score the task that just finished")
             showAppShell(startDestination = AuraRoutes.EVAL_SUITE)
             return
+        }
+
+        // Debug builds: `am start ... --es OPEN_ROUTE settings` opens any page directly, for
+        // screenshots and UI checks without driving the phone (adb input pauses AURA).
+        if (BuildConfig.DEBUG) {
+            intent?.getStringExtra(EXTRA_OPEN_ROUTE)?.let { route ->
+                showAppShell(startDestination = route)
+                return
+            }
         }
 
         // Check if we should navigate to settings (from overlay settings button)
@@ -555,6 +566,9 @@ class MainActivity : FragmentActivity() {
     private fun showAppShell(startDestination: String = AuraRoutes.HOME) {
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Why: on 3-button navigation Android draws a white scrim behind the bar; the pages
+        // draw their own canvas there instead.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
         setContent {
             AuraUITheme {
                 Surface(
@@ -620,6 +634,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent) // Store the new intent
+        com.aura.aura_ui.agentcore.AgentCore.noteLaunch(intent)
 
         // OAuth redirect from a third-party MCP server's sign-in (Sub-project #2). MainActivity is
         // singleTask, so the aura://mcp/oauth callback usually arrives here, not in a fresh onCreate.
@@ -668,20 +683,6 @@ class MainActivity : FragmentActivity() {
             Log.d(TAG, "Plain relaunch while flagged in-settings — clearing stale flag to restore overlay")
             showingSettings = false
         }
-    }
-
-    override fun onStart() {
-        super.onStart()
-        // Pill lifecycle: the status chip renders only while the app is on
-        // screen (or an MCP client is connected / a flow is live) — see
-        // ChipVisibilityPolicy. Swiping the app away flips this false and the
-        // pill disappears while the keep-alive service lives on silently.
-        com.aura.aura_ui.services.AppVisibilityRegistry.set(true)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        com.aura.aura_ui.services.AppVisibilityRegistry.set(false)
     }
 
     override fun onResume() {

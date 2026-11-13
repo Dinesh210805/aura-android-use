@@ -66,8 +66,11 @@ import com.aura.aura_ui.presentation.utils.AuraHapticType
 import com.aura.aura_ui.presentation.utils.rememberHapticFeedback
 import com.aura.aura_ui.ui.theme.Mono
 import com.aura.aura_ui.ui.theme.MonoScheme
+import com.aura.aura_ui.voice.GeminiVoicePreview
 import com.aura.aura_ui.voice.LocalVoiceModels
 import com.aura.aura_ui.voice.LocalVoices
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 
 private const val PREFS_NAME = "aura_voice_settings"
@@ -334,6 +337,40 @@ private fun GeminiLiveTab(scheme: MonoScheme, companion: CompanionConfig) {
     val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     var selected by remember { mutableStateOf(companion.voice()) }
     val selectedVoice = GEMINI_LIVE_VOICES.firstOrNull { it.name == selected }
+    val apiKey = remember { companion.byokKey() }
+    val scope = rememberCoroutineScope()
+    var previewJob by remember { mutableStateOf<Job?>(null) }
+    var previewing by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var previewError by remember { mutableStateOf<String?>(null) }
+
+    // One preview at a time: a new tap cancels the old one, which stops its audio immediately.
+    fun stopPreview() {
+        previewJob?.cancel()
+        previewJob = null
+        previewing = null
+        loading = false
+    }
+    fun preview(voice: String) {
+        val key = apiKey ?: return
+        stopPreview()
+        previewError = null
+        previewing = voice
+        loading = true
+        previewJob = scope.launch {
+            try {
+                val ok = GeminiVoicePreview.play(context, key, voice) { loading = false }
+                if (!ok) previewError = "Couldn't load a preview of $voice. Check your connection or key quota."
+            } finally {
+                // Only the current preview may clear the state; a cancelled one finishes after its successor starts.
+                if (previewJob === coroutineContext.job) {
+                    previewing = null
+                    loading = false
+                }
+            }
+        }
+    }
+    DisposableEffect(Unit) { onDispose { previewJob?.cancel() } }
 
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         item {
@@ -346,11 +383,29 @@ private fun GeminiLiveTab(scheme: MonoScheme, companion: CompanionConfig) {
             MonoSectionLabel("Voice", scheme)
             MonoCardGroup(scheme) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = selected + (selectedVoice?.description?.let { " — $it" } ?: ""),
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                        color = scheme.textPrimary,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = selected + (selectedVoice?.description?.let { " — $it" } ?: ""),
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                            color = scheme.textPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        when {
+                            apiKey == null -> Unit
+                            previewing == selected && loading -> CircularProgressIndicator(
+                                modifier = Modifier.padding(12.dp).size(24.dp),
+                                strokeWidth = 3.dp,
+                                color = scheme.textPrimary,
+                            )
+                            else -> IconButton(onClick = { if (previewing == selected) stopPreview() else preview(selected) }) {
+                                Icon(
+                                    imageVector = if (previewing == selected) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                    contentDescription = if (previewing == selected) "Stop preview" else "Preview $selected",
+                                    tint = scheme.textPrimary,
+                                )
+                            }
+                        }
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -360,12 +415,21 @@ private fun GeminiLiveTab(scheme: MonoScheme, companion: CompanionConfig) {
                                 haptic(AuraHapticType.LIGHT)
                                 prefs.edit().putString(KEY_GEMINI_LIVE_VOICE, voice.name).apply()
                                 selected = voice.name
+                                preview(voice.name)
                             }
                         }
                     }
                 }
             }
-            Hint("Gemini voices play only inside a Live session; there is no offline preview.", scheme)
+            previewError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Mono.Blood, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) }
+            Hint(
+                if (apiKey == null) {
+                    "Add a Gemini key in Settings → API keys to hear voice previews."
+                } else {
+                    "Tap a voice to hear it. Each preview is fetched once with your key, then saved on the phone."
+                },
+                scheme,
+            )
             Spacer(Modifier.height(32.dp))
         }
     }

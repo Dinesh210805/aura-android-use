@@ -10,17 +10,17 @@ import com.aura.aura_ui.compat.OemCompat
 // ============================================================================
 // PERMISSION SYSTEM LAUNCHER — opens the correct Android settings page for a
 // SPECIAL-access permission (accessibility, overlay, notification-listener,
-// exact-alarms, battery, screen-capture). RUNTIME permissions are handled by
-// each screen's own ActivityResult launcher, not here.
+// exact-alarms, battery, keyboard), and App info for switching a RUNTIME
+// permission off. Turning a RUNTIME permission on uses each screen's own
+// ActivityResult launcher, not this.
 //
 // Shared by Settings and Permissions Health so the routing lives in one place.
 // ============================================================================
 
-/** Open the system page that grants [permission]. Screen-capture defers to [onScreenCapture]. */
+/** Open the system page that grants or revokes [permission]. */
 fun openPermissionSystemPage(
     context: Context,
     permission: AuraPermission,
-    onScreenCapture: () -> Unit,
 ) {
     val pkg = Uri.parse("package:${context.packageName}")
 
@@ -50,12 +50,8 @@ fun openPermissionSystemPage(
             } else {
                 null
             }
-        "screen_capture" -> {
-            onScreenCapture()
-            null
-        }
-        // RUNTIME perms never reach here; fall back to app details if an unknown
-        // special id appears.
+        // RUNTIME perms land here when switched off: App info is where the user
+        // revokes them (see PermissionToggleModel).
         else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
     }
     intent?.let {

@@ -531,7 +531,8 @@ private fun CopyableCode(
             shape = Capsule.ShapeChipWell,
             modifier = Modifier.fillMaxWidth().clickable {
                 copyToClipboard(context, clipLabel, text)
-                android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                // Android 13+ shows its own clipboard confirmation.
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
             },
         ) {
             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

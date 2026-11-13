@@ -197,7 +197,8 @@ private fun copyOrShare(context: Context, file: File) {
     if (file.length() <= CLIPBOARD_MAX) {
         val cm = context.getSystemService(ClipboardManager::class.java)
         cm?.setPrimaryClip(ClipData.newPlainText(file.name, file.readText()))
-        Toast.makeText(context, "Copied ${file.name}", Toast.LENGTH_SHORT).show()
+        // Android 13+ shows its own clipboard confirmation.
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied ${file.name}", Toast.LENGTH_SHORT).show()
         return
     }
     runCatching {

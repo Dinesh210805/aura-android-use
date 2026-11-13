@@ -4,8 +4,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="aura_mcp_trust.xml" />
+        <exclude domain="sharedpref" path="aura_secure_keys.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="aura_mcp_trust.xml" />
+        <exclude domain="sharedpref" path="aura_secure_keys.xml" />
     </device-transfer>
 </data-extraction-rules>

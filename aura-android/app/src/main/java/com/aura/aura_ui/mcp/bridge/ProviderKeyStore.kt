@@ -22,19 +22,19 @@ import kotlinx.serialization.json.Json
  * (`provider_key_groq`, …) exactly — a user upgrading keeps every saved key with zero migration.
  * Presets added later carry no such constraint; they simply must never collide with those five.
  *
- * Mirrors [TavilyKeyStore] exactly (AES-256 GCM via an Android-Keystore [MasterKey],
- * with a graceful plain-prefs fallback on ROMs with broken keystores) and shares
- * the same `aura_secure_keys` prefs file — only the key names differ, so provider
- * keys live alongside the Tavily/Exa keys without a second encrypted store.
+ * Mirrors [TavilyKeyStore] (AES-256 GCM via an Android-Keystore [MasterKey]) and shares the same
+ * `aura_secure_keys` prefs file — only the key names differ, so provider keys live alongside the
+ * Tavily key without a second encrypted store.
+ *
+ * - Fails: closed. When the Keystore cannot open the encrypted file, [setKey] refuses (returns
+ *   false) and [getKey] returns null, so a key is never written or read in plain text. The
+ *   selected provider and model, which are not secrets, still work.
+ * - Reads/Writes: `aura_secure_keys.xml`, excluded from backups (`backup_rules.xml`,
+ *   `data_extraction_rules.xml`): a restored copy could not be decrypted on another phone.
  */
 class ProviderKeyStore(context: Context) {
 
-    /**
-     * B2 — whether the API keys are actually at-rest encrypted. False means the Keystore was broken
-     * and we fell back to plaintext prefs; the Settings UI should warn the user (their provider keys
-     * are stored in the clear) rather than reporting silent success. Failing closed is wrong here —
-     * it would make the app unusable on a broken ROM — so keys are still stored, but not silently.
-     */
+    /** Whether keys can be stored: false when the Keystore is broken on this phone. */
     val isEncrypted: Boolean
 
     private val prefs: SharedPreferences
@@ -61,10 +61,13 @@ class ProviderKeyStore(context: Context) {
 
     /** Per-endpoint API key. Returns null when the user has not configured one. */
     fun getKey(endpointId: String): String? =
-        prefs.getString(keyNameFor(endpointId), null)?.takeIf { it.isNotBlank() }
+        if (!isEncrypted) null else prefs.getString(keyNameFor(endpointId), null)?.takeIf { it.isNotBlank() }
 
-    fun setKey(endpointId: String, value: String) {
+    /** Stores [value] encrypted. False, and nothing written, when encryption is unavailable. */
+    fun setKey(endpointId: String, value: String): Boolean {
+        if (!isEncrypted) return false
         prefs.edit().putString(keyNameFor(endpointId), value.trim()).apply()
+        return true
     }
 
     fun clearKey(endpointId: String) {
@@ -130,6 +133,41 @@ class ProviderKeyStore(context: Context) {
     }
 
     /**
+     * Saves [modelId] as the model for [endpointId], with the facts its `/models` listing gave.
+     *
+     * - Contract: [info] null (the listing was never fetched) clears the context window and the
+     *   vision flag to "unknown" rather than leaving the previous model's numbers behind.
+     * - Change together: `ProviderSettingsScreen` and the chat's model sheet both save through here.
+     */
+    fun saveModelChoice(endpointId: String, modelId: String, info: com.aura.aura_ui.agent.llm.ModelInfo?) {
+        setSelectedModel(endpointId, modelId)
+        setSelectedModelContextWindow(endpointId, info?.contextWindow)
+        setSelectedModelVisionCapable(endpointId, info?.visionCapable)
+        prefs.edit().apply {
+            if (info != null) {
+                putBoolean(keyThinksFor(endpointId), info.reasoningCapable)
+                putBoolean(keyThinkOffFor(endpointId), info.canDisableThinking)
+            } else {
+                remove(keyThinksFor(endpointId))
+                remove(keyThinkOffFor(endpointId))
+            }
+        }.apply()
+    }
+
+    /**
+     * Whether the selected model can think, as its listing said; null when the listing was never
+     * read, in which case `ThinkingSupport` falls back to its id rules. Stored for the same reason
+     * as [getSelectedModelVisionCapable]: OpenRouter's `supported_parameters` is exact and only in
+     * hand at selection time.
+     */
+    fun getSelectedModelReasoning(endpointId: String): Boolean? =
+        keyThinksFor(endpointId).takeIf(prefs::contains)?.let { prefs.getBoolean(it, false) }
+
+    /** Whether the selected model can turn thinking off; null when unknown. See [getSelectedModelReasoning]. */
+    fun getSelectedModelCanDisableThinking(endpointId: String): Boolean? =
+        keyThinkOffFor(endpointId).takeIf(prefs::contains)?.let { prefs.getBoolean(it, false) }
+
+    /**
      * The per-endpoint generation controls (thinking level + temperature, D2 piece 2). Absent or
      * corrupt storage decodes to [GenerationConfig] defaults — so an upgrading user, or one who
      * never opened the controls, drives the agent with a byte-identical request to before.
@@ -178,6 +216,8 @@ class ProviderKeyStore(context: Context) {
         fun keyGenFor(endpointId: String) = "provider_gen_$endpointId"
         fun keyCtxFor(endpointId: String) = "provider_ctx_$endpointId"
         fun keyVisionFor(endpointId: String) = "provider_vision_$endpointId"
+        fun keyThinksFor(endpointId: String) = "provider_thinks_$endpointId"
+        fun keyThinkOffFor(endpointId: String) = "provider_think_off_$endpointId"
         fun keyRunCapFor(endpointId: String) = "provider_runcap_$endpointId"
 
         /**

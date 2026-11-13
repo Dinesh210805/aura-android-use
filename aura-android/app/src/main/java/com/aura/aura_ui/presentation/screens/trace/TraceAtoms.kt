@@ -536,7 +536,8 @@ internal fun GridZoomDialog(raw: String, onDismiss: () -> Unit) {
                         .clip(CircleShape)
                         .clickable {
                             clipboard.setText(AnnotatedString(raw))
-                            Toast.makeText(context, "screen copied", Toast.LENGTH_SHORT).show()
+                            // Android 13+ shows its own clipboard confirmation.
+                            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "screen copied", Toast.LENGTH_SHORT).show()
                         }
                         .padding(6.dp)
                         .size(22.dp),
@@ -568,7 +569,8 @@ internal fun CopyButton(raw: String, label: String, scheme: MonoScheme) {
             .clip(CircleShape)
             .clickable {
                 clipboard.setText(AnnotatedString(raw))
-                Toast.makeText(context, "$label copied", Toast.LENGTH_SHORT).show()
+                // Android 13+ shows its own clipboard confirmation.
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "$label copied", Toast.LENGTH_SHORT).show()
             }
             .padding(4.dp)
             .size(16.dp),

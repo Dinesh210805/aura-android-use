@@ -18,8 +18,8 @@ import kotlinx.serialization.json.longOrNull
  * what is on my calendar").
  *
  * - Contract: a scheduled run is a [RunMode.BACKGROUND] turn in its own thread, so it can read
- *   but never tap, send or change anything. Its answer becomes a notification, unless the answer
- *   is [SILENT]. Creating a schedule always asks the user.
+ *   but never tap, send or change anything. Its answer becomes a notification and a chat
+ *   holding one result card, unless the answer is [SILENT]. Creating a schedule always asks the user.
  * - Fails: a run that fails is recorded on the job and tried again at its next slot. The worker
  *   runs about every 15 minutes, so a job fires up to that late.
  * - Reads/Writes: table `jobs` in `agentcore.db`.
@@ -100,7 +100,14 @@ class JobRunner(
                     .filterIsInstance<AgentEvent.TurnEnded>().lastOrNull()?.message
             }.getOrNull()
             jobs.finished(job, answer)
-            if (answer.isNullOrBlank() || Schedule.SILENT in answer) threads.delete(thread.id) else notify(thread.title, answer, thread.id)
+            if (answer.isNullOrBlank() || Schedule.SILENT in answer) {
+                threads.delete(thread.id)
+            } else {
+                // The chat shows the result as one card; the model's context for follow-up questions is kept.
+                threads.clearItems(thread.id)
+                threads.append(thread.id, ItemKind.CARD, ChatCard.Result(job.prompt, answer.lines().filter { it.isNotBlank() }, "Scheduled task").encode())
+                notify(thread.title, answer, thread.id)
+            }
         }
     }
 

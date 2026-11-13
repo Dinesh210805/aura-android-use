@@ -1,6 +1,10 @@
 package com.aura.aura_ui.presentation.overlay
 
+import android.animation.ValueAnimator
 import android.content.Context
+import android.os.SystemClock
+import kotlin.math.PI
+import kotlin.math.sin
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
@@ -113,16 +117,47 @@ internal class BeatIconView(context: Context, private val ink: Int, private val 
                 canvas.drawRoundRect(oval, s * 0.06f, s * 0.06f, fill)
             }
             // Busy: three dots.
-            Kind.WORK -> {
-                val r = s * 0.07f
-                canvas.drawCircle(s * 0.26f, c, r, fill)
-                canvas.drawCircle(c, c, r, fill)
-                canvas.drawCircle(s * 0.74f, c, r, fill)
-            }
+            Kind.WORK -> drawBusyDots(canvas, s, c)
         }
+    }
+
+    /**
+     * Three dots in a slow wave: each one rises a little and brightens in turn.
+     *
+     * - Contract: redraws itself every frame only while [kind] is [Kind.WORK] and the view is on
+     *   screen; any other kind, a hidden view or "Remove animations" draws still dots.
+     * - Why so small (rise of 12% of the icon, 1.2 s loop): it sits beside a line of text and must
+     *   read as "alive", not pull the eye off the words.
+     */
+    private fun drawBusyDots(canvas: Canvas, s: Float, c: Float) {
+        val r = s * 0.075f
+        val animate = isShown && ValueAnimator.areAnimatorsEnabled()
+        val t = if (animate) (SystemClock.uptimeMillis() % LOOP_MS) / LOOP_MS.toFloat() else -1f
+        val baseAlpha = fill.alpha
+        DOT_X.forEachIndexed { i, x ->
+            // 0..1 bump that travels across the dots; flat for the rest of the loop.
+            val phase = if (t < 0f) 0f else ((t - i * DOT_STAGGER + 1f) % 1f)
+            val bump = if (phase < BUMP_SPAN) sin(phase / BUMP_SPAN * PI).toFloat() else 0f
+            fill.alpha = (baseAlpha * (MIN_ALPHA + (1f - MIN_ALPHA) * (if (t < 0f) 1f else bump))).toInt()
+            canvas.drawCircle(s * x, c - bump * s * RISE, r, fill)
+        }
+        fill.alpha = baseAlpha
+        if (animate) postInvalidateOnAnimation()
+    }
+
+    /** Restart the wave when the strip comes back (it is hidden for every screenshot). */
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility == VISIBLE && kind == Kind.WORK) invalidate()
     }
 
     private companion object {
         const val SIZE_DP = 16
+        const val LOOP_MS = 1_200L
+        const val DOT_STAGGER = 0.15f
+        const val BUMP_SPAN = 0.45f
+        const val RISE = 0.12f
+        const val MIN_ALPHA = 0.4f
+        val DOT_X = floatArrayOf(0.26f, 0.5f, 0.74f)
     }
 }

@@ -8,58 +8,63 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material.icons.rounded.Check
+import com.aura.aura_ui.agent.llm.ThinkingSupport
+import com.aura.aura_ui.agent.llm.ReasoningLevel
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,43 +72,94 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import com.aura.aura_ui.agent.llm.LlmEndpoint
+import com.aura.aura_ui.agent.llm.LlmEndpointCatalog
+import com.aura.aura_ui.agent.llm.ModelCatalog
+import com.aura.aura_ui.agent.llm.ModelInfo
+import com.aura.aura_ui.agent.memory.EncryptedJsonStore
+import com.aura.aura_ui.mcp.bridge.CustomEndpointStore
+import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
+import com.aura.aura_ui.presentation.components.AuraMark
+import com.aura.aura_ui.presentation.navigation.AuraRoutes
+import com.aura.aura_ui.presentation.screens.home.AppPromptMarquee
+import com.aura.aura_ui.ui.theme.AuraShape
+import com.aura.aura_ui.ui.theme.AuraType
+import com.aura.aura_ui.ui.theme.Capsule
+import com.aura.aura_ui.ui.theme.LocalAura
+import com.aura.aura_ui.ui.theme.LocalHaze
+import com.aura.aura_ui.ui.theme.glass
+import com.aura.aura_ui.ui.theme.auraBackground
+import com.aura.aura_ui.ui.theme.auraCard
+import com.aura.aura_ui.ui.theme.auraCardStrong
+import com.aura.aura_ui.ui.theme.rememberBitmap
+import com.google.firebase.auth.FirebaseAuth
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import java.net.URL
+import java.time.LocalTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+
+/** A provider the user has set up, with the model saved for it. */
+data class ModelChoice(val endpointId: String, val provider: String, val model: String, val selected: Boolean)
+
+/** The selected provider's models, as its `/models` listing returned them. */
+/** The thinking menu for the selected model: the levels it accepts, in order, and the saved one. */
+data class Thinking(val levels: List<ReasoningLevel>, val current: ReasoningLevel)
+
+data class Catalog(val endpointId: String, val models: List<ModelInfo>, val loading: Boolean, val error: String? = null)
+
+/** The signed-in Google account, as far as the chat shows it. All null when signed out. */
+data class Profile(val name: String? = null, val email: String? = null, val photoUrl: String? = null) {
+    val firstName: String? get() = name?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }
+}
 
 /**
- * The chat screen for the agent core: a drawer with past chats and the agent's panels (scheduled
- * tasks, connections, run log), the conversation, questions from the agent, attachments and stop.
+ * State for the chat screen: the open thread, the running turn, and the model in use.
  *
- * - Contract: the screen holds no agent logic. It renders `ThreadStore` rows and forwards the
- *   user's actions to [AgentEngine], [UserBroker], [JobStore] and [ConnectorStore]. Sending while
- *   a turn is running steers that turn instead of starting a second one.
- * - Why plain Material components: this is the working surface for the new agent. Restyle it
- *   with the app's own components before it is the default for every user.
- * - Change together: the route and the drawer links are set up in `AuraAppShell.kt`.
+ * - Contract: holds no agent logic. It forwards the user's actions to [AgentEngine] and
+ *   [UserBroker]. Sending while a turn is running steers that turn instead of starting a second
+ *   one. It is the only collector of `AgentCore.openThread`, so a notification tap opens its chat.
+ * - Reads/Writes: `ProviderKeyStore` (the selected provider and its model).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val core = AgentCore.get(app)
+    private val keys = ProviderKeyStore(app)
     private val threadId = MutableStateFlow<String?>(null)
     private var turn: Job? = null
 
@@ -116,55 +172,97 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     val running = MutableStateFlow(false)
     val status = MutableStateFlow<String?>(null)
     val plan = MutableStateFlow<AgentEvent.PlanUpdated?>(null)
-    val alwaysOn = MutableStateFlow(core.alwaysOn)
-    val enabled = MutableStateFlow(core.enabled)
-    val connectors = MutableStateFlow(core.connectors.configs())
-    val connectorStatus = MutableStateFlow<String?>(null)
-    val jobs = MutableStateFlow(emptyList<JobRow>())
-    val log = MutableStateFlow(emptyList<RunLog>())
+    val models = MutableStateFlow(emptyList<ModelChoice>())
+    val catalog = MutableStateFlow<Catalog?>(null)
+    val profile = MutableStateFlow(Profile())
+
+    /** Null when the selected model has no thinking control, which hides the menu. */
+    val thinking = MutableStateFlow<Thinking?>(null)
 
     init {
-        core.start()
+        refresh()
+        // A notification for a scheduled task or a digest opens its chat.
+        viewModelScope.launch {
+            AgentCore.openThread.filterNotNull().collect { id ->
+                open(id)
+                AgentCore.openThread.value = null
+            }
+        }
     }
 
-    fun setAlwaysOn(on: Boolean) {
-        core.alwaysOn = on
-        alwaysOn.value = on
+    /** Re-read what another screen may have changed: the provider, the model, the account. */
+    fun refresh() = viewModelScope.launch {
+        models.value = withContext(Dispatchers.IO) { runCatching { modelChoices() }.getOrDefault(emptyList()) }
+        thinking.value = withContext(Dispatchers.IO) { runCatching { thinkingNow() }.getOrNull() }
+        profile.value = runCatching {
+            FirebaseAuth.getInstance().currentUser?.takeIf { !it.isAnonymous }
+                ?.let { Profile(it.displayName, it.email, it.photoUrl?.toString()) }
+        }.getOrNull() ?: Profile()
     }
 
-    fun setEnabled(on: Boolean) {
-        core.enabled = on
-        enabled.value = on
+    private fun endpoints(): List<LlmEndpoint> {
+        val custom = CustomEndpointStore(EncryptedJsonStore(getApplication(), CustomEndpointStore.STORE_NAME)).allEndpoints()
+        return (LlmEndpointCatalog.BUILTINS + custom).distinctBy { it.id }
     }
 
-    fun loadJobs() = viewModelScope.launch { jobs.value = core.jobs.list() }
-
-    /** [whenText] is a time of day ("08:30") or a number of minutes between runs. */
-    fun addJob(prompt: String, whenText: String) = viewModelScope.launch {
-        val daily = Schedule.parseDailyAt(whenText)
-        core.jobs.add(prompt.trim(), if (daily == null) whenText.trim().toIntOrNull() else null, daily)
-        loadJobs()
+    private fun modelChoices(): List<ModelChoice> {
+        val selected = keys.getSelectedEndpointId()
+        return endpoints().mapNotNull { endpoint ->
+            if (endpoint.requiresKey && !keys.isConfigured(endpoint.id)) return@mapNotNull null
+            val model = keys.getSelectedModel(endpoint.id) ?: endpoint.defaultModelId.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            ModelChoice(endpoint.id, endpoint.displayName, model, endpoint.id == selected)
+        }
     }
 
-    fun cancelJob(id: Long) = viewModelScope.launch {
-        core.jobs.cancel(id)
-        loadJobs()
+    /**
+     * The selected model's thinking levels ([ThinkingSupport.levelsFor]) and the saved level, clamped
+     * to them. Reads the facts its listing gave at selection, so OpenRouter's exact flag wins.
+     */
+    private fun thinkingNow(): Thinking? {
+        val id = keys.getSelectedEndpointId()
+        val endpoint = endpoints().firstOrNull { it.id == id } ?: return null
+        val model = keys.getSelectedModel(id) ?: endpoint.defaultModelId.ifBlank { return null }
+        val levels = ThinkingSupport.levelsFor(endpoint, model, keys.getSelectedModelReasoning(id), keys.getSelectedModelCanDisableThinking(id))
+        if (levels.size < 2) return null
+        return Thinking(levels, ThinkingSupport.clamp(keys.getGeneration(id).reasoning, levels))
     }
 
-    fun loadLog() = viewModelScope.launch { log.value = withContext(Dispatchers.IO) { core.telemetry.recent() } }
+    /**
+     * Saves [level] for the selected provider. Settings → Model reads the same value, and the next
+     * request uses it: the agent resolves the model at the start of every turn.
+     */
+    fun setThinking(level: ReasoningLevel) {
+        val id = keys.getSelectedEndpointId()
+        keys.setGeneration(id, keys.getGeneration(id).copy(reasoning = level))
+        thinking.value = thinking.value?.copy(current = level)
+    }
 
-    fun addConnector(name: String, url: String, token: String) = viewModelScope.launch {
-        connectorStatus.value = "Connecting"
-        connectorStatus.value = core.connectors.add(name, url, token.ifBlank { null }).fold(
-            onSuccess = { "$it tools approved. A tool that changes later stays hidden until you connect again." },
-            onFailure = { it.message ?: "Could not connect." },
+    /** Use another provider that is already set up. The model sheet then lists its models. */
+    fun pickProvider(choice: ModelChoice) {
+        keys.setSelectedEndpointId(choice.endpointId)
+        refresh()
+    }
+
+    /**
+     * Lists [endpointId]'s models from its `/models` endpoint.
+     * - Fails: on a network or key error the list holds only the saved model, with the error.
+     */
+    fun loadCatalog(endpointId: String = keys.getSelectedEndpointId()) = viewModelScope.launch {
+        val endpoint = withContext(Dispatchers.IO) { endpoints().firstOrNull { it.id == endpointId } } ?: return@launch
+        val saved = keys.getSelectedModel(endpointId) ?: endpoint.defaultModelId
+        val fallback = listOfNotNull(saved.takeIf { it.isNotBlank() }?.let { ModelInfo(it, keys.getSelectedModelVisionCapable(endpointId) ?: true) })
+        if (catalog.value?.endpointId != endpointId || catalog.value?.error != null) catalog.value = Catalog(endpointId, fallback, loading = true)
+        val result = ModelCatalog.fetch(endpoint, keys.getKey(endpointId).orEmpty())
+        catalog.value = result.fold(
+            onSuccess = { list -> Catalog(endpointId, list.sortedWith(compareByDescending<ModelInfo> { it.visionCapable }.thenBy { it.id }), loading = false) },
+            onFailure = { error -> Catalog(endpointId, fallback, loading = false, error = (error as? ModelCatalog.ModelFetchError)?.userMessage ?: "Could not list the models.") },
         )
-        connectors.value = core.connectors.configs()
     }
 
-    fun removeConnector(id: String) = viewModelScope.launch {
-        core.connectors.remove(id)
-        connectors.value = core.connectors.configs()
+    /** Saves [model] for the selected provider, with its context window and vision flag. */
+    fun chooseModel(model: ModelInfo) {
+        keys.saveModelChoice(keys.getSelectedEndpointId(), model.id, model)
+        refresh()
     }
 
     fun open(id: String?) {
@@ -172,12 +270,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         plan.value = null
     }
 
-    fun delete(id: String) = viewModelScope.launch {
-        if (threadId.value == id) open(null)
-        core.threads.delete(id)
-    }
-
     fun answer(promptId: String, answer: String?) = core.broker.answer(promptId, answer)
+
+    /** A tap on a "which one?" card: answers the open question, or is sent as a message. */
+    fun pick(name: String) {
+        val waiting = prompts.value.firstOrNull { !it.isConfirm }
+        if (waiting != null) answer(waiting.id, name) else send(name, emptyList())
+    }
 
     fun stop() {
         turn?.cancel()
@@ -188,6 +287,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val id = threadId.value ?: core.threads.create().id.also { threadId.value = it }
             if (running.value && core.engine.steer(id, text)) return@launch
+            core.releaseIdlePause()
             turn = launch {
                 running.value = true
                 try {
@@ -195,12 +295,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     turn.collect { event ->
                         when (event) {
                             is AgentEvent.TurnStarted -> status.value = "Thinking"
-                            is AgentEvent.ToolStarted -> status.value = event.tool.replace('_', ' ')
+                            is AgentEvent.ToolStarted -> status.value = StepPhrase.of(event.tool, event.argsPreview, null)
                             is AgentEvent.ToolFinished -> status.value = "Thinking"
                             is AgentEvent.PlanUpdated -> plan.value = event
                             // Work on the screen happens on the overlay, where it can be watched and paused.
                             is AgentEvent.TurnEnded -> if (event.end == TurnEnd.HANDED_OFF) core.handOff(id, text)
-                            is AgentEvent.AssistantText, is AgentEvent.UserPromptRequested -> Unit
+                            is AgentEvent.AssistantText, is AgentEvent.Card, is AgentEvent.UserPromptRequested -> Unit
                         }
                     }
                 } finally {
@@ -226,22 +326,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }.getOrNull()
 }
 
-private enum class Panel(val title: String) { SCHEDULES("Scheduled tasks"), CONNECTIONS("Connections"), LOG("Run log") }
-
 /**
- * @param links other places in the app, as label to route, listed at the bottom of the drawer.
- * @param onVoice opens the voice overlay; null hides the mic button.
- * @param onAgentSwitch told when the user turns "use for voice and the overlay" on or off.
+ * The chat with AURA: a drawer (places in the app and recent chats), the conversation with its
+ * cards, and a glass composer with dictation, the model sheet and the voice button.
+ *
+ * - Contract: no agent logic here or in the files it draws with (`ChatCards.kt`,
+ *   `ChatDrawer.kt`, `ModelSheet.kt`, `Dictation.kt`); colours and type come from
+ *   `ui/theme/AuraTheme.kt`.
+ * - Change together: the routes the drawer opens are registered in `AuraAppShell.kt`.
+ *
+ * @param onVoice opens the voice overlay; null hides the voice button.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AgentChatScreen(
-    links: List<Pair<String, String>> = emptyList(),
     onNavigate: (route: String) -> Unit = {},
     onVoice: (() -> Unit)? = null,
-    onAgentSwitch: (Boolean) -> Unit = {},
     vm: ChatViewModel = viewModel(),
 ) {
+    val aura = LocalAura.current
     val threads by vm.threads.collectAsState()
     val current by vm.current.collectAsState()
     val items by vm.items.collectAsState()
@@ -249,436 +351,646 @@ fun AgentChatScreen(
     val running by vm.running.collectAsState()
     val status by vm.status.collectAsState()
     val plan by vm.plan.collectAsState()
-    var panel by remember { mutableStateOf<Panel?>(null) }
+    val profile by vm.profile.collectAsState()
+    var draft by rememberSaveable { mutableStateOf("") }
+    var modelsOpen by remember { mutableStateOf(false) }
+    val composerFocus = remember { FocusRequester() }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val list = rememberLazyListState()
 
-    LaunchedEffect(items.size) { if (items.isNotEmpty()) list.animateScrollToItem(items.lastIndex) }
+    // The model or the account may have been changed on another screen.
+    LaunchedEffect(Unit) { vm.refresh() }
 
     ModalNavigationDrawer(
         drawerState = drawer,
+        scrimColor = Color.Black.copy(alpha = 0.32f),
         drawerContent = {
-            ModalDrawerSheet {
-                Drawer(
+            // Leaves a strip of the chat showing, as ChatGPT does, on any screen width.
+            ModalDrawerSheet(
+                modifier = Modifier.fillMaxWidth(DRAWER_FRACTION).widthIn(max = DRAWER_MAX),
+                drawerContainerColor = aura.surfaceStrong,
+                drawerContentColor = aura.label,
+                windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+            ) {
+                ChatDrawer(
                     vm = vm,
                     threads = threads,
                     current = current,
-                    links = links,
-                    onPanel = { panel = it },
                     onNavigate = onNavigate,
-                    onAgentSwitch = onAgentSwitch,
                     close = { scope.launch { drawer.close() } },
                 )
             }
         },
     ) {
-        Column(Modifier.fillMaxSize().imePadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, contentDescription = "Chats and tools") }
-                Text(
-                    threads.firstOrNull { it.id == current }?.title ?: "AURA",
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                IconButton(onClick = { vm.open(null) }) { Icon(Icons.Default.Add, contentDescription = "New chat") }
-            }
-
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (items.isEmpty()) {
-                    item {
-                        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("What can I do for you?", style = MaterialTheme.typography.headlineSmall)
-                            Text(
-                                "Ask a question, hand over a task on this phone, set a reminder, or attach a file.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+        val phoneAccess = rememberPhoneAccess()
+        // The content scrolls behind the top bar and the composer, which blur it (LocalHaze).
+        val haze = rememberHazeState()
+        val density = LocalDensity.current
+        var topPx by remember { mutableIntStateOf(0) }
+        var bottomPx by remember { mutableIntStateOf(0) }
+        val insets = PaddingValues(top = with(density) { topPx.toDp() } + 8.dp, bottom = with(density) { bottomPx.toDp() } + 8.dp)
+        CompositionLocalProvider(LocalHaze provides haze) {
+            Box(Modifier.fillMaxSize().background(aura.canvas).imePadding()) {
+                Box(Modifier.fillMaxSize().hazeSource(haze).auraBackground()) {
+                    if (items.isEmpty()) {
+                        Welcome(profile.firstName, Modifier.fillMaxSize().padding(insets), onPrompt = { draft = it })
+                    } else {
+                        Transcript(items, vm::pick, insets, Modifier.fillMaxSize())
                     }
                 }
-                items(items, key = { it.rowid }) { ChatRow(it) }
-            }
-
-            AnimatedVisibility(plan != null) { plan?.let { PlanCard(it) } }
-            AnimatedVisibility(prompts.isNotEmpty()) { prompts.firstOrNull()?.let { PromptCard(it, vm::answer) } }
-            AnimatedVisibility(running) {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(status.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TopBar(
+                    title = threads.firstOrNull { it.id == current }?.title.takeIf { items.isNotEmpty() },
+                    profile = profile,
+                    onMenu = { scope.launch { drawer.open() } },
+                    onNewChat = { vm.open(null) }.takeIf { current != null },
+                    onProfile = { onNavigate(AuraRoutes.SETTINGS) },
+                    modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { topPx = it.height },
+                )
+                // Floats under the top bar, so it moves nothing when it appears or goes.
+                AnimatedVisibility(
+                    !phoneAccess,
+                    Modifier.align(Alignment.TopCenter).padding(top = with(density) { topPx.toDp() }),
+                ) { AccessChip() }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().onSizeChanged { bottomPx = it.height }) {
+                    AnimatedVisibility(plan != null && running) { plan?.let { PlanCard(it) } }
+                    AnimatedVisibility(prompts.isNotEmpty()) {
+                        prompts.firstOrNull()?.let { prompt ->
+                            PromptCard(prompt, vm::answer, onEdit = {
+                                draft = "Change it: "
+                                runCatching { composerFocus.requestFocus() }
+                            })
+                        }
+                    }
+                    AnimatedVisibility(running) { StatusLine(status.orEmpty()) }
+                    Composer(
+                        text = draft,
+                        onText = { draft = it },
+                        running = running,
+                        focus = composerFocus,
+                        vm = vm,
+                        onVoice = onVoice,
+                        onModels = { modelsOpen = true },
+                    )
                 }
             }
-            InputBar(running = running, onSend = vm::send, onStop = vm::stop, onVoice = onVoice)
         }
     }
 
-    panel?.let { open ->
-        ModalBottomSheet(onDismissRequest = { panel = null }) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(open.title, style = MaterialTheme.typography.titleMedium)
-                when (open) {
-                    Panel.SCHEDULES -> SchedulesPanel(vm)
-                    Panel.CONNECTIONS -> ConnectionsPanel(vm)
-                    Panel.LOG -> LogPanel(vm)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Drawer(
-    vm: ChatViewModel,
-    threads: List<ThreadRow>,
-    current: String?,
-    links: List<Pair<String, String>>,
-    onPanel: (Panel) -> Unit,
-    onNavigate: (String) -> Unit,
-    onAgentSwitch: (Boolean) -> Unit,
-    close: () -> Unit,
-) {
-    val alwaysOn by vm.alwaysOn.collectAsState()
-    val enabled by vm.enabled.collectAsState()
-    LazyColumn(Modifier.fillMaxSize().padding(vertical = 12.dp)) {
-        item {
-            DrawerRow("New chat", bold = true) {
-                vm.open(null)
-                close()
-            }
-        }
-        items(threads, key = { it.id }) { thread ->
-            Row(
-                Modifier.fillMaxWidth().clickable {
-                    vm.open(thread.id)
-                    close()
-                }.padding(start = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    thread.title,
-                    Modifier.weight(1f),
-                    fontWeight = if (thread.id == current) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                IconButton(onClick = { vm.delete(thread.id) }) { Icon(Icons.Default.Delete, contentDescription = "Delete chat") }
-            }
-        }
-        item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-        items(Panel.entries) { panel ->
-            DrawerRow(panel.title) {
-                onPanel(panel)
-                close()
-            }
-        }
-        item {
-            SwitchRow("Use for voice and the overlay", "The mic button and the voice companion run on this agent.", enabled) {
-                vm.setEnabled(it)
-                onAgentSwitch(it)
-            }
-        }
-        item { SwitchRow("Notification digests", "Urgent ones right away, the rest summarised.", alwaysOn, vm::setAlwaysOn) }
-        if (links.isNotEmpty()) item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-        items(links) { (label, route) ->
-            DrawerRow(label) {
-                close()
-                onNavigate(route)
-            }
-        }
-    }
-}
-
-@Composable
-private fun DrawerRow(label: String, bold: Boolean = false, onClick: () -> Unit) {
-    Text(
-        label,
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
-        fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
-    )
-}
-
-@Composable
-private fun SwitchRow(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title)
-            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-private val clock = DateTimeFormatter.ofPattern("d MMM HH:mm").withZone(ZoneId.systemDefault())
-private val clockSeconds = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
-
-/** Reminders and repeating tasks: what is scheduled, when it runs next, and a form to add one. */
-@Composable
-private fun SchedulesPanel(vm: ChatViewModel) {
-    val jobs by vm.jobs.collectAsState()
-    var prompt by rememberSaveable { mutableStateOf("") }
-    var whenText by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(Unit) { vm.loadJobs() }
-
-    if (jobs.isEmpty()) Text("Nothing scheduled. Add one here, or just ask: \"remind me every day at 8 to check my mail\".")
-    jobs.forEach { job ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(job.prompt, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                val every = job.dailyAtMinute?.let { "Daily at %02d:%02d".format(it / 60, it % 60) } ?: "Every ${job.everyMinutes} min"
-                Text(
-                    "$every · next ${clock.format(Instant.ofEpochMilli(job.nextRunMs))}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = { vm.cancelJob(job.rowid) }) { Icon(Icons.Default.Delete, contentDescription = "Cancel this task") }
-        }
-    }
-    OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("What to do") })
-    OutlinedTextField(whenText, { whenText = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("When: 08:30, or minutes between runs") })
-    Button(
-        onClick = {
-            vm.addJob(prompt, whenText)
-            prompt = ""
-            whenText = ""
-        },
-        enabled = prompt.isNotBlank() && (Schedule.parseDailyAt(whenText) != null || whenText.trim().toIntOrNull() != null),
-    ) { Text("Schedule") }
-    Text(
-        "Scheduled tasks run in the background and can only read; they tell you the result in a notification.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-/** Remote MCP servers the agent may use: the list, and a form to add one. */
-@Composable
-private fun ConnectionsPanel(vm: ChatViewModel) {
-    val connectors by vm.connectors.collectAsState()
-    val status by vm.connectorStatus.collectAsState()
-    var name by rememberSaveable { mutableStateOf("") }
-    var url by rememberSaveable { mutableStateOf("") }
-    var token by remember { mutableStateOf("") }
-
-    connectors.forEach { connector ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${connector.displayName} · ${connector.approvedTools.size} tools", Modifier.weight(1f))
-            IconButton(onClick = { vm.removeConnector(connector.id) }) {
-                Icon(Icons.Default.Delete, contentDescription = "Remove ${connector.displayName}")
-            }
-        }
-    }
-    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Name") })
-    OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("MCP server address (https)") })
-    OutlinedTextField(
-        token,
-        { token = it },
-        Modifier.fillMaxWidth(),
-        singleLine = true,
-        label = { Text("Access token (optional)") },
-        visualTransformation = PasswordVisualTransformation(),
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(
-            onClick = {
-                vm.addConnector(name, url, token)
-                token = ""
+    if (modelsOpen) {
+        ModelSheet(
+            vm,
+            onDismiss = { modelsOpen = false },
+            onMoreSettings = {
+                modelsOpen = false
+                onNavigate(AuraRoutes.AGENT_BRAIN)
             },
-            enabled = name.isNotBlank() && url.isNotBlank(),
-        ) { Text("Connect") }
-        TextButton(onClick = {
-            name = "GitHub"
-            url = GITHUB_MCP_URL
-        }) { Text("Use GitHub") }
-    }
-    status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-}
-
-/** GitHub's hosted MCP server; it takes a personal access token as the bearer. */
-private const val GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
-
-/** Recent runs from the OpenTelemetry traces, newest first. Tap a run for its steps, a step for its details. */
-@Composable
-private fun LogPanel(vm: ChatViewModel) {
-    val runs by vm.log.collectAsState()
-    LaunchedEffect(Unit) { vm.loadLog() }
-    if (runs.isEmpty()) Text("No runs logged yet.")
-    LazyColumn(Modifier.heightIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(runs, key = { it.startMs }) { run -> RunCard(run) }
+            onAddKey = {
+                modelsOpen = false
+                onNavigate(AuraRoutes.apiKeys())
+            },
+        )
     }
 }
 
 @Composable
-private fun RunCard(run: RunLog) {
-    var open by remember(run.startMs) { mutableStateOf(false) }
-    val scheme = MaterialTheme.colorScheme
-    Surface(color = scheme.surfaceVariant, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().animateContentSize()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Column(Modifier.fillMaxWidth().clickable { open = !open }) {
-                Text(
-                    clock.format(Instant.ofEpochMilli(run.startMs)) + if (run.failed) " · had errors" else "",
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (run.failed) scheme.error else scheme.onSurface,
-                )
-                Text(
-                    "${run.modelCalls} model calls · ${run.toolCalls} tool calls · ${run.tokens} tokens · ${run.durationMs / 1000} s",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-            if (open) run.steps.forEach { StepRow(it) }
+private fun TopBar(
+    title: String?,
+    profile: Profile,
+    onMenu: () -> Unit,
+    onNewChat: (() -> Unit)?,
+    onProfile: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val aura = LocalAura.current
+    Row(
+        modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        GlassIconButton(Icons.Rounded.Menu, "Chats and places", onMenu)
+        Box(Modifier.weight(1f).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+            Text(
+                title?.takeIf { it.isNotBlank() } ?: "AURA",
+                style = AuraType.headline,
+                color = aura.onSky,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
         }
-    }
-}
-
-@Composable
-private fun StepRow(step: LogEntry) {
-    var open by remember(step) { mutableStateOf(false) }
-    val scheme = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth().clickable { open = !open }.animateContentSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(clockSeconds.format(Instant.ofEpochMilli(step.atMs)), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+        if (onNewChat != null) {
+            GlassIconButton(Icons.Outlined.Edit, "New chat", onNewChat)
             Spacer(Modifier.width(8.dp))
-            val title = when (step.kind) {
-                LogKind.MODEL -> "Model · ${step.label}"
-                LogKind.TOOL -> "Tool · ${step.label.replace('_', ' ')}"
-                LogKind.SCREEN, LogKind.RUN, LogKind.INTERNAL -> step.label
-            }
-            Text(title, Modifier.weight(1f), color = if (step.ok) scheme.onSurface else scheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val meta = when (step.kind) {
-                LogKind.MODEL -> "${step.inputTokens}→${step.outputTokens} tok · ${step.durationMs} ms"
-                LogKind.SCREEN -> ""
-                LogKind.TOOL, LogKind.RUN, LogKind.INTERNAL -> "${step.durationMs} ms"
-            }
-            Text(meta, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
         }
-        step.image?.let { file ->
-            val bitmap = remember(file) { runCatching { BitmapFactory.decodeFile(file.path)?.asImageBitmap() }.getOrNull() }
-            bitmap?.let { Image(it, contentDescription = "Screenshot sent to the model", Modifier.heightIn(max = if (open) 640.dp else 180.dp)) }
+        Avatar(profile, 40, onProfile)
+    }
+}
+
+@Composable
+private fun GlassIconButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val aura = LocalAura.current
+    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).glass(CircleShape, elevation = 2.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = label, tint = aura.label, modifier = Modifier.size(20.dp))
         }
-        if (open) {
-            step.details.forEach { (key, value) ->
-                Text("$key: $value", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+    }
+}
+
+/** The account's Google photo, or its initial, or the AURA mark when signed out. */
+@Composable
+fun Avatar(profile: Profile, sizeDp: Int, onClick: (() -> Unit)? = null) {
+    val aura = LocalAura.current
+    val photo by rememberBitmap(profile.photoUrl) {
+        profile.photoUrl?.let { url -> URL(url).openStream().use(BitmapFactory::decodeStream) }
+    }
+    val initial = (profile.name ?: profile.email)?.take(1)?.uppercase()
+    val picture = photo
+    Box(
+        Modifier.size(sizeDp.dp).clip(CircleShape).background(aura.well)
+            .then(if (onClick != null) Modifier.clickable(onClickLabel = "Account and settings", role = Role.Button, onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            picture != null -> Image(picture, contentDescription = "Your account", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            initial != null -> Text(initial, style = AuraType.headline, color = aura.label)
+            else -> AuraMark(size = (sizeDp * 0.5f).dp)
+        }
+    }
+}
+
+/**
+ * Shown under the top bar while the accessibility service is off: without it AURA can answer but
+ * cannot use the phone. One tap opens Accessibility with AURA's row picked out.
+ */
+@Composable
+private fun AccessChip() {
+    val aura = LocalAura.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Row(
+        Modifier.clip(AuraShape.Pill).background(aura.surfaceStrong)
+            .clickable(onClickLabel = "Turn on accessibility", role = Role.Button) { PhoneAccess.openSettings(context) }
+            .heightIn(min = 36.dp).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.AccessibilityNew, contentDescription = null, tint = aura.danger, modifier = Modifier.size(16.dp).drawWithContent {
+            drawContent()
+            drawLine(aura.danger, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 1.6.dp.toPx())
+        })
+        Text("Accessibility is off", Modifier.padding(start = 8.dp), style = AuraType.caption, color = aura.label)
+        Text("Turn on", Modifier.padding(start = 8.dp), style = AuraType.caption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = aura.label)
+    }
+}
+
+/** Share of the screen width the drawer takes, and its cap on tablets. */
+private const val DRAWER_FRACTION = 0.82f
+private val DRAWER_MAX = 360.dp
+
+/**
+ * The empty chat: the mark, the greeting and the date centred in the space between the top bar
+ * and the composer, then the app carousel on a card.
+ * - Contract: all spacing is fixed in dp and the block is centred in whatever height is left, so
+ *   it sits the same on a small phone and a tall one; the greeting wraps rather than shrinks.
+ */
+@Composable
+private fun Welcome(firstName: String?, modifier: Modifier, onPrompt: (String) -> Unit) {
+    val aura = LocalAura.current
+    val now = remember { java.time.LocalDateTime.now() }
+    val greeting = when (now.hour) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        else -> "Good evening"
+    }
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        AuraMark(size = 48.dp, tint = aura.onSky)
+        Spacer(Modifier.height(20.dp))
+        Text(listOfNotNull(greeting, firstName).joinToString(", "), style = AuraType.hero, color = aura.onSky, textAlign = TextAlign.Center)
+        Text(
+            now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")),
+            Modifier.padding(top = 6.dp),
+            style = AuraType.heroSub,
+            color = aura.onSkyMuted,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(28.dp))
+        // The apps on this phone, each with a thing to ask. Tapping the caption puts that prompt in
+        // the composer. On a card, so the caption reads on any sky.
+        Column(Modifier.fillMaxWidth().widthIn(max = 520.dp).auraCard().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Try asking", style = AuraType.footnote, color = aura.secondary)
+            AppPromptMarquee(cs = Capsule.scheme().copy(card = aura.surfaceStrong, ink = aura.label), onPrompt = onPrompt)
+        }
+    }
+}
+
+/** Puts text that would sit on the page onto glass when the page is a sky; plain in Classic. */
+@Composable
+private fun Modifier.onPage(): Modifier {
+    val aura = LocalAura.current
+    return if (aura.sky == null) this else this.auraCard(AuraShape.Bubble).padding(horizontal = 8.dp, vertical = 10.dp)
+}
+
+/** What the transcript draws: one row, or a run of tool rows folded into one line. */
+private sealed interface Entry {
+    val key: Long
+
+    data class One(val row: ItemRow) : Entry {
+        override val key get() = row.rowid
+    }
+
+    data class Steps(val rows: List<ItemRow>) : Entry {
+        override val key get() = -rows.first().rowid
+    }
+}
+
+private fun entries(items: List<ItemRow>): List<Entry> = buildList {
+    val steps = mutableListOf<ItemRow>()
+    fun flush() {
+        if (steps.isNotEmpty()) add(Entry.Steps(steps.toList()))
+        steps.clear()
+    }
+    items.forEach { row ->
+        if (row.kind == ItemKind.TOOL.name) {
+            steps += row
+        } else {
+            flush()
+            add(Entry.One(row))
+        }
+    }
+    flush()
+}
+
+@Composable
+private fun Transcript(items: List<ItemRow>, onPick: (String) -> Unit, padding: PaddingValues, modifier: Modifier) {
+    val list = rememberLazyListState()
+    val shown = remember(items) { entries(items) }
+    LaunchedEffect(shown.size) { if (shown.isNotEmpty()) list.animateScrollToItem(shown.lastIndex) }
+    LazyColumn(modifier.fillMaxWidth(), state = list, contentPadding = padding, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(shown, key = { it.key }) { entry ->
+            when (entry) {
+                is Entry.Steps -> StepsFold(entry.rows)
+                is Entry.One -> ItemView(entry.row, onPick)
             }
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ChatRow(item: ItemRow) {
-    val scheme = MaterialTheme.colorScheme
+private fun ItemView(item: ItemRow, onPick: (String) -> Unit) {
+    val aura = LocalAura.current
+    val copy = rememberCopy()
     when (item.kind) {
-        ItemKind.USER.name -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp), contentAlignment = Alignment.CenterEnd) {
-            Surface(color = scheme.primaryContainer, shape = RoundedCornerShape(16.dp), modifier = Modifier.widthIn(max = 300.dp)) {
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Text(item.text)
-                    if (item.attachmentsJson != null) Text("with attachments", style = MaterialTheme.typography.labelSmall)
+        ItemKind.USER.name -> Box(Modifier.fillMaxWidth().padding(start = 56.dp, end = 16.dp), contentAlignment = Alignment.CenterEnd) {
+            // On the sky the bubble is a glass card like AURA's replies: the plain well is
+            // nearly transparent there, and ink text on a night sky cannot be read.
+            val fill = if (aura.sky != null) Modifier.auraCard(AuraShape.Bubble) else Modifier.clip(AuraShape.Bubble).background(aura.well)
+            Column(
+                fill
+                    .combinedClickable(onClickLabel = null, onLongClickLabel = "Copy message", onLongClick = { copy(item.text) }, onClick = {})
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text(item.text, style = AuraType.body, color = aura.label)
+                attachmentNames(item.attachmentsJson).takeIf { it.isNotEmpty() }?.let {
+                    Text(it.joinToString(" · "), style = AuraType.footnote, color = aura.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
-        ItemKind.ASSISTANT.name -> Text(item.text, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-        ItemKind.TOOL.name -> Text(
-            "${if (item.ok == false) "✗" else "✓"} ${item.tool.orEmpty().replace('_', ' ')}",
-            Modifier.padding(horizontal = 16.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = if (item.ok == false) scheme.error else scheme.onSurfaceVariant,
-        )
+        ItemKind.ASSISTANT.name -> Column {
+            SelectionContainer {
+                RichText(item.text, AuraType.body, aura.label, Modifier.padding(horizontal = 12.dp).onPage().padding(horizontal = 6.dp, vertical = 2.dp))
+            }
+            ReplyActions(item.text, copy)
+        }
+        ItemKind.CARD.name -> ChatCard.decode(item.text)?.let { CardView(it, onPick) }
         ItemKind.PROMPT.name -> Text(
             "Asked: ${item.text}",
-            Modifier.padding(horizontal = 16.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = scheme.onSurfaceVariant,
+            Modifier.padding(horizontal = 12.dp).onPage().padding(horizontal = 6.dp),
+            style = AuraType.footnote,
+            color = aura.secondary,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
         )
-        else -> Text(item.text, Modifier.padding(horizontal = 16.dp), color = scheme.error)
+        else -> Text(
+            item.text,
+            Modifier.padding(horizontal = 16.dp).clip(AuraShape.Inner).background(aura.danger.copy(alpha = 0.12f)).padding(12.dp),
+            style = AuraType.callout,
+            color = aura.label,
+        )
     }
 }
 
+/** Copies text to the clipboard and says so. Android 13+ shows its own clipboard preview, so no toast there. */
 @Composable
-private fun PlanCard(plan: AgentEvent.PlanUpdated) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).animateContentSize(),
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            plan.steps.forEachIndexed { index, step ->
-                Text("${if (index < plan.done) "✓" else "○"} $step", style = MaterialTheme.typography.bodySmall)
+private fun rememberCopy(): (String) -> Unit {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    return remember(clipboard) {
+        { text ->
+            clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+                android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
 }
 
+/**
+ * Under each of AURA's replies: copy it as written (Markdown), copy it as plain text, or share it.
+ * Plain text drops the Markdown marks, for pasting into a message.
+ */
 @Composable
-private fun PromptCard(prompt: UserBroker.Pending, onAnswer: (String, String?) -> Unit) {
-    var typed by rememberSaveable(prompt.id) { mutableStateOf("") }
-    Surface(
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Long questions (a draft or a skill to approve) scroll instead of pushing the buttons off screen.
-            Text(prompt.question, Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()))
-            if (prompt.options.isEmpty()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(typed, { typed = it }, Modifier.weight(1f), singleLine = true)
-                    TextButton(onClick = { onAnswer(prompt.id, typed.ifBlank { null }) }) { Text("Reply") }
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    prompt.options.forEachIndexed { index, option ->
-                        if (index == 0) {
-                            Button(onClick = { onAnswer(prompt.id, option) }) { Text(option) }
-                        } else {
-                            OutlinedButton(onClick = { onAnswer(prompt.id, option) }) { Text(option) }
-                        }
-                    }
-                }
-            }
+private fun ReplyActions(text: String, copy: (String) -> Unit) {
+    val aura = LocalAura.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val tint = if (aura.sky != null) aura.onSkyMuted else aura.tertiary
+    Row(Modifier.padding(start = 14.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        ReplyAction(Icons.Outlined.ContentCopy, "Copy reply", tint) { copy(text) }
+        ReplyAction(Icons.Outlined.TextFields, "Copy as plain text", tint) { copy(plainText(text)) }
+        ReplyAction(Icons.Outlined.Share, "Share reply", tint) {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, plainText(text))
+            context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 }
 
 @Composable
-private fun InputBar(running: Boolean, onSend: (String, List<Uri>) -> Unit, onStop: () -> Unit, onVoice: (() -> Unit)?) {
-    var text by rememberSaveable { mutableStateOf("") }
+private fun ReplyAction(icon: ImageVector, label: String, tint: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    Box(
+        Modifier.size(36.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(17.dp))
+    }
+}
+
+/** [markdown] without its marks: headings, emphasis, code fences, link targets, list bullets. Pure. */
+internal fun plainText(markdown: String): String = markdown
+    .replace(Regex("```[a-zA-Z0-9_-]*\\n?"), "")
+    .replace(Regex("\\[([^\\]]+)]\\([^)]+\\)"), "$1")
+    .replace(Regex("(?m)^#{1,6}\\s+"), "")
+    .replace(Regex("(?m)^\\s*[-*+]\\s+"), "• ")
+    .replace(Regex("(\\*\\*|__)(.+?)\\1"), "$2")
+    .replace(Regex("(?<![*\\w])[*_](?!\\s)(.+?)(?<!\\s)[*_](?![*\\w])"), "$1")
+    .replace("`", "")
+    .trim()
+
+private fun attachmentNames(json: String?): List<String> = json?.let {
+    runCatching { Json.decodeFromString(ListSerializer(Attachment.serializer()), it).map(Attachment::displayName) }.getOrNull()
+}.orEmpty()
+
+@Composable
+private fun StatusLine(status: String) {
+    val aura = LocalAura.current
+    Row(
+        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).glass(AuraShape.Pill, elevation = 0.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(Modifier.size(14.dp), color = aura.label, strokeWidth = 2.dp)
+        Spacer(Modifier.width(10.dp))
+        Text(status, style = AuraType.footnote, color = aura.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * The glass composer: attach · text · model · mic (dictation) · talk to AURA, or send once
+ * there is something to send, or stop while a turn runs.
+ */
+@Composable
+private fun Composer(
+    text: String,
+    onText: (String) -> Unit,
+    running: Boolean,
+    focus: FocusRequester,
+    vm: ChatViewModel,
+    onVoice: (() -> Unit)?,
+    onModels: () -> Unit,
+) {
+    val aura = LocalAura.current
     var attached by remember { mutableStateOf(emptyList<Uri>()) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { attached = attached + it }
+    val dictation = rememberDictation { heard -> onText(listOf(text.trimEnd(), heard).filter { it.isNotBlank() }.joinToString(" ")) }
+    val canSend = text.isNotBlank() || attached.isNotEmpty()
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    // Sending ends typing: the keyboard closes so the answer has the screen.
+    val submit = {
+        if (canSend) {
+            vm.send(text.trim(), attached)
+            onText("")
+            attached = emptyList()
+            keyboard?.hide()
+            focusManager.clearFocus()
+        }
+    }
 
-    Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
+    Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).glass(AuraShape.Composer).padding(12.dp)) {
         if (attached.isNotEmpty()) {
-            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${attached.size} attached", style = MaterialTheme.typography.labelMedium)
-                IconButton(onClick = { attached = emptyList() }) { Icon(Icons.Default.Close, contentDescription = "Remove attachments") }
+            Row(
+                Modifier.padding(bottom = 8.dp).clip(AuraShape.Pill).background(aura.well)
+                    .clickable(onClickLabel = "Remove attachments") { attached = emptyList() }.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("${attached.size} attached", style = AuraType.caption, color = aura.label)
+                Icon(Icons.Rounded.Close, contentDescription = null, tint = aura.label, modifier = Modifier.padding(start = 6.dp).size(14.dp))
             }
         }
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Bottom) {
-            IconButton(onClick = { runCatching { picker.launch(arrayOf("image/*", "text/*", "application/json")) } }) {
-                Icon(Icons.Default.Add, contentDescription = "Attach a file")
-            }
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(if (running) "Add to what AURA is doing" else "Message AURA") },
-                maxLines = 5,
-                shape = RoundedCornerShape(24.dp),
-            )
-            when {
-                running && text.isBlank() -> IconButton(onClick = onStop) { Icon(Icons.Default.Close, contentDescription = "Stop") }
-                text.isBlank() && attached.isEmpty() && onVoice != null ->
-                    IconButton(onClick = onVoice) { Icon(Icons.Default.Mic, contentDescription = "Talk to AURA") }
-                else -> IconButton(
-                    onClick = {
-                        onSend(text.trim(), attached)
-                        text = ""
-                        attached = emptyList()
+        Box(Modifier.fillMaxWidth().heightIn(min = 28.dp, max = 140.dp).padding(horizontal = 6.dp)) {
+            if (text.isEmpty()) {
+                Text(
+                    when {
+                        dictation.listening -> "Listening…"
+                        running -> "Add something to the task"
+                        else -> "What can I do for you?"
                     },
-                    enabled = text.isNotBlank() || attached.isNotEmpty(),
-                ) { Icon(Icons.Default.Send, contentDescription = "Send") }
+                    style = AuraType.body,
+                    color = aura.secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            BasicTextField(
+                value = text,
+                onValueChange = onText,
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                textStyle = AuraType.body.copy(color = aura.label),
+                cursorBrush = SolidColor(aura.label),
+                maxLines = 6,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Send,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { submit() }),
+            )
+        }
+        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            ComposerButton(Icons.Rounded.Add, "Attach a file") { runCatching { picker.launch(arrayOf("image/*", "text/*", "application/json")) } }
+            // The model name takes what is left and shortens first; the buttons keep their 44dp.
+            Box(Modifier.weight(1f)) { ModelChip(vm, onModels) }
+            ComposerButton(if (dictation.listening) Icons.Rounded.Stop else Icons.Rounded.Mic, if (dictation.listening) "Stop dictation" else "Dictate", active = dictation.listening, onClick = dictation::toggle)
+            Spacer(Modifier.width(4.dp))
+            when {
+                running && text.isBlank() -> RoundButton(Icons.Rounded.Stop, "Stop", onClick = vm::stop)
+                canSend || onVoice == null -> RoundButton(Icons.Rounded.ArrowUpward, "Send", enabled = canSend, onClick = submit)
+                else -> TalkButton(onVoice)
             }
         }
+    }
+}
+
+@Composable
+private fun ComposerButton(icon: ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
+    val aura = LocalAura.current
+    Box(
+        Modifier.size(44.dp).clip(CircleShape).background(if (active) aura.well else Color.Transparent)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = aura.label, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** Send or stop: a filled circle in the accent. */
+@Composable
+private fun RoundButton(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val aura = LocalAura.current
+    Box(
+        Modifier.size(44.dp).clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(38.dp).clip(CircleShape).background(if (enabled) aura.accent else aura.well), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = label, tint = if (enabled) aura.onAccent else aura.tertiary, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** Talk with AURA: the mark in a filled circle, opening the voice overlay. */
+@Composable
+private fun TalkButton(onClick: () -> Unit) {
+    val aura = LocalAura.current
+    Box(
+        Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "Talk with AURA", role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(38.dp).clip(CircleShape).background(aura.label), contentAlignment = Alignment.Center) {
+            AuraMark(size = 22.dp, tint = aura.canvas)
+        }
+    }
+}
+
+/** The model in use, as a chip that opens the model sheet. */
+@Composable
+private fun ModelChip(vm: ChatViewModel, onClick: () -> Unit) {
+    val aura = LocalAura.current
+    val models by vm.models.collectAsState()
+    val selected = models.firstOrNull { it.selected }
+    // One pill, two taps: the name opens the model list, the level opens the thinking menu.
+    Row(Modifier.heightIn(min = 44.dp).clip(AuraShape.Pill), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            selected?.model?.substringAfterLast('/') ?: "Set up a model",
+            Modifier.weight(1f, fill = false).clip(AuraShape.Pill)
+                .clickable(onClickLabel = "Choose the model", role = Role.Button, onClick = onClick)
+                .padding(start = 8.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+            style = AuraType.footnote,
+            color = aura.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        ThinkingLevel(vm)
+        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = aura.secondary, modifier = Modifier.size(18.dp))
+    }
+}
+
+/**
+ * How hard the model thinks, as a word beside the model name, opening a menu of the levels this
+ * model accepts. Not drawn for a model without a thinking control.
+ */
+@Composable
+private fun ThinkingLevel(vm: ChatViewModel) {
+    val aura = LocalAura.current
+    val thinking by vm.thinking.collectAsState()
+    val state = thinking ?: return
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Text(
+            shortLabel(state.current),
+            Modifier.clip(AuraShape.Pill)
+                .clickable(onClickLabel = "Choose how hard AURA thinks", role = Role.Button) { open = true }
+                .padding(horizontal = 4.dp, vertical = 12.dp),
+            style = AuraType.footnote,
+            color = aura.secondary,
+            maxLines = 1,
+        )
+        androidx.compose.material3.DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = aura.surfaceStrong,
+            shape = AuraShape.Inner,
+        ) {
+            Text("Thinking", Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp), style = AuraType.caption, color = aura.secondary)
+            state.levels.forEach { level ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(ThinkingSupport.label(level), style = AuraType.body, color = aura.label)
+                            Text(thinkingHint(level), style = AuraType.footnote, color = aura.secondary)
+                        }
+                    },
+                    trailingIcon = {
+                        if (level == state.current) Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = aura.label, modifier = Modifier.size(18.dp))
+                    },
+                    onClick = {
+                        vm.setThinking(level)
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** The level in four letters or fewer, so the composer row never truncates. */
+private fun shortLabel(level: ReasoningLevel): String = if (level == ReasoningLevel.MEDIUM) "Med" else ThinkingSupport.label(level)
+
+private fun thinkingHint(level: ReasoningLevel): String = when (level) {
+    ReasoningLevel.DEFAULT -> "The model decides"
+    ReasoningLevel.OFF -> "Fastest, no reasoning"
+    ReasoningLevel.LOW -> "Quick reasoning"
+    ReasoningLevel.MEDIUM -> "Balanced"
+    ReasoningLevel.HIGH -> "Deepest, slowest"
+}
+
+private val BULLET = Regex("""^\s*(?:[-*•]|\d+[.)])\s+(.*)$""")
+
+/**
+ * Text as the model writes it: paragraphs, "- " and "1." lists, "#" headings and `**bold**`.
+ * - Contract: anything else is shown as written. This is not a markdown renderer.
+ */
+@Composable
+fun RichText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
+    val aura = LocalAura.current
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        text.trim().lines().forEach { raw ->
+            val line = raw.trimEnd()
+            val bullet = BULLET.find(line)
+            when {
+                line.isBlank() -> Spacer(Modifier.height(4.dp))
+                bullet != null -> Row {
+                    Text("•", Modifier.width(18.dp), style = style, color = aura.secondary)
+                    Text(inline(bullet.groupValues[1]), style = style, color = color)
+                }
+                line.startsWith("#") -> Text(inline(line.trimStart('#', ' ')), style = style.copy(fontWeight = FontWeight.SemiBold), color = color)
+                else -> Text(inline(line), style = style, color = color)
+            }
+        }
+    }
+}
+
+private fun inline(text: String): AnnotatedString = buildAnnotatedString {
+    text.replace("`", "").split("**").forEachIndexed { index, part ->
+        if (index % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(part) } else append(part)
     }
 }

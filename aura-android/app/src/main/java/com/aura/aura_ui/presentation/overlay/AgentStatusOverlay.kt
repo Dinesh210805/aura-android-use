@@ -12,6 +12,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb
 import com.aura.aura_ui.services.AgentStatusRegistry
 import com.aura.aura_ui.utils.AgentLogger
 
@@ -106,6 +107,14 @@ class AgentStatusOverlay(private val context: Context) {
 
     /** Fades each newly revealed word up instead of snapping it on — see [renderSpeech]. */
     private var wordFade: android.animation.ValueAnimator? = null
+
+    /**
+     * The colours, read from the user's light or dark mode each time the window is built: the
+     * app's glass and ink, never the sky. A theme change applies from the next attach.
+     */
+    private var ink: Int = INK
+    private var inkMuted: Int = INK_TERTIARY
+    private var plate: GradientDrawable? = null
 
     /** Screen stays on while the strip is up — see [attach]. */
     private val keepAwake = com.aura.aura_ui.agent.RunKeepAwake(context)
@@ -223,7 +232,15 @@ class AgentStatusOverlay(private val context: Context) {
         applyVisibility()
     }
 
-    private fun hasContent(): Boolean = status.isNotBlank() || visibleSpeech != null
+    /**
+     * [status] as the strip may draw it right now. During a run only [AgentStatusRegistry.THINKING]
+     * is shown: while a task acts on the phone the screen belongs to the task, and the Pause pill
+     * is the only AURA surface on it.
+     */
+    private val visibleStatus: String
+        get() = status.takeUnless { runActive && it != AgentStatusRegistry.THINKING }.orEmpty()
+
+    private fun hasContent(): Boolean = visibleStatus.isNotBlank() || visibleSpeech != null
 
     /**
      * The only place `root.visibility` is written.
@@ -283,7 +300,7 @@ class AgentStatusOverlay(private val context: Context) {
     private fun attach() {
         if (root != null) return
         // Hosted by the accessibility service when it is bound: that makes the window a
-        // trusted overlay, which is what lets the plate be opaque (see [CANVAS]).
+        // trusted overlay, which is what lets the plate be opaque (see [stripBackground]).
         val a11y = com.aura.aura_ui.accessibility.AuraAccessibilityService.instance
         trusted = a11y != null
         if (!trusted && !Settings.canDrawOverlays(context)) {
@@ -326,6 +343,7 @@ class AgentStatusOverlay(private val context: Context) {
         windowManager = null
         AgentLogger.UI.i("strip DETACHED", emptyMap())
         root = null
+        plate = null
         statusLine = null
         statusRow = null
         headlineLine = null
@@ -400,6 +418,7 @@ class AgentStatusOverlay(private val context: Context) {
             // every tick would bury the transitions this exists to make visible.
             if (changed && text.isNotBlank()) logRendered(view, "status", text) { lastLoggedStatus = it }
         }
+        shapeFor(card = visibleSpeech != null)
         val view = spokenLine ?: return
         val said = visibleSpeech
         if (said == null) {
@@ -452,7 +471,7 @@ class AgentStatusOverlay(private val context: Context) {
         // The speaker is dimmer than the words: it is a label, not the content.
         val text = android.text.SpannableStringBuilder(full).apply {
             setSpan(
-                android.text.style.ForegroundColorSpan(INK_TERTIARY),
+                android.text.style.ForegroundColorSpan(inkMuted),
                 0,
                 labelEnd,
                 android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
@@ -474,7 +493,7 @@ class AgentStatusOverlay(private val context: Context) {
 
         view.animate().cancel()
         view.alpha = 1f
-        val fade = FadeInSpan()
+        val fade = FadeInSpan(ink)
         text.setSpan(fade, appendedFrom, full.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         view.text = text
         wordFade = android.animation.ValueAnimator.ofInt(0, 0xFF).apply {
@@ -494,12 +513,27 @@ class AgentStatusOverlay(private val context: Context) {
      * new `Spannable` every frame — which re-measures and re-wraps a multi-line caption 60
      * times a second for a colour change. This mutates a field and repaints.
      */
-    private class FadeInSpan : android.text.style.CharacterStyle() {
+    private class FadeInSpan(private val ink: Int) : android.text.style.CharacterStyle() {
         var alpha: Int = 0
 
         override fun updateDrawState(tp: android.text.TextPaint) {
-            tp.color = (alpha shl 24) or (INK and 0x00FFFFFF)
+            tp.color = (alpha shl 24) or (ink and 0x00FFFFFF)
         }
+    }
+
+    /**
+     * Two shapes for one window. With only a status ("Thinking…") it is a small centered pill;
+     * with a caption it is a rounded card that hugs the sentence, up to the screen's width.
+     * The pill's radius is half its height, so it is set once the height is known.
+     */
+    private fun shapeFor(card: Boolean) {
+        val view = root ?: return
+        val (side, vert) = if (card) SIDE_PAD_DP to VERT_PAD_DP else PILL_SIDE_PAD_DP to PILL_VERT_PAD_DP
+        if (view.paddingLeft != side.dp() || view.paddingTop != vert.dp()) {
+            view.setPadding(side.dp(), vert.dp(), side.dp(), vert.dp())
+        }
+        view.tag = card
+        plate?.cornerRadius = if (card) CORNER_DP.dp().toFloat() else view.height / 2f
     }
 
     /**
@@ -538,11 +572,19 @@ class AgentStatusOverlay(private val context: Context) {
     // ── view ───────────────────────────────────────────────────────────
 
     private fun buildView(): LinearLayout {
+        val theme = com.aura.aura_ui.ui.theme.overlayColors(com.aura.aura_ui.ui.theme.overlayIsDark(context))
+        ink = theme.label.toArgb()
+        inkMuted = theme.secondary.toArgb()
+        // Wide enough for a sentence, never wider than the screen minus its margins: the window
+        // is WRAP_CONTENT so the pill can shrink to one word.
+        val screenWidth = com.aura.aura_ui.accessibility.ScreenGeometry.realSizePx(context).first
+        val textMax = (screenWidth - 2 * SIDE_MARGIN_DP.dp() - 2 * SIDE_PAD_DP.dp()).coerceAtLeast(MIN_WIDTH_DP.dp())
         val status = TextView(context).apply {
+            maxWidth = textMax
             // Starts EMPTY and hidden. Whether there is anything to report is the caller's
             // question, not this view's — it is on screen during conversation as well as
             // during a run, and only one of those has a status.
-            setTextColor(INK)
+            setTextColor(ink)
             // Deliberately SMALLER than the caption below it. This row says what the phone is
             // doing; the caption says what AURA is saying, and the caption is what the user is
             // actually reading. Same size for both made the strip read as two equal columns of
@@ -561,7 +603,8 @@ class AgentStatusOverlay(private val context: Context) {
         // Where the run is: the plan step this action serves. Small and quiet — it is context
         // for the line below, which is the thing that changes.
         val headline = TextView(context).apply {
-            setTextColor(INK_TERTIARY)
+            setTextColor(inkMuted)
+            maxWidth = textMax
             textSize = HEADLINE_SP
             letterSpacing = 0.04f
             maxLines = 1
@@ -571,7 +614,7 @@ class AgentStatusOverlay(private val context: Context) {
         }
         headlineLine = headline
 
-        val icon = BeatIconView(context, INK, BLOOD)
+        val icon = BeatIconView(context, ink, BLOOD)
         beatIcon = icon
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -582,7 +625,7 @@ class AgentStatusOverlay(private val context: Context) {
                     topMargin = 1.dp()
                 },
             )
-            addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             visibility = View.GONE
         }
         statusRow = row
@@ -591,7 +634,8 @@ class AgentStatusOverlay(private val context: Context) {
             // Full white, not the 90% ink it used to be. This row IS the content — it is what
             // the user is reading while AURA talks — and it sits on a dark plate
             // over arbitrary app pixels, where every step down in alpha costs real legibility.
-            setTextColor(INK)
+            setTextColor(ink)
+            maxWidth = textMax
             // Biggest thing on the strip. The status line above is a caption ABOUT the work;
             // this is what AURA is saying, read at a glance from arm's length while the phone
             // is driving itself.
@@ -616,8 +660,13 @@ class AgentStatusOverlay(private val context: Context) {
 
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = stripBackground()
-            setPadding(SIDE_PAD_DP.dp(), VERT_PAD_DP.dp(), SIDE_PAD_DP.dp(), VERT_PAD_DP.dp())
+            gravity = Gravity.CENTER_HORIZONTAL
+            background = stripBackground(theme).also { plate = it }
+            setPadding(PILL_SIDE_PAD_DP.dp(), PILL_VERT_PAD_DP.dp(), PILL_SIDE_PAD_DP.dp(), PILL_VERT_PAD_DP.dp())
+            // A pill's radius is half its height, which is only known after layout.
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                if (v.tag != true) plate?.cornerRadius = v.height / 2f
+            }
             addView(headline)
             addView(row)
             addView(spoken)
@@ -625,21 +674,20 @@ class AgentStatusOverlay(private val context: Context) {
     }
 
     /**
-     * The plate: a flat fill in the chat input bar's colour, behind a bright rim.
+     * The plate: the prompt box's glass, the theme's strongest surface at the box's 0.94 alpha
+     * behind its hairline edge, so the pill, the caption and the prompt box read as one surface.
      *
-     * **No window blur, and no gradient.** `FLAG_BLUR_BEHIND` was tried and removed —
-     * frosting the app underneath destroys the thing the user is trying to watch AURA
-     * operate, which is the whole point of an overlay that sits on top of it. The gradient
-     * that replaced it went the same way for a simpler reason: this strip and the chat
-     * overlay are one surface as far as the user is concerned, and the chat overlay draws a
-     * flat fill. A plate with its own lighting model beside a flat one reads as two apps.
-     *
+     * - Why no blur: frosting the app underneath hides what the user is watching AURA operate.
+     * - Why untrusted is capped at 0xC8: Android 12 drops touches through an untrusted overlay
+     *   whose opacity exceeds 0.8 ("Untrusted touch due to occlusion"). Do not raise past 0xCC.
+     * - Change together: `inputBarBackground` in `VoiceAssistantOverlay.kt`.
      */
-    private fun stripBackground() = GradientDrawable().apply {
+    private fun stripBackground(theme: com.aura.aura_ui.ui.theme.AuraColors) = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = CORNER_DP.dp().toFloat()
-        setColor(if (trusted) CANVAS else CANVAS_UNTRUSTED)
-        setStroke(1.dp(), RIM)
+        val fill = theme.surfaceStrong.toArgb() and 0x00FFFFFF
+        setColor(fill or ((if (trusted) PLATE_ALPHA else PLATE_ALPHA_UNTRUSTED) shl 24))
+        setStroke(1.dp(), theme.glassEdge.toArgb())
     }
 
     private fun layoutParams(): WindowManager.LayoutParams {
@@ -653,17 +701,10 @@ class AgentStatusOverlay(private val context: Context) {
                 WindowManager.LayoutParams.TYPE_PHONE
             }
 
-        // Width is the screen minus a margin on each side rather than MATCH_PARENT: a strip
-        // running edge to edge reads as a system bar the user cannot dismiss, and on a curved
-        // display its corners fall off the glass.
-        // ScreenGeometry, not displayMetrics: this repo pins that choice with a test, because
-        // displayMetrics excludes system insets and so disagrees with the real display on
-        // exactly the devices where the difference matters.
-        val screenWidth = com.aura.aura_ui.accessibility.ScreenGeometry.realSizePx(context).first
-        val width = (screenWidth - 2 * SIDE_MARGIN_DP.dp()).coerceAtLeast(MIN_WIDTH_DP.dp())
-
+        // WRAP_CONTENT width, centered: a small pill for "Thinking…", a card that hugs the
+        // caption. The text views cap the width (see [buildView]), never the window.
         return WindowManager.LayoutParams(
-            width,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             type,
             // NOT_TOUCHABLE is the load-bearing one — see the class KDoc. NOT_FOCUSABLE
@@ -738,43 +779,20 @@ class AgentStatusOverlay(private val context: Context) {
         const val SIDE_PAD_DP = 16
         const val VERT_PAD_DP = 14
 
-        /** The chat overlay's surface radius, so the two plates are visibly the same family. */
-        const val CORNER_DP = 16
+        const val PILL_SIDE_PAD_DP = 16
+        const val PILL_VERT_PAD_DP = 8
 
-        /**
-         * The plate when hosted as a trusted accessibility overlay: the chat input bar's fill,
-         * `Mono.scheme(dark = true).chip` (`#1C1A18`) at the bar's own alpha 0.98, so the strip
-         * and the mic bar read as one surface.
-         *
-         * - Change together: `inputBarBackground` in `VoiceAssistantOverlay.kt`.
-         * - Why opaque is safe here: accessibility overlays are trusted, so Android 12's
-         *   untrusted-occlusion rule below does not apply and taps still pass through.
-         */
-        val CANVAS: Int = Color.parseColor("#FA1C1A18")
+        /** The caption card's radius, matching the prompt box's rounded glass. */
+        const val CORNER_DP = 24
 
-        /**
-         * The same colour for the fallback `TYPE_APPLICATION_OVERLAY` window (accessibility
-         * service not bound), held at alpha 0xC8 = 0.784.
-         *
-         * - Why: Android 12 discards touches that pass through an *untrusted* overlay whose
-         *   combined opacity exceeds 0.8, logging "Untrusted touch due to occlusion by
-         *   com.aura…". Above that this strip would be a dead band across the top of every
-         *   app. Do not raise it past 0xCC.
-         *   https://developer.android.com/about/versions/12/behavior-changes-all
-         */
-        val CANVAS_UNTRUSTED: Int = Color.parseColor("#C81C1A18")
+        /** The prompt box's fill alpha (0.94). Safe opaque: accessibility overlays are trusted. */
+        const val PLATE_ALPHA = 0xF0
 
-        /**
-         * The rim, matching the hairline the chat overlay puts on its own dark surfaces
-         * (`Color.White.copy(alpha = 0.16f)`). Enough to separate the plate from a dark app
-         * underneath, never enough to compete with the text.
-         */
-        val RIM: Int = Color.parseColor("#29FFFFFF")
+        /** Below Android 12's 0.8 untrusted-occlusion limit; see [stripBackground]. */
+        const val PLATE_ALPHA_UNTRUSTED = 0xC8
 
-        /** Full-strength white: this is the line the user is actually trying to read. */
+        /** Fallbacks before the first build; [buildView] replaces them with the theme's ink. */
         val INK: Int = Color.parseColor("#FFFFFFFF")
-
-        /** The speaker label only — a tag, never the content. */
         val INK_TERTIARY: Int = Color.parseColor("#8CFFFFFF")
 
         /** Mono's blood red — attention only: the HOLD icon, nothing decorative. */

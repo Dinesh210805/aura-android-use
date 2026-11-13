@@ -25,6 +25,12 @@ sealed interface AgentStreamEvent {
     /** [tool] threw; [error] is the failure message. */
     data class ToolFailed(val tool: String, val error: String) : AgentStreamEvent
 
+    /** What the model wrote before its next tool call. Not the answer. */
+    data class Narration(val text: String) : AgentStreamEvent
+
+    /** The model's plan: [steps] in order, the first [done] of them finished. */
+    data class Plan(val steps: List<String>, val done: Int) : AgentStreamEvent
+
     /** The agent produced its final natural-language [result]; the run is over. */
     data class Finished(val result: String) : AgentStreamEvent
 }

@@ -3,8 +3,6 @@ package com.aura.aura_ui.presentation.screens
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import com.aura.aura_ui.agent.conversation.CompanionConfig
-import com.aura.aura_ui.agent.llm.LlmEndpointCatalog
-import com.aura.aura_ui.mcp.bridge.ProviderKeyStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,14 +18,13 @@ data class CompanionUiState(
 )
 
 /**
- * Settings → Companion: BYOK key entry (never logged) + the voice-mode selector.
+ * Settings → Voice: the voice-mode selector. The Gemini key itself is entered on the API keys page.
  * The two toggles map onto a single boolean (`useGeminiLive`) so exactly one mode
  * is always active; Gemini Live requires a saved key, otherwise TTS/STT holds.
  */
 class CompanionViewModel(context: Context) : ViewModel() {
     private val app = context.applicationContext
     private val config = CompanionConfig(app)
-    private val keys = ProviderKeyStore(app)
     private val voicePrefs =
         app.getSharedPreferences("aura_voice_settings", android.content.Context.MODE_PRIVATE)
 
@@ -58,11 +55,6 @@ class CompanionViewModel(context: Context) : ViewModel() {
         val effectiveLive = live && config.byokKey() != null
         config.useGeminiLive = effectiveLive
         config.enabled = effectiveLive
-        refresh()
-    }
-
-    fun saveKey(key: String) {
-        if (key.isNotBlank()) keys.setKey(LlmEndpointCatalog.GEMINI_ID, key)
         refresh()
     }
 }

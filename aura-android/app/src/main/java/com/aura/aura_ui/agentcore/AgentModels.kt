@@ -76,7 +76,12 @@ data class Attachment(
 }
 
 /** What one row of a thread's visible transcript is. */
-enum class ItemKind { USER, ASSISTANT, TOOL, PROMPT, NOTICE }
+enum class ItemKind {
+    USER, ASSISTANT, TOOL, PROMPT, NOTICE,
+
+    /** A [ChatCard]; the row's text is the card as JSON ([ChatCard.encode]). */
+    CARD,
+}
 
 /** Why a turn stopped. */
 enum class TurnEnd {
@@ -132,6 +137,9 @@ sealed interface AgentEvent {
 
     /** The turn is waiting for the user. Answer through [UserBroker.answer] with one of [options] or free text. */
     data class UserPromptRequested(val promptId: String, val question: String, val options: List<String>) : AgentEvent
+
+    /** Something to show the user as a card: files that were found, contacts, a result. */
+    data class Card(val card: ChatCard) : AgentEvent
 
     /** The model's plan for this task: [steps] in order, the first [done] of them finished. */
     data class PlanUpdated(val steps: List<String>, val done: Int) : AgentEvent

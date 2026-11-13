@@ -24,6 +24,8 @@ fun AgentStreamEvent.toProgress(): String = when (this) {
     is AgentStreamEvent.ToolStarting -> "running $tool"
     is AgentStreamEvent.ToolCompleted -> "did $tool"
     is AgentStreamEvent.ToolFailed -> "step failed: $tool"
+    is AgentStreamEvent.Narration -> text.take(80)
+    is AgentStreamEvent.Plan -> steps.getOrNull(done)?.let { "next: $it" } ?: "plan finished"
     is AgentStreamEvent.Finished -> "done"
 }
 

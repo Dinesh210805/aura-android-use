@@ -1,62 +1,47 @@
 package com.aura.aura_ui.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.googlefonts.Font
-import androidx.compose.ui.text.googlefonts.GoogleFont
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.unit.sp
 import com.aura.aura_ui.R
 
-// Google Fonts Provider
-val provider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs,
+// Fonts ship in res/font (SIL Open Font License), so text never waits on a download or falls
+// back to the system face. Instrument Sans is variable (weight 400-700); each weight picks its
+// axis value, clamped to what the file has.
+@OptIn(ExperimentalTextApi::class)
+private fun sans(weight: FontWeight) = Font(
+    R.font.instrument_sans,
+    weight = weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight.coerceIn(400, 700))),
 )
 
-// Plus Jakarta Sans — razor-sharp, geometric, ultra-crisp modern sans
-private val PlusJakartaSansFont = GoogleFont("Plus Jakarta Sans")
-
-// JetBrains Mono — razor-sharp, technical monospace companion
-private val JetBrainsMonoFont = GoogleFont("JetBrains Mono")
-
-/**
- * Display / Hero font family: Sharp, confident geometric grotesque.
- */
-val AuraDisplayFamily = FontFamily(
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.Normal),
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.Bold),
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.ExtraBold),
-)
-
-/**
- * Body / UI font family: Crisp, balanced, high-legibility UI typography.
- */
+/** Instrument Sans: every piece of UI text. */
 val AuraBodyFamily = FontFamily(
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.Normal),
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = PlusJakartaSansFont, fontProvider = provider, weight = FontWeight.Bold),
+    sans(FontWeight.Normal),
+    sans(FontWeight.Medium),
+    sans(FontWeight.SemiBold),
+    sans(FontWeight.Bold),
+    sans(FontWeight.ExtraBold),
 )
 
-/**
- * Monospace font family for code, pills, data metrics, and technical labels.
- */
-val AuraMonoFamily = FontFamily(
-    Font(googleFont = JetBrainsMonoFont, fontProvider = provider, weight = FontWeight.Normal),
-    Font(googleFont = JetBrainsMonoFont, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = JetBrainsMonoFont, fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = JetBrainsMonoFont, fontProvider = provider, weight = FontWeight.Bold),
-)
+/** Display text uses the same face as the body; hierarchy comes from size and weight. */
+val AuraDisplayFamily = AuraBodyFamily
+
+/** Instrument Serif: the greeting and page titles, the app's editorial voice. One weight only. */
+val AuraSerifFamily = FontFamily(Font(R.font.instrument_serif, FontWeight.Normal))
+
+/** Code, ids and raw payloads. */
+val AuraMonoFamily = FontFamily.Monospace
 
 // Legacy alias — existing callsites referencing AuraFontFamily continue to compile
 val AuraFontFamily = AuraBodyFamily
 
-// AURA Razor-Sharp Minimalist Typography System
+// The Material type scale, on Instrument Sans.
 val Typography = Typography(
     // ── Display ── large hero text, screen titles
     displayLarge = TextStyle(

@@ -62,13 +62,14 @@ internal object GeminiThinkingConfig {
         // positive thinking_budget. Sending thinking_level to a 2.5 model 400s (verified live), which
         // previously broke EVERY traced Gemini-2.5 run.
         val useLevel = GeminiThinkingWire.usesThinkingLevel(root.optString("model").takeIf { it.isNotBlank() })
-        val alreadyThinking = if (useLevel) thinking.optString("thinking_level") == "low" else thinking.has("thinking_budget")
+        // A level or budget already on the request is the user's choice: keep it, only ask for summaries.
+        val alreadyThinking = if (useLevel) thinking.has("thinking_level") else thinking.has("thinking_budget")
 
         // Idempotent: both the enabling field and include_thoughts already present → nothing to change.
         if (thinking.optBoolean("include_thoughts", false) && alreadyThinking) return null
 
         if (useLevel) {
-            thinking.put("thinking_level", "low") // cheapest level that still yields thought summaries
+            if (!thinking.has("thinking_level")) thinking.put("thinking_level", "low") // cheapest level that still yields summaries
         } else if (!thinking.has("thinking_budget")) {
             thinking.put("thinking_budget", GeminiThinkingWire.budgetFor(ReasoningLevel.LOW))
         }

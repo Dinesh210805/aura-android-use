@@ -4,470 +4,230 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.Verified
-import androidx.compose.runtime.rememberCoroutineScope
-import com.aura.aura_ui.agent.conversation.PersonaOwner
-import com.aura.aura_ui.remote.AuraSignIn
-import com.aura.aura_ui.remote.AuthState
-import com.aura.aura_ui.remote.SignInOutcome
-import kotlinx.coroutines.launch
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Hearing
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Screenshot
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Vibration
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import com.aura.aura_ui.accessibility.AccessibilityCapturePolicy
-import com.aura.aura_ui.accessibility.AuraAccessibilityService
+import com.aura.aura_ui.agent.conversation.PersonaOwner
+import com.aura.aura_ui.agentcore.Avatar
+import com.aura.aura_ui.agentcore.LogKeep
+import com.aura.aura_ui.agentcore.PhoneAccess
+import com.aura.aura_ui.agentcore.rememberPhoneAccess
+import androidx.compose.material.icons.outlined.AccessibilityNew
+import com.aura.aura_ui.agentcore.Profile
 import com.aura.aura_ui.data.preferences.DiagnosticsStore
 import com.aura.aura_ui.data.preferences.ThemeManager
-import com.aura.aura_ui.presentation.components.AuraScreenScaffold
-import com.aura.aura_ui.presentation.components.AuraSwitch
-import com.aura.aura_ui.presentation.components.MonoCardGroup
-import com.aura.aura_ui.presentation.components.MonoDivider
-import com.aura.aura_ui.presentation.components.MonoRow
-import com.aura.aura_ui.presentation.components.MonoSectionLabel
-import com.aura.aura_ui.presentation.components.PermissionToggleRow
-import com.aura.aura_ui.presentation.components.permissionIcon
-import com.aura.aura_ui.presentation.components.rememberMonoScheme
-import com.aura.aura_ui.presentation.permissions.PermissionRegistry
-import com.aura.aura_ui.presentation.permissions.openPermissionSystemPage
+import com.aura.aura_ui.presentation.components.AuraDivider
+import com.aura.aura_ui.presentation.components.AuraPage
+import com.aura.aura_ui.presentation.components.AuraRow
+import com.aura.aura_ui.presentation.components.AuraSection
+import com.aura.aura_ui.presentation.components.AuraToggleRow
+import com.aura.aura_ui.presentation.navigation.AuraRoutes
+import com.aura.aura_ui.remote.AuraSignIn
+import com.aura.aura_ui.remote.SignInOutcome
 import com.aura.aura_ui.services.WakeWordListeningService
-import com.aura.aura_ui.ui.theme.Mono
-import com.aura.aura_ui.ui.theme.MonoScheme
+import com.aura.aura_ui.ui.theme.AppearanceStore
+import com.aura.aura_ui.ui.theme.AuraType
+import com.aura.aura_ui.ui.theme.LocalAura
+import com.aura.aura_ui.ui.theme.auraCard
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 
-// ============================================================================
-// SETTINGS — app plumbing only (spec rule: agent-behavior lives in the Agent
-// tab). Built on the shared AuraScreenScaffold + grouped Apple-style cards so
-// it is visibly the same system as every other screen. Top-to-bottom:
-//   Profile (Guest placeholder) → Access (uniform permission toggles + screen
-//   capture) → Integrations → Appearance → Preferences → Privacy & Data → About.
-// Every permission and preference uses the single AuraSwitch.
-// ============================================================================
+/** Inset of a divider between rows that have an icon. */
+private val ICON_INSET = 52.dp
 
+/**
+ * Settings: the account, then General, AI, Privacy and security, Connections, About.
+ *
+ * - Contract: every row opens a page or flips one switch. A subtitle appears only where the
+ *   effect is not obvious from the title. Agent behaviour lives on the On-device agent page.
+ *
+ * @param onOpen opens a route in [AuraRoutes].
+ * @param debug shows the Developer section (the eval suite), debug builds only.
+ */
 @Composable
-fun MonoSettingsScreen(
-    onOpenPermissions: () -> Unit,
-    onOpenTavilyKey: () -> Unit,
-    onRequestScreenCapture: () -> Unit,
-    onOpenPrivacy: () -> Unit,
-    onOpenTerms: () -> Unit,
-    onOpenLicenses: () -> Unit,
-    onOpenRestrictedApps: () -> Unit = {},
-    /**
-     * Debug builds only. Null in release, which is what keeps the eval cockpit out of a shipped
-     * app: the row cannot render if the callback does not exist, so there is no way to reach the
-     * screen even if the route were somehow registered.
-     */
-    onOpenEvalSuite: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-) {
-    val scheme = rememberMonoScheme()
+fun MonoSettingsScreen(onOpen: (String) -> Unit, debug: Boolean = false) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-
     remember(context) { DiagnosticsStore.hydrate(context) }
-    val diagnosticsEnabled by DiagnosticsStore.enabled.collectAsState()
-    val wakeWordEnabled by ThemeManager.enableWakeWord.collectAsState()
+    val diagnostics by DiagnosticsStore.enabled.collectAsState()
+    val wakeWord by ThemeManager.enableWakeWord.collectAsState()
     val haptics by ThemeManager.enableHapticFeedback.collectAsState()
     val edgeGlow by ThemeManager.enableEdgeGlow.collectAsState()
     val notifications by ThemeManager.enableNotifications.collectAsState()
-    val screenCaptureAvailable by AuraAccessibilityService.screenCaptureAvailable.collectAsState()
+    val style by AppearanceStore.style.collectAsState()
 
-    // Re-evaluate permission statuses whenever the screen resumes (e.g. after the
-    // user returns from a system settings page having granted something).
-    var refresh by remember { mutableIntStateOf(0) }
-    // Bumped when a sign-in completes, so the profile row re-reads without waiting for a resume.
-    var signInTick by remember { mutableIntStateOf(0) }
-    val scope = rememberCoroutineScope()
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) refresh++
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    AuraPage("Settings", orbits = true) {
+        ProfileCard()
 
-    val runtimeLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { refresh++ }
-
-    AuraScreenScaffold(title = "Settings", modifier = modifier) {
-        // ── Profile — the real account, not a placeholder ────────────────────
-        // `refresh` is already bumped on every ON_RESUME by the lifecycle observer above, so
-        // returning from the account picker re-reads Firebase Auth without extra plumbing.
-        val signedInEmail = remember(refresh, signInTick) { AuthState.email() }
-        val displayName = remember(refresh, signInTick) {
-            PersonaOwner.get(context) ?: signedInEmail?.substringBefore('@')
-        }
-        ProfileHeaderCard(
-            scheme = scheme,
-            name = displayName ?: "Guest",
-            subtitle = signedInEmail ?: "Not signed in — tap to sign in with Google",
-            signedIn = signedInEmail != null,
-        ) {
-            if (signedInEmail != null) {
-                // Signing out is not offered here. The account is what makes the install
-                // usable at all, so a sign-out button in Settings is a one-tap way to lock
-                // yourself out of your own phone assistant.
-                Toast.makeText(context, "Signed in as $signedInEmail", Toast.LENGTH_SHORT).show()
-            } else {
-                scope.launch {
-                    when (val out = AuraSignIn(context).signIn(context)) {
-                        is SignInOutcome.Success -> signInTick++
-                        SignInOutcome.Cancelled -> Unit
-                        SignInOutcome.NoGoogleAccount -> Toast.makeText(
-                            context,
-                            "No Google account on this phone. Add one in Android Settings.",
-                            Toast.LENGTH_LONG,
-                        ).show()
-                        is SignInOutcome.Misconfigured ->
-                            Toast.makeText(context, out.message, Toast.LENGTH_LONG).show()
-                        is SignInOutcome.Failed ->
-                            Toast.makeText(context, out.message, Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
-
-        // ── Access — uniform permission toggles ──────────────────────────────
-        MonoSectionLabel("Access", scheme)
-        MonoCardGroup(scheme) {
-            PermissionRegistry.tier1.forEachIndexed { index, permission ->
-                if (index > 0) MonoDivider()
-                val granted = remember(permission.id, refresh) { permission.isGranted(context) }
-                PermissionToggleRow(
-                    permission = permission,
-                    granted = granted,
-                    icon = permissionIcon(permission.id),
-                    onRequestRuntime = { runtimeLauncher.launch(it.toTypedArray()) },
-                    onOpenSystem = {
-                        openPermissionSystemPage(context, permission, onScreenCapture = onRequestScreenCapture)
-                    },
-                )
-            }
-            // HIDDEN 2026-08-12 — kept, not deleted, so the screen-mirroring feature can
-            // restore it by flipping AccessibilityCapturePolicy.MIRROR_ENABLED.
-            //
-            // The agent no longer needs MediaProjection to see the screen: perception moved to
-            // AccessibilityService.takeScreenshot(), covered by the Accessibility permission
-            // already granted above. Showing this switch would ask for a capability nothing
-            // consumes — and because the mirror is gated off, it could never turn ON, leaving
-            // a switch that visibly refuses to move.
-            if (AccessibilityCapturePolicy.MIRROR_ENABLED) {
-                MonoDivider()
-                MonoRow(
-                    icon = Icons.Outlined.Screenshot,
-                    title = "Screen capture",
-                    subtitle = if (screenCaptureAvailable) "Enabled for this session" else "Let the agent see the screen",
-                    trailing = {
-                        AuraSwitch(
-                            checked = screenCaptureAvailable,
-                            onCheckedChange = { enabled ->
-                                if (enabled && !screenCaptureAvailable) onRequestScreenCapture()
-                            },
-                        )
-                    },
-                )
-            }
-            MonoDivider()
-            MonoRow(
-                icon = Icons.Outlined.Security,
-                title = "See all permissions",
-                subtitle = "Manage everything AURA can access",
-                onClick = onOpenPermissions,
-            )
-        }
-
-        // ── Safety ───────────────────────────────────────────────────────────
-        MonoSectionLabel("Safety", scheme)
-        MonoCardGroup(scheme) {
-            MonoRow(
-                icon = Icons.Outlined.Block,
-                title = "Restricted Apps",
-                subtitle = "Apps AURA declines to act in — banking, payments, auth",
-                onClick = onOpenRestrictedApps,
-            )
-        }
-
-        // ── Integrations ─────────────────────────────────────────────────────
-        MonoSectionLabel("Integrations", scheme)
-        MonoCardGroup(scheme) {
-            MonoRow(
-                icon = Icons.Outlined.Search,
-                title = "Web search (Tavily)",
-                subtitle = "API key for live web lookups",
-                onClick = onOpenTavilyKey,
-            )
-        }
-
-        // ── Preferences ──────────────────────────────────────────────────────
-        MonoSectionLabel("Preferences", scheme)
-        MonoCardGroup(scheme) {
-            MonoRow(
+        AuraSection(title = "General") {
+            AuraRow("Appearance", icon = Icons.Outlined.Palette, value = style.title, onClick = { onOpen(AuraRoutes.SETTINGS_APPEARANCE) })
+            AuraDivider(ICON_INSET)
+            AuraToggleRow("Notifications", notifications, ThemeManager::updateNotifications, icon = Icons.Outlined.Notifications)
+            AuraDivider(ICON_INSET)
+            AuraToggleRow("Haptics", haptics, ThemeManager::updateHapticFeedback, icon = Icons.Outlined.Vibration)
+            AuraDivider(ICON_INSET)
+            AuraToggleRow("Edge lighting", edgeGlow, ThemeManager::updateEdgeGlow, icon = Icons.Outlined.BlurOn, subtitle = "Glow around the screen while AURA works")
+            AuraDivider(ICON_INSET)
+            AuraToggleRow(
+                "Wake word",
+                wakeWord,
+                { on ->
+                    ThemeManager.updateWakeWord(on)
+                    if (on) WakeWordListeningService.start(context) else WakeWordListeningService.stop(context)
+                },
                 icon = Icons.Outlined.Hearing,
-                title = "\"Wake up AURA\" wake word",
-                trailing = {
-                    AuraSwitch(
-                        checked = wakeWordEnabled,
-                        onCheckedChange = { enabled ->
-                            ThemeManager.updateWakeWord(enabled)
-                            if (enabled) {
-                                WakeWordListeningService.start(context)
-                            } else {
-                                WakeWordListeningService.stop(context)
-                            }
-                        },
-                    )
-                },
-            )
-            MonoDivider()
-            MonoRow(
-                icon = Icons.Outlined.Notifications,
-                title = "Notifications",
-                trailing = {
-                    AuraSwitch(
-                        checked = notifications,
-                        onCheckedChange = ThemeManager::updateNotifications,
-                    )
-                },
+                subtitle = "Say \"Wake up AURA\"",
             )
             if (android.os.Build.VERSION.SDK_INT >= 36) {
-                MonoDivider()
-                MonoRow(
-                    icon = Icons.Outlined.Notifications,
-                    title = "Live Updates",
-                    subtitle = "Manage status bar chip settings",
-                    onClick = {
-                        val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        }
-                        context.startActivity(intent)
-                    }
-                )
-            }
-            MonoDivider()
-            MonoRow(
-                icon = Icons.Outlined.Vibration,
-                title = "Haptic feedback",
-                trailing = {
-                    AuraSwitch(
-                        checked = haptics,
-                        onCheckedChange = ThemeManager::updateHapticFeedback,
-                    )
-                },
-            )
-            MonoDivider()
-            MonoRow(
-                icon = Icons.Outlined.BlurOn,
-                title = "Edge lighting",
-                subtitle = "White glow around the screen while AURA is open or working",
-                trailing = {
-                    AuraSwitch(
-                        checked = edgeGlow,
-                        onCheckedChange = ThemeManager::updateEdgeGlow,
-                    )
-                },
-            )
-        }
-
-        // ── Privacy & Data ───────────────────────────────────────────────────
-        MonoSectionLabel("Privacy & Data", scheme)
-        MonoCardGroup(scheme) {
-            // Placed first in this group, above the policy links: a control the
-            // user can act on outranks documents they can only read.
-            MonoRow(
-                icon = Icons.Outlined.Insights,
-                title = "Share diagnostics",
-                subtitle = "Your Google email, phone model, app version, usage counts, crash reports. " +
-                    "Never your tasks, screen or messages.",
-                trailing = {
-                    AuraSwitch(
-                        checked = diagnosticsEnabled,
-                        onCheckedChange = { DiagnosticsStore.setEnabled(context, it) },
-                    )
-                },
-            )
-            MonoDivider()
-            MonoRow(icon = Icons.Outlined.Shield, title = "Privacy Policy", onClick = onOpenPrivacy)
-            MonoDivider()
-            MonoRow(icon = Icons.Outlined.Description, title = "Terms of Service", onClick = onOpenTerms)
-            MonoDivider()
-            MonoRow(icon = Icons.Outlined.Code, title = "Open-source licenses", onClick = onOpenLicenses)
-        }
-
-        // ── Developer (debug builds only) ────────────────────────────────────
-        // The eval cockpit drives the agent through the whole task suite and spends real provider
-        // quota doing it, so it lives behind BuildConfig.DEBUG and is passed in as a nullable
-        // callback rather than gated inside this file.
-        onOpenEvalSuite?.let { openEval ->
-            MonoSectionLabel("Developer", scheme)
-            MonoCardGroup(scheme) {
-                MonoRow(icon = Icons.Outlined.Science, title = "Eval suite", onClick = openEval)
-            }
-        }
-
-        // ── Community ────────────────────────────────────────────────────────
-        MonoSectionLabel("Community", scheme)
-        MonoCardGroup(scheme) {
-            MonoRow(
-                icon = Icons.Outlined.Forum,
-                title = "Join the AURA Discord",
-                subtitle = "Chat with us, leave a review, report bugs",
-                onClick = {
+                AuraDivider(ICON_INSET)
+                AuraRow("Live updates", icon = Icons.Outlined.Notifications, onClick = {
                     runCatching {
                         context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(DISCORD_INVITE))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName),
                         )
                     }
-                },
-                trailing = {
-                    Icon(
-                        Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        tint = scheme.textSecondary,
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
+                })
+            }
+        }
+
+        AuraSection(title = "AI") {
+            AuraRow("On-device agent", icon = Icons.Outlined.Hub, onClick = { onOpen(AuraRoutes.AGENT) })
+            AuraDivider(ICON_INSET)
+            AuraRow("Voice", icon = Icons.Outlined.RecordVoiceOver, onClick = { onOpen(AuraRoutes.AGENT_COMPANION) })
+            AuraDivider(ICON_INSET)
+            AuraRow("API keys", icon = Icons.Outlined.Key, onClick = { onOpen(AuraRoutes.apiKeys()) })
+        }
+
+        AuraSection(title = "Privacy and security") {
+            val access = rememberPhoneAccess()
+            AuraRow(
+                "Accessibility",
+                icon = Icons.Outlined.AccessibilityNew,
+                value = if (access) "On" else "Off",
+                tint = if (access) null else LocalAura.current.danger,
+                onClick = { PhoneAccess.openSettings(context) },
+            )
+            AuraDivider(ICON_INSET)
+            AuraRow("Permissions", icon = Icons.Outlined.Security, onClick = { onOpen(AuraRoutes.SETTINGS_PERMISSIONS) })
+            AuraDivider(ICON_INSET)
+            AuraRow("Restricted apps", icon = Icons.Outlined.Block, onClick = { onOpen(AuraRoutes.SETTINGS_RESTRICTED_APPS) })
+            AuraDivider(ICON_INSET)
+            val keep = remember { LogKeep.days(context) }
+            AuraRow("Keep run logs", icon = Icons.Outlined.History, value = LogKeep.label(keep), onClick = { onOpen(AuraRoutes.RUN_LOGS_KEEP) })
+            AuraDivider(ICON_INSET)
+            AuraToggleRow(
+                "Share diagnostics",
+                diagnostics,
+                { DiagnosticsStore.setEnabled(context, it) },
+                icon = Icons.Outlined.Insights,
+                subtitle = "Crash reports and usage counts. Never your tasks, screen or messages.",
             )
         }
 
-        // ── About ────────────────────────────────────────────────────────────
-        MonoSectionLabel("About", scheme)
-        MonoCardGroup(scheme) {
-            val (versionName, versionCode) = remember { appVersion(context) }
-            MonoRow(
-                icon = Icons.Outlined.Info,
-                title = "Version",
-                trailing = {
-                    Text(
-                        text = versionName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.textSecondary,
-                    )
-                },
-            )
-            MonoDivider()
-            MonoRow(
-                icon = Icons.Outlined.Info,
-                title = "Build",
-                trailing = {
-                    Text(
-                        text = versionCode,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.textSecondary,
-                    )
-                },
-            )
+        AuraSection(title = "Connections") {
+            AuraRow("MCP server", icon = Icons.Outlined.Hub, onClick = { onOpen(AuraRoutes.SETTINGS_MCP_CENTER) })
+            AuraDivider(ICON_INSET)
+            AuraRow("Trusted devices", icon = Icons.Outlined.Devices, onClick = { onOpen(AuraRoutes.SETTINGS_TRUSTED_DEVICES) })
+            AuraDivider(ICON_INSET)
+            AuraRow("Phone status", icon = Icons.Outlined.MonitorHeart, onClick = { onOpen(AuraRoutes.HOME_DASHBOARD) })
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        AuraSection(title = "About") {
+            val version = remember { appVersion(context) }
+            AuraRow("Version", icon = Icons.Outlined.Info, value = version)
+            AuraDivider(ICON_INSET)
+            AuraRow("Join the Discord", icon = Icons.Outlined.Forum, onClick = {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DISCORD_INVITE)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            })
+            AuraDivider(ICON_INSET)
+            AuraRow("Privacy policy", icon = Icons.Outlined.Shield, onClick = { onOpen(AuraRoutes.SETTINGS_PRIVACY) })
+            AuraDivider(ICON_INSET)
+            AuraRow("Terms of service", icon = Icons.Outlined.Description, onClick = { onOpen(AuraRoutes.SETTINGS_TERMS) })
+            AuraDivider(ICON_INSET)
+            AuraRow("Open-source licences", icon = Icons.Outlined.Code, onClick = { onOpen(AuraRoutes.SETTINGS_LICENSES) })
+        }
+
+        // The eval suite spends real provider quota running the whole task list: debug builds only.
+        if (debug) {
+            AuraSection(title = "Developer") {
+                AuraRow("Eval suite", icon = Icons.Outlined.Science, onClick = { onOpen(AuraRoutes.EVAL_SUITE) })
+            }
+        }
     }
 }
 
-/** Apple-ID-style account card. Placeholder identity until OAuth is wired. */
+/**
+ * The Google account: photo, name and email. Tapping it signs in when signed out.
+ * Why no sign-out: the account is what makes the install usable, so a sign-out row would be a
+ * one-tap way to lock yourself out of your own assistant.
+ */
 @Composable
-private fun ProfileHeaderCard(
-    scheme: MonoScheme,
-    name: String,
-    subtitle: String,
-    signedIn: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        shape = Mono.ShapeCard,
-        color = scheme.card,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp),
+private fun ProfileCard() {
+    val context = LocalContext.current
+    val aura = LocalAura.current
+    val scope = rememberCoroutineScope()
+    var tick by remember { mutableIntStateOf(0) }
+    val profile = remember(tick) {
+        runCatching {
+            FirebaseAuth.getInstance().currentUser?.takeIf { !it.isAnonymous }?.let {
+                Profile(it.displayName ?: PersonaOwner.get(context), it.email, it.photoUrl?.toString())
+            }
+        }.getOrNull() ?: Profile()
+    }
+    val signedIn = profile.email != null
+    Row(
+        Modifier.fillMaxWidth().padding(top = 14.dp).auraCard().clickable(enabled = !signedIn) {
+            scope.launch {
+                when (val out = AuraSignIn(context).signIn(context)) {
+                    is SignInOutcome.Success -> tick++
+                    SignInOutcome.Cancelled -> Unit
+                    SignInOutcome.NoGoogleAccount -> Toast.makeText(context, "Add a Google account in Android Settings first.", Toast.LENGTH_LONG).show()
+                    is SignInOutcome.Misconfigured -> Toast.makeText(context, out.message, Toast.LENGTH_LONG).show()
+                    is SignInOutcome.Failed -> Toast.makeText(context, out.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(scheme.chip),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (signedIn) Icons.Outlined.Verified else Icons.Outlined.Person,
-                    contentDescription = null,
-                    tint = scheme.chipContent,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = scheme.textPrimary,
-                    maxLines = 1,
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.textSecondary,
-                    maxLines = 1,
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = scheme.textSecondary,
-                modifier = Modifier.size(20.dp),
-            )
+        Avatar(profile, 56)
+        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+            Text(profile.name ?: if (signedIn) profile.email.orEmpty() else "Sign in", style = AuraType.title, color = aura.label)
+            Text(profile.email ?: "With Google, to use AURA", style = AuraType.callout, color = aura.secondary)
         }
     }
 }
@@ -475,14 +235,8 @@ private fun ProfileHeaderCard(
 /** The AURA community server: chat, reviews and bug reports. */
 private const val DISCORD_INVITE = "https://discord.com/invite/H66ws9zMPF"
 
-private fun appVersion(context: Context): Pair<String, String> = try {
+private fun appVersion(context: Context): String = runCatching {
     val info = context.packageManager.getPackageInfo(context.packageName, 0)
-    val code = if (android.os.Build.VERSION.SDK_INT >= 28) {
-        info.longVersionCode.toString()
-    } else {
-        @Suppress("DEPRECATION") info.versionCode.toString()
-    }
-    (info.versionName ?: "—") to code
-} catch (e: Exception) {
-    "—" to "—"
-}
+    val code = if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    "${info.versionName ?: "—"} ($code)"
+}.getOrDefault("—")

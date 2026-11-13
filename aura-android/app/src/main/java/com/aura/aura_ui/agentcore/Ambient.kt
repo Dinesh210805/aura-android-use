@@ -5,7 +5,8 @@ package com.aura.aura_ui.agentcore
  *
  * It is a pipeline, not an agent. Events arrive (a notification, a schedule), rules decide what
  * they are worth, an on-device model words the result when one is available, and the user gets
- * one notification. No model plans anything here and no tool is called.
+ * one notification: the digest. AURA never re-posts a single notification; the app that posted it
+ * already told the user. No model plans anything here and no tool is called.
  *
  * - Contract: nothing in this file sends notification text off the device. A cloud model is only
  *   ever reached by the user opening the digest and asking about it, which is an ordinary
@@ -39,14 +40,9 @@ enum class Urgency {
 
     /** Held for the next digest. */
     DIGEST,
-
-    /** Worth telling the user about now. */
-    NOW,
 }
 
 data class TriagePrefs(
-    /** Sender names the user marked as always urgent, lower-cased. */
-    val priorityPeople: Set<String> = emptySet(),
     val mutedPackages: Set<String> = emptySet(),
 )
 
@@ -68,7 +64,6 @@ object NotificationTriage {
             n.packageName in prefs.mutedPackages -> Urgency.DROP
             isSensitivePackage(n.packageName) || code.containsMatchIn(body) -> Urgency.DROP
             n.category in dropCategories -> Urgency.DROP
-            n.isConversation && n.title?.lowercase() in prefs.priorityPeople -> Urgency.NOW
             n.isConversation || n.category in digestCategories -> Urgency.DIGEST
             else -> Urgency.DROP
         }
@@ -136,6 +131,7 @@ object DigestBuilder {
  *
  * - Contract: thread-safe, bounded to [capacity] (oldest dropped), one entry per notification key.
  *   In memory only: a digest lost to a process death is cheaper than notification text on disk.
+ *   What is saved is the finished [Digest] (app names, sender names and counts), as a chat card.
  */
 class AmbientInbox(private val capacity: Int = 200) {
     private val pending = LinkedHashMap<String, NotificationSignal>()
@@ -164,15 +160,12 @@ class AmbientCoordinator(
     private val prefs: () -> TriagePrefs,
     private val isSensitivePackage: (String) -> Boolean,
     private val model: LocalModel = NoLocalModel,
-    /** Show an urgent notification's sender to the user now. */
-    private val notifyNow: (NotificationSignal) -> Unit,
-    private val notifyDigest: (Digest) -> Unit,
+    private val notifyDigest: suspend (Digest) -> Unit,
 ) {
     private val inbox = AmbientInbox()
 
     fun onPosted(signal: NotificationSignal) {
         when (NotificationTriage.classify(signal, prefs(), isSensitivePackage)) {
-            Urgency.NOW -> notifyNow(signal)
             Urgency.DIGEST -> inbox.add(signal)
             Urgency.DROP -> Unit
         }
@@ -182,6 +175,6 @@ class AmbientCoordinator(
     fun onRemoved(key: String) = inbox.remove(key)
 
     suspend fun flush() {
-        DigestBuilder.build(inbox.drain(), model)?.let(notifyDigest)
+        DigestBuilder.build(inbox.drain(), model)?.let { notifyDigest(it) }
     }
 }

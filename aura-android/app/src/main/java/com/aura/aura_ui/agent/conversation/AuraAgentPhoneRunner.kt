@@ -22,9 +22,7 @@ class AuraAgentPhoneRunner(private val context: Context) : PhoneTaskRunner {
     override suspend fun run(task: String, onProgress: (String) -> Unit): String =
         minimizedBrowser {
             LiveSessionScope.expectRun {
-                // The agent switch: `AgentCore.enabled` routes voice tasks to the agent in `agentcore/`.
-                AgentCore.ifEnabled(context)?.runTask(task) { onProgress(it.toProgress()) }
-                    ?: AuraAgent(context).runFromSavedSettings(task, showReportCard = true) { onProgress(it.toProgress()) }
+                AgentCore.get(context).runTask(task) { onProgress(it.toProgress()) }
             }
         }
 

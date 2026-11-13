@@ -109,6 +109,11 @@ internal object McpServerBuilder {
          */
         labelLookup: ((somId: Int) -> String?) -> Unit = {},
         /**
+         * As [labelLookup], for the element's bounds in screen pixels. A host uses it to mark
+         * the pressed element on a screenshot in its run log.
+         */
+        boundsLookup: ((somId: Int) -> com.aura.mcp.bridge.BBox?) -> Unit = {},
+        /**
          * Spec 2026-07-31 — control lock. Reports whether the human currently has the
          * wheel; every tool call is refused while they do.
          *
@@ -161,6 +166,7 @@ internal object McpServerBuilder {
             },
         )
         labelLookup(perceptionCache::labelFor)
+        boundsLookup(perceptionCache::boundsFor)
         val cvMemo = com.aura.mcp.cache.CvMemo()
         // Shared "when did we last look at the screen" baseline. Written by
         // perceive_screen and by every post-action settle, so change detection always

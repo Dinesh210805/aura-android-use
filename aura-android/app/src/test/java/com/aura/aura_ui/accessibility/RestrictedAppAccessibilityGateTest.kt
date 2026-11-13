@@ -77,17 +77,6 @@ class RestrictedAppAccessibilityGateTest {
         assertNull(RestrictedAppAccessibilityGate.matchLabel("   ", listOf(restricted)))
     }
 
-    // --- recovery deep link ---------------------------------------------------
-
-    @Test fun `details deep link is used from API 31 up`() {
-        assertTrue(RestrictedAppAccessibilityGate.supportsDetailsDeepLink(31))
-        assertTrue(RestrictedAppAccessibilityGate.supportsDetailsDeepLink(36))
-    }
-
-    @Test fun `older API falls back to the generic accessibility list`() {
-        assertFalse(RestrictedAppAccessibilityGate.supportsDetailsDeepLink(30))
-    }
-
     // --- which events mean the app is on screen --------------------------------
 
     @Test fun `a notification or toast from a restricted app does not count as opening it`() {

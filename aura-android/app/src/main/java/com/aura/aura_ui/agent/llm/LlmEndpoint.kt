@@ -41,10 +41,21 @@ enum class VisionInference { LLAMA4_FAMILY, OPENROUTER_MODALITY, GEMINI_GENERATI
  * per-model. Providers report this as inconsistently as modality:
  *  - [OPENROUTER_SUPPORTED_PARAMS] — exact: the model's `supported_parameters` array lists `reasoning`.
  *  - [OPENAI_OSERIES] / [GROQ_FAMILY] / [GEMINI_GENERATION] — id heuristics (the vendor exposes no flag).
- *  - [NONE] — no reasoning control (Anthropic compat unverified; custom endpoints).
+ *  - [ANTHROPIC_FAMILY] — id rule: Claude 3.7 and every Claude 4 or later model can think.
+ *  - [NONE] — no reasoning control (custom endpoints).
  */
 @Serializable
-enum class ReasoningInference { NONE, OPENROUTER_SUPPORTED_PARAMS, OPENAI_OSERIES, GROQ_FAMILY, GEMINI_GENERATION }
+enum class ReasoningInference { NONE, OPENROUTER_SUPPORTED_PARAMS, OPENAI_OSERIES, GROQ_FAMILY, GEMINI_GENERATION, ANTHROPIC_FAMILY }
+
+/**
+ * Which Koog client carries an endpoint's chat.
+ * - [OPENAI_COMPAT]: Koog's OpenAI client against the provider's OpenAI-compatible surface, with the
+ *   [ProviderProfile] shims. Every provider that has no stable native Koog client.
+ * - [ANTHROPIC_NATIVE]: Koog's Anthropic client ([AnthropicNative]). Anthropic's compatible layer
+ *   drops thinking, ignores `reasoning_effort` and reports no cache use.
+ */
+@Serializable
+enum class ChatWire { OPENAI_COMPAT, ANTHROPIC_NATIVE }
 
 /**
  * One configured LLM endpoint the on-device agent can target (D2). Replaces the frozen
@@ -69,6 +80,8 @@ data class LlmEndpoint(
     /** How per-model reasoning capability is decided. Defaults to [ReasoningInference.NONE] so a
      * serialized custom endpoint without this field (older store) deserializes to "no thinking". */
     val reasoningInference: ReasoningInference = ReasoningInference.NONE,
+    /** Defaults to the OpenAI-compatible wire, so stored custom endpoints keep working. */
+    val wire: ChatWire = ChatWire.OPENAI_COMPAT,
     val profile: ProviderProfile,
     val isBuiltIn: Boolean,
     val keyHint: String = "",

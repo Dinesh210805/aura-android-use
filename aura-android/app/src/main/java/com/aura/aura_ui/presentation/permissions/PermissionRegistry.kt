@@ -153,30 +153,9 @@ object PermissionRegistry {
                 NotificationManagerCompat.getEnabledListenerPackages(it).contains(it.packageName)
             },
         ),
-        AuraPermission(
-            id = "camera",
-            title = "Camera",
-            why = "Use the camera and flashlight when a task needs them.",
-            tier = 2,
-            kind = PermissionKind.RUNTIME,
-            runtimePermissions = listOf(Manifest.permission.CAMERA),
-            isGranted = { it.has(Manifest.permission.CAMERA) },
-        ),
-        AuraPermission(
-            id = "location",
-            title = "Location",
-            why = "Answer \"where am I\" and share your location when you ask.",
-            tier = 2,
-            kind = PermissionKind.RUNTIME,
-            runtimePermissions = listOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION,
-            ),
-            isGranted = {
-                it.has(Manifest.permission.ACCESS_FINE_LOCATION) ||
-                    it.has(Manifest.permission.ACCESS_COARSE_LOCATION)
-            },
-        ),
+        // No Camera or Location entry: the flashlight uses CameraManager.setTorchMode and "take a
+        // photo" hands off to the camera app by intent, neither of which needs CAMERA, and no tool
+        // reads location. Add an entry only alongside the code that needs it.
         AuraPermission(
             id = "exact_alarms",
             title = "Alarms & reminders",

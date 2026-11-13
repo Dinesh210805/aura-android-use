@@ -10,6 +10,7 @@ import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -303,6 +304,8 @@ fun AppPromptMarquee(
     dwellMillis: Long = 2200,
     travelMillis: Int = 700,
     scale: Float = 1f,
+    /** Called with the centred app's prompt when its caption is tapped; null leaves the caption inert. */
+    onPrompt: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -511,6 +514,7 @@ fun AppPromptMarquee(
                 maxLines = 2,
                 modifier = Modifier
                     .padding(horizontal = 24.dp)
+                    .then(if (onPrompt != null) Modifier.clickable(onClickLabel = "Use this prompt") { onPrompt(centred.prompt) } else Modifier)
                     .graphicsLayer { alpha = MarqueeGeometry.captionAlpha(visualPosition) },
             )
         }

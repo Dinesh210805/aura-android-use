@@ -197,7 +197,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         private const val STRIP_FAREWELL_MAX_MS = 4_000L
         // OxygenOS/OnePlus Live Alert chips truncate hard past ~15 chars.
         private const val CHIP_MAX_CHARS = 15
-        private const val CHANNEL_ID = "aura_overlay_channel"
         private const val CHANNEL_ID_WORKING = "aura_working_channel" // For Live Alert / Dynamic Island
         // IMPORTANCE_MIN channel for the idle FGS notification. Android requires
         // every foreground service to post a notification; IMPORTANCE_MIN ones get
@@ -754,9 +753,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     }
                     onAgentStreamEvent(event)
                 }
-                // The agent switch: `AgentCore.enabled` routes this run to the agent in `agentcore/`.
-                com.aura.aura_ui.agentcore.AgentCore.ifEnabled(this@AuraOverlayService)?.runTask(text, onEvent)
-                    ?: auraAgent.runFromSavedSettings(text, remember = remember, showReportCard = remember, onEvent = onEvent)
+                com.aura.aura_ui.agentcore.AgentCore.get(this@AuraOverlayService).runTask(text, remember, onEvent)
             }
         } catch (ce: CancellationException) {
             com.aura.aura_ui.telemetry.AuraAnalytics.agentTask(
@@ -1001,6 +998,11 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 conversationViewModel.completeAgentStep(event.tool, "")
             is AgentStreamEvent.ToolFailed ->
                 conversationViewModel.failAgentStep(event.tool, event.error)
+            is AgentStreamEvent.Narration -> conversationViewModel.addAgentOutput("AURA", event.text)
+            is AgentStreamEvent.Plan -> conversationViewModel.addAgentOutput(
+                "Plan",
+                event.steps.mapIndexed { index, step -> (if (index < event.done) "✓ " else "○ ") + step }.joinToString("\n"),
+            )
             // Run finished: hand touches back. Whether the chat comes back or the report card
             // shows instead is the caller's call (finishRun).
             is AgentStreamEvent.Finished -> serviceScope.launch {
@@ -1214,6 +1216,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     // clearing on every emission would swallow that. A USER line is kept: it is
                     // the command that started this run, and it should stay up while AURA works.
                     val registry = com.aura.aura_ui.services.AgentStatusRegistry
+                    if (running && !runWasActive) registry.clearStaleLine()
+                    if (!running && runWasActive) registry.endRun()
                     if (running && !runWasActive &&
                         registry.speech.value?.speaker != com.aura.aura_ui.services.AgentStatusRegistry.Speaker.USER
                     ) {
@@ -1295,31 +1299,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 // that cleared it by a frame; evasion covers it when the controls are gone.
                 override fun controlsBounds() = pausePill.boundsOnScreen() ?: reportCard.boundsOnScreen()
             }
-
-        // Publishes the conversation phase (Listening/Thinking/Speaking) to the
-        // process-global VoiceStatusRegistry, which AssistantForegroundService
-        // merges into the single promoted chip. Registered ONCE here — it used
-        // to live inside the legacy Gemini-Live branch only, so the BYOK
-        // companion and classic cascade modes never showed "Listening".
-        serviceScope.launch {
-            combine(conversationViewModel.state, _isOverlayVisible) { state, visible -> state to visible }
-                .collect { (state, visible) ->
-                // Hidden = idle. Returning early here instead left the last phase (usually
-                // Listening) in the registry, pinning the chip after the overlay closed.
-                if (!visible) {
-                    com.aura.aura_ui.services.VoiceStatusRegistry.set(com.aura.aura_ui.services.AuraStatus.Idle)
-                    return@collect
-                }
-                if (_isMinimized.value) return@collect // automation pill owns the notch
-                val status = when (state.conversationState) {
-                    ConversationPhase.LISTENING -> com.aura.aura_ui.services.AuraStatus.Listening
-                    ConversationPhase.THINKING -> com.aura.aura_ui.services.AuraStatus.Thinking
-                    ConversationPhase.RESPONDING -> com.aura.aura_ui.services.AuraStatus.Speaking
-                    else -> com.aura.aura_ui.services.AuraStatus.Idle
-                }
-                com.aura.aura_ui.services.VoiceStatusRegistry.set(status)
-            }
-        }
 
         Log.i(TAG, "AuraOverlayService created")
     }
@@ -1888,10 +1867,12 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             // Only ALLOWS the strip — the strip itself stays off screen until it has a line
             // to show, so opening the chat no longer paints an empty bar across the top.
             statusStrip.setEnabled(true)
-            // "Working…" belongs to a RUN and only to a run. Seeded here rather than as the
-            // view's default so it can never appear during a plain conversation, where
-            // nothing is being automated and the word would simply be untrue.
-            if (runActive) com.aura.aura_ui.services.AgentStatusRegistry.seedWorking()
+            // "Thinking…" belongs to an on-device RUN that has not acted yet. Seeded here rather
+            // than as the view's default so it never appears in a plain conversation, nor for a
+            // desktop client's run, where no model on this phone is thinking.
+            if (runActive && com.aura.aura_ui.services.ControlLockStore.shared.localRunning.value) {
+                com.aura.aura_ui.services.AgentStatusRegistry.seedThinking()
+            }
             return
         }
         // Nothing on the glass — go now, and clear on the way OUT rather than the way in, so
@@ -2449,7 +2430,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                         .fillMaxWidth()
                         .background(Color.Transparent)
                 ) {
-                    AuraUITheme(darkTheme = true) {
+                    AuraUITheme(darkTheme = com.aura.aura_ui.ui.theme.rememberOverlayDark()) {
                         OverlayContent()
                     }
                 }
@@ -2748,20 +2729,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
      */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Main channel - DEFAULT importance for Live Alert compatibility
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "AURA Voice Assistant",
-                NotificationManager.IMPORTANCE_DEFAULT  // DEFAULT required for Live Alert visibility
-            ).apply {
-                description = "AURA voice assistant service - appears in Live Alerts"
-                setShowBadge(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                // Disable sound but keep importance for Live Alert
-                setSound(null, null)
-                enableVibration(false)
-            }
-            
             // High priority channel for active commands / Live Alert pill
             val workingChannel = NotificationChannel(
                 CHANNEL_ID_WORKING,
@@ -2794,7 +2761,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             }
 
             val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
             notificationManager?.createNotificationChannel(workingChannel)
             notificationManager?.createNotificationChannel(silentChannel)
         }

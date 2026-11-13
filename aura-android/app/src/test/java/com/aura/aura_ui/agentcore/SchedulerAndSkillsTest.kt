@@ -57,4 +57,21 @@ class SchedulerAndSkillsTest {
             .flatMap { it.parts }.filterIsInstance<MessagePart.Tool.Result>()
         assertEquals(listOf(ContextAssembler.PRUNED_RESULT, ContextAssembler.PRUNED_RESULT, "2$long"), results.map { it.output })
     }
+
+    @Test
+    fun `bundled skills are installed once and a deleted one stays deleted`() {
+        val store = SkillStore(java.nio.file.Files.createTempDirectory("skills").toFile())
+        val bundled = mapOf(
+            "send-email" to { "---\nname: Send Email\ndescription: Send an email from Gmail\nwhenToUse: when asked to email\n---\n# Steps\n1. Open Gmail" },
+        )
+
+        store.seed(bundled)
+        assertEquals(listOf("send-email"), store.list().map { it.name })
+        assertEquals("Send an email from Gmail. Use when asked to email", store.list().single().description)
+        assertEquals("# Steps\n1. Open Gmail", store.read("send-email"))
+
+        store.delete("send-email")
+        store.seed(bundled)
+        assertEquals(emptyList<Skill>(), store.list())
+    }
 }

@@ -20,11 +20,18 @@ class PermissionToggleModelTest {
     }
 
     @Test
-    fun `runtime has no caption`() {
-        val s = toggleUiState(perm(PermissionKind.RUNTIME), granted = true)
-        assertEquals(true, s.checked)
+    fun `runtime not granted has no caption`() {
+        val s = toggleUiState(perm(PermissionKind.RUNTIME), granted = false)
+        assertEquals(false, s.checked)
         assertEquals(false, s.routesToSystem)
         assertNull(s.caption)
+    }
+
+    @Test
+    fun `runtime granted says where turning off goes`() {
+        val s = toggleUiState(perm(PermissionKind.RUNTIME), granted = true)
+        assertEquals(true, s.checked)
+        assertEquals("Turning off opens App info", s.caption)
     }
 
     @Test
@@ -48,9 +55,9 @@ class PermissionToggleModelTest {
     }
 
     @Test
-    fun `runtime turning off is no-op here`() {
+    fun `runtime turning off opens system app info`() {
         assertEquals(
-            ToggleAction.NONE,
+            ToggleAction.OPEN_SYSTEM,
             toggleAction(perm(PermissionKind.RUNTIME), granted = true, desired = false),
         )
     }

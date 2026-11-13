@@ -58,6 +58,8 @@ class RemoteGateManager @Inject constructor(
                 // Empty on purpose: the real URL is set in Remote Config, so a wrong baked-in
                 // value can never reach users.
                 KEY_UPDATE_URL to "",
+                KEY_LATEST_VERSION_NAME to "",
+                KEY_RELEASE_NOTES to "",
             ),
         )
     }
@@ -87,6 +89,8 @@ class RemoteGateManager @Inject constructor(
             versionGateMessage = remoteConfig.getString(KEY_VERSION_GATE_MESSAGE),
             latestVersionCode = remoteConfig.getLong(KEY_LATEST_VERSION_CODE),
             updateUrl = remoteConfig.getString(KEY_UPDATE_URL),
+            latestVersionName = remoteConfig.getString(KEY_LATEST_VERSION_NAME),
+            releaseNotes = remoteConfig.getString(KEY_RELEASE_NOTES),
         )
         saveInputs(context, inputs)
 
@@ -142,6 +146,8 @@ class RemoteGateManager @Inject constructor(
                 versionGateMessage = p.getString(KEY_VERSION_GATE_MESSAGE, null) ?: DEFAULT_VERSION_GATE_MESSAGE,
                 latestVersionCode = p.getLong(KEY_LATEST_VERSION_CODE, 0L),
                 updateUrl = p.getString(KEY_UPDATE_URL, null).orEmpty(),
+                latestVersionName = p.getString(KEY_LATEST_VERSION_NAME, null).orEmpty(),
+                releaseNotes = p.getString(KEY_RELEASE_NOTES, null).orEmpty(),
             )
             publish(evaluateGate(inputs, Blocklist.cached(context), BuildConfig.VERSION_CODE.toLong()))
         }
@@ -154,6 +160,8 @@ class RemoteGateManager @Inject constructor(
                 .putString(KEY_VERSION_GATE_MESSAGE, i.versionGateMessage)
                 .putLong(KEY_LATEST_VERSION_CODE, i.latestVersionCode)
                 .putString(KEY_UPDATE_URL, i.updateUrl)
+                .putString(KEY_LATEST_VERSION_NAME, i.latestVersionName)
+                .putString(KEY_RELEASE_NOTES, i.releaseNotes)
                 .apply()
         }
 
@@ -168,5 +176,9 @@ class RemoteGateManager @Inject constructor(
         const val KEY_VERSION_GATE_MESSAGE = "version_gate_message"
         const val KEY_LATEST_VERSION_CODE = "latest_version_code"
         const val KEY_UPDATE_URL = "update_url"
+
+        /** Shown in the update pop-up; blank hides it. Set with `KEY_LATEST_VERSION_CODE` on each release. */
+        const val KEY_LATEST_VERSION_NAME = "latest_version_name"
+        const val KEY_RELEASE_NOTES = "release_notes"
     }
 }

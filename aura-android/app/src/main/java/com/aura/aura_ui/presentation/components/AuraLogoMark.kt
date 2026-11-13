@@ -204,7 +204,7 @@ fun AuraLogoAvatar(
 ) {
     val logo = ImageBitmap.imageResource(R.mipmap.ic_launcher_foreground)
     Canvas(modifier = modifier.size(size)) {
-        drawLogo(logo)
+        drawLogo(logo, ColorFilter.tint(Color.White))
     }
 }
 
