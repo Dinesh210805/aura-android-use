@@ -559,17 +559,56 @@ class ToolHub(
         private const val OPEN_DEEPLINK = "open_deeplink"
 
         /**
-         * True when every query and fragment value of [url] (percent-decoded) appears in [request].
-         * Numbers count as dictated too when the request has none: they are routing (a phone number,
-         * an id), and the commit card at the app's Send shows the user where it goes.
+         * True when [url] carries nothing but routing and the user's own words, so handing it to an
+         * installed app cannot leak what the turn read.
+         *
+         * - Every path segment must be a known routing word, a phone-length number (10 to 15
+         *   digits: an OTP or PIN is shorter) or a run of the request's words.
+         * - Every query name must be a known routing name; every value and the fragment must be a
+         *   whole run of the request's words (token equality, not substring), or a number the
+         *   request itself contains, or a phone-length number.
+         * - Anything holding a secret shape (`SecretPatterns`) fails, whatever else holds.
+         * - Fails closed: anything unparsable is not dictated.
          */
         internal fun dictatedOnly(url: String, request: String): Boolean {
-            val tail = url.substringAfter('?', "") + "&" + url.substringAfter('#', "")
-            val said = request.lowercase()
-            return tail.split('&', ';').mapNotNull { it.substringAfter('=', "").takeIf(String::isNotBlank) }
-                .map { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it).trim().lowercase() }
-                .all { value -> value.isEmpty() || value in said || value.all { c -> c.isDigit() || c == '+' } }
+            if (SecretPatterns.containsSecret(decode(url))) return false
+            val said = tokens(request)
+            fun spoken(text: String): Boolean {
+                val t = tokens(text)
+                if (t.isEmpty()) return true
+                if (t.size == 1 && t[0].all(Char::isDigit) && (t[0].length in PHONE_DIGITS || t[0] in said)) return true
+                return (0..said.size - t.size).any { start -> said.subList(start, start + t.size) == t }
+            }
+            val afterScheme = url.substringAfter("://", url.substringAfter(':'))
+            val path = afterScheme.substringBefore('?').substringBefore('#').split('/').drop(1)
+            val query = afterScheme.substringAfter('?', "").substringBefore('#')
+            val fragment = afterScheme.substringAfter('#', "")
+            val pathOk = path.filter(String::isNotBlank).map(::decode).all { seg ->
+                seg.lowercase() in ROUTING_WORDS || seg.trimStart('+').let { it.all(Char::isDigit) && it.length in PHONE_DIGITS } || spoken(seg)
+            }
+            val queryOk = query.split('&', ';').filter(String::isNotBlank).all { pair ->
+                decode(pair.substringBefore('=')).lowercase() in ROUTING_NAMES && spoken(decode(pair.substringAfter('=', "")))
+            }
+            return pathOk && queryOk && spoken(decode(fragment))
         }
+
+        private fun decode(text: String): String = runCatching { java.net.URLDecoder.decode(text, "UTF-8") }.getOrDefault(text)
+
+        private fun tokens(text: String): List<String> =
+            text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
+
+        private val PHONE_DIGITS = 10..15
+
+        /** Path words apps use to route a link; they carry no user data. */
+        private val ROUTING_WORDS = setOf(
+            "send", "search", "chat", "open", "play", "user", "u", "profile", "track", "album", "playlist",
+            "artist", "message", "compose", "share", "home", "app", "dl", "go", "dir", "maps", "place",
+        )
+
+        /** Query names apps use for routing or for the text to fill in; the values are checked separately. */
+        private val ROUTING_NAMES = setOf(
+            "text", "q", "query", "phone", "body", "message", "msg", "subject", "search", "term", "to", "destination", "daddr",
+        )
 
         /** A URL or intent link inside JSON text: up to the next quote, backslash or space. */
         private val URL = Regex("""(?i)(?:[a-z][a-z0-9+.\-]*://|intent:)[^\s"\\]+""")

@@ -18,4 +18,14 @@ class DeepLinkEgressTest {
         assertFalse(ToolHub.dictatedOnly("https://wa.me/919876543210?text=OTP%20is%20482910", "reply to the last message"))
         assertFalse(ToolHub.dictatedOnly("myapp://open#token=abc123secret", "open my app"))
     }
+
+    @Test
+    fun `data hidden in a path, a parameter name, a short number or a substring is caught`() {
+        assertFalse(ToolHub.dictatedOnly("myapp://open/482910", "open my app"))
+        assertFalse(ToolHub.dictatedOnly("myapp://open?482910=1", "open my app"))
+        assertFalse(ToolHub.dictatedOnly("https://wa.me/919876543210?text=a", "send hi amma"))
+        assertFalse(ToolHub.dictatedOnly("https://wa.me/919876543210?text=4111111111111111", "pay"))
+        // A number the user said is theirs to send.
+        assertTrue(ToolHub.dictatedOnly("https://wa.me/919876543210?text=room%20402", "tell Amma room 402"))
+    }
 }
