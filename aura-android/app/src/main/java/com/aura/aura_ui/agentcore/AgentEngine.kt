@@ -260,7 +260,8 @@ class AgentEngine(
                     journal?.say(turn.runId, it)
                     turn.emit(AgentEvent.AssistantText(it, final = false))
                 }
-                val results = executeTools(reply, false).map { it.toMessagePart() }
+                val callNames = reply.parts.filterIsInstance<MessagePart.Tool.Call>().map { it.tool }
+                val results = executeTools(reply, hub.parallelSafe(callNames)).map { it.toMessagePart() }
                 val calls = reply.parts.filterIsInstance<MessagePart.Tool.Call>().associateBy { it.id }
                 results.filter { !it.isError && it.tool in ContextAssembler.SCREEN_CHANGING }.forEach { r ->
                     // The call only, never its result: a result can carry screen text, and this line

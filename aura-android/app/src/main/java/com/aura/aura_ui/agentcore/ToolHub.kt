@@ -323,10 +323,23 @@ class ToolHub(
     /** Every tool name the model could call. */
     fun names(): Set<String> = catalog.keys
 
-    /** The schemas to send with the next request: only the toolsets this turn has loaded. */
+    /**
+     * The schemas to send with the next request: only the toolsets this turn has loaded.
+     * - Why in load order: loading a toolset then appends to the tools field, so the provider's
+     *   cached prefix (system prompt plus the tools already sent) still matches.
+     */
     fun visible(turn: TurnState): List<ToolDescriptor> {
-        val loaded = turn.loaded()
-        return catalog.values.map { it.first }.filter { it.toolset in loaded }.map { it.descriptor }
+        val specs = catalog.values.map { it.first }
+        return turn.loaded().flatMap { toolset -> specs.filter { it.toolset == toolset } }.map { it.descriptor }
+    }
+
+    /**
+     * True when every call in a reply may run at once: reads that do not touch the screen and
+     * neither ask the user nor change what the turn has loaded. Screen work stays in order.
+     */
+    fun parallelSafe(names: List<String>): Boolean = names.size > 1 && names.all { name ->
+        val spec = catalog[name]?.first ?: return@all false
+        spec.risk == ToolRisk.READ && spec.toolset != SCREEN && name !in SEQUENTIAL
     }
 
     /** One line per unloaded toolset, for the system prompt. Stable while the tool set is. */
@@ -709,6 +722,8 @@ class ToolHub(
         /** Open something on this phone; their text reaches an app that still needs its own Send. */
         private val OPENS_LOCALLY = setOf("system_intent", "open_file", "launch_app")
         private const val MAX_SAID_IN_QUESTION = 400
+        /** Reads that still run one at a time: they wait on the user or change the turn's tools. */
+        private val SEQUENTIAL = setOf("ask_user", "load_toolset", "update_plan")
         private const val MAX_RESULT_CHARS = 12_000
         private const val PREVIEW_CHARS = 240
         private const val MAX_OPTIONS = 4
