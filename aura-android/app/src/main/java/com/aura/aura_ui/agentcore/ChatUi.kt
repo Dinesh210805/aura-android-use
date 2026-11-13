@@ -175,6 +175,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The last turn stopped at its time limit; the chat offers "Keep going". */
     val outOfTime = MutableStateFlow(false)
+
+    /** A run the app died in the middle of, as (thread, request); the chat offers to continue it. */
+    val interrupted = MutableStateFlow(core.interrupted()?.takeIf { core.engine.isIdle() })
     val models = MutableStateFlow(emptyList<ModelChoice>())
     val catalog = MutableStateFlow<Catalog?>(null)
     val profile = MutableStateFlow(Profile())
@@ -273,6 +276,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         plan.value = null
     }
 
+    /** Continue the run the app died in, from its last saved step; or let it go. */
+    fun resume(go: Boolean) {
+        val (id, _) = interrupted.value ?: return
+        interrupted.value = null
+        core.forgetInterrupted()
+        if (!go) return
+        viewModelScope.launch {
+            // A benchmark task's thread is deleted after its run; nothing to continue then.
+            if (core.threads.thread(id) == null) return@launch
+            open(id)
+            send(CONTINUE, emptyList())
+        }
+    }
+
     fun answer(promptId: String, answer: String?) = core.broker.answer(promptId, answer)
 
     /** A tap on a "which one?" card: answers the open question, or is sent as a message. */
@@ -292,6 +309,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             if (running.value && core.engine.steer(id, text)) return@launch
             core.releaseIdlePause()
             outOfTime.value = false
+            if (interrupted.value != null) {
+                interrupted.value = null
+                core.forgetInterrupted()
+            }
             turn = launch {
                 running.value = true
                 try {
@@ -360,6 +381,7 @@ fun AgentChatScreen(
     val status by vm.status.collectAsState()
     val plan by vm.plan.collectAsState()
     val outOfTime by vm.outOfTime.collectAsState()
+    val interrupted by vm.interrupted.collectAsState()
     val profile by vm.profile.collectAsState()
     var draft by rememberSaveable { mutableStateOf("") }
     var modelsOpen by remember { mutableStateOf(false) }
@@ -431,6 +453,15 @@ fun AgentChatScreen(
                         }
                     }
                     AnimatedVisibility(running) { StatusLine(status.orEmpty()) }
+                    AnimatedVisibility(interrupted != null && !running) {
+                        interrupted?.let { (_, request) ->
+                            Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                PillButton("Continue: ${request.take(40)}", Modifier.weight(1f, fill = false), filled = true) { vm.resume(true) }
+                                Spacer(Modifier.width(8.dp))
+                                PillButton("Dismiss") { vm.resume(false) }
+                            }
+                        }
+                    }
                     AnimatedVisibility(outOfTime && !running) {
                         PillButton("Keep going", Modifier.padding(start = 16.dp, bottom = 8.dp), filled = true) {
                             vm.send(KEEP_GOING, emptyList())
@@ -1011,3 +1042,6 @@ private fun inline(text: String): AnnotatedString = buildAnnotatedString {
 
 /** Sent by the "Keep going" button; the thread still holds the task and what was done. */
 private const val KEEP_GOING = "Keep going from where you stopped."
+
+/** Sent by "Continue" after the app died mid-run; the thread holds the work up to the last step. */
+private const val CONTINUE = "Continue the task from where you were stopped. Look at the screen first if you were using it."

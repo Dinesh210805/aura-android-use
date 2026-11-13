@@ -92,8 +92,17 @@ class AgentEngine(
     private val onDriving: (driving: Boolean, request: String) -> Unit = { _, _ -> },
     /** Removes tool-call syntax a model wrote as plain text from a reply. */
     private val tidy: (String) -> String = { it },
+    /**
+     * Called with the thread and request when a foreground turn starts, and with null when it ends
+     * however it ends. A mark still set at the next launch means the app died mid-run; the chat then
+     * offers to continue it, from the checkpoint saved after every step.
+     */
+    private val markRunning: (threadId: String, request: String?) -> Unit = { _, _ -> },
 ) {
     private val running = ConcurrentHashMap<String, TurnState>()
+
+    /** True when no turn is running in any thread. */
+    fun isIdle(): Boolean = running.isEmpty()
     private val journal = telemetry?.journal
 
     /**
@@ -144,8 +153,11 @@ class AgentEngine(
         val run = TurnRun(stored.messages)
         running[threadId] = turn
         onTurn(true, mode)
+        if (mode == RunMode.FOREGROUND) markRunning(threadId, text)
+        // A hand-off saved the chat turn's work, which already holds the request: say only "go on".
+        val asked = if (continuesHandOff && stored.messages.isNotEmpty()) CONTINUE_ON_SCREEN else text
         val ended = try {
-            val answer = execute(main, turn, run, stored.messages.isEmpty(), text, attachments)
+            val answer = execute(main, turn, run, stored.messages.isEmpty(), text, asked, attachments)
             if (run.end == TurnEnd.HANDED_OFF) {
                 AgentEvent.TurnEnded(TurnEnd.HANDED_OFF, null)
             } else {
@@ -165,10 +177,11 @@ class AgentEngine(
             AgentEvent.TurnEnded(TurnEnd.FAILED, message)
         } finally {
             onTurn(false, mode)
+            if (mode == RunMode.FOREGROUND) markRunning(threadId, null)
         }
         running.remove(threadId, turn)
-        // A handed-off turn leaves the thread as it found it; the overlay's turn starts clean.
-        if (ended.end != TurnEnd.HANDED_OFF) save(turn, run)
+        // A handed-off turn saves what it did, and the overlay's turn continues from it.
+        save(turn, run)
         journal?.end(turn.runId, ended.end, ended.message)
         send(ended)
         val untitled = threads.thread(threadId)?.title == ThreadStore.DEFAULT_TITLE
@@ -186,6 +199,8 @@ class AgentEngine(
         run: TurnRun,
         firstTurn: Boolean,
         text: String,
+        /** What the model is sent as the user's message: [text], or a "carry on" note. */
+        asked: String,
         attachments: List<Attachment>,
     ): String {
         hub.refresh()
@@ -243,7 +258,12 @@ class AgentEngine(
                 }
                 val results = executeTools(reply, false).map { it.toMessagePart() }
                 if (turn.handedOff) {
-                    journal?.note(turn.runId, "Handed the task to the overlay, which runs it as a new run")
+                    journal?.note(turn.runId, "Handed the task to the overlay, which continues this run")
+                    // Everything but the reply whose calls asked for the screen: those calls have no
+                    // results, and the overlay's turn makes them itself.
+                    run.messages = llm.readSession { prompt.messages }.dropLastWhile { m ->
+                        m is Message.Assistant && m.parts.any { it is MessagePart.Tool.Call }
+                    }
                     run.end = TurnEnd.HANDED_OFF
                     return@functionalStrategy ""
                 }
@@ -303,6 +323,8 @@ class AgentEngine(
                     }
                 }
                 noteThinking(turn, reply)
+                // Checkpoint: a killed app resumes from here (see markRunning).
+                save(turn, run)
                 if (atLimit) {
                     run.end = TurnEnd.LIMIT
                     break
@@ -356,7 +378,7 @@ class AgentEngine(
             telemetry?.let { tracing -> install(OpenTelemetry) { tracing.configure(this) } }
         }
         return try {
-            agent.run(TurnInput(userMessage(turn, firstTurn, text, attachments), images(main, turn, attachments)))
+            agent.run(TurnInput(userMessage(turn, firstTurn, asked, attachments), images(main, turn, attachments)))
         } finally {
             side.cancel()
             if (driving) onDriving(false, text)
@@ -503,6 +525,7 @@ class AgentEngine(
         const val STEERING = "The user added this while you were working. Take it into account:\n"
         const val EMPTY_REPLY =
             "Your last reply had no words and no tool call. Either call a tool to carry on, or tell the user the result."
+        const val CONTINUE_ON_SCREEN = "[Continue this request on the phone's screen now; you have the screen tools.]"
         const val PAUSED_TOO_LONG =
             "You took the phone back and I waited, so I've stopped here. Say continue when you want me to pick it up."
         const val DROPPED = "Okay, I've dropped it."

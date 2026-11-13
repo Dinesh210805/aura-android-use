@@ -167,7 +167,21 @@ class AgentCore private constructor(private val app: Context) {
             }
         },
         tidy = ToolCallDebris::clean,
+        markRunning = { threadId, request ->
+            prefs.edit().apply {
+                if (request == null) remove(KEY_RUNNING) else putString(KEY_RUNNING, "$threadId\n$request")
+            }.apply()
+        },
     )
+
+    /**
+     * The thread and request of a foreground run the app died in the middle of, or null.
+     * - Contract: only meaningful at launch, before any turn starts; a running turn also holds the mark.
+     */
+    fun interrupted(): Pair<String, String>? =
+        prefs.getString(KEY_RUNNING, null)?.split('\n', limit = 2)?.takeIf { it.size == 2 }?.let { it[0] to it[1] }
+
+    fun forgetInterrupted() = prefs.edit().remove(KEY_RUNNING).apply()
 
     val ambient = AmbientCoordinator(
         prefs = { TriagePrefs() },
@@ -479,6 +493,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val KEY_ALWAYS_ON = "always_on"
         private const val KEY_APPROVAL_MODE = "approval_mode"
         private const val KEY_SURFACE_THREAD = "surface_thread"
+        private const val KEY_RUNNING = "running_run"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
         private const val KEEP_GOING_HINT = " I stopped at the time limit. Say \"keep going\" to continue."
         private const val ASK_TIMEOUT_MS = 120_000L
