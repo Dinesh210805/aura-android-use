@@ -64,7 +64,10 @@ private fun allUiTools(): List<UiTool> {
     val device = McpToolCatalog.entries.map {
         UiTool(it.name, it.description, if (it.scope == McpScope.WRITE) ToolTag.WRITE else ToolTag.READ)
     }
-    val client = ClientToolCatalog.entries.map { UiTool(it.name, it.description, ToolTag.AGENT) }
+    // A tool both sides define (ask_user) is listed once, as the device tool. The list keys rows by
+    // name, and a repeated key crashes the screen.
+    val deviceNames = device.map { it.name }.toSet()
+    val client = ClientToolCatalog.entries.filter { it.name !in deviceNames }.map { UiTool(it.name, it.description, ToolTag.AGENT) }
     return (device + client).sortedBy { it.name }
 }
 
