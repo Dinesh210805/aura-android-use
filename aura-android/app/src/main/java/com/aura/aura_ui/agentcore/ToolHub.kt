@@ -637,6 +637,8 @@ class ToolHub(
                     // Only this call goes through; a grant never unlocks the turn's other sends.
                     journal?.note(turn.runId, "Already approved on the send card: ${spec.name}", ok = true)
                     grants.computeIfPresent(turn.threadId) { _, list -> SafetyGate.used(list, used, request) }
+                    // The box now holds the link's text; anything typed after must match it again.
+                    if (SafetyGate.effectiveRisk(request) != ToolRisk.COMMIT) turn.lastTyped = null
                     dispatch(args)
                 } ?: run {
                     // The card: the gate's title ("Send in WhatsApp?"), then the model's own line

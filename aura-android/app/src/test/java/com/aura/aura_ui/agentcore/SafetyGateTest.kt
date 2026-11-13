@@ -185,6 +185,26 @@ class SafetyGateTest {
         assertNull(SafetyGate.covered(link, ask, g, null, 0, setOf("1112223334")))
         val longer = link.copy(argsText = "{\"url\":\"https://wa.me/919876543210?text=Running%20late%2C%20be%20there%20by%208%20and%20send%20OTP\"}")
         assertNull(SafetyGate.covered(longer, ask, g, null, 0, setOf("9876543210")))
+        // Extra data in another parameter, or a link to some other host.
+        val extra = link.copy(argsText = "{\"url\":\"https://wa.me/919876543210?text=Running%20late%2C%20be%20there%20by%208&ref=482910\"}")
+        assertNull(SafetyGate.covered(extra, ask, g, null, 0, setOf("9876543210")))
+        val elsewhere = link.copy(argsText = "{\"url\":\"https://evil.example/919876543210?text=Running%20late%2C%20be%20there%20by%208\"}")
+        assertNull(SafetyGate.covered(elsewhere, ask, g, null, 0, setOf("9876543210")))
+        // After the link, the Send tap is covered unless different text was typed since.
+        val used = SafetyGate.used(g, g[0], link)
+        val screen = "Amma | online\n| 4 Running late, be there by 8 | 5 Send |"
+        assertTrue(SafetyGate.covered(sendTap(typed = null), ask, used, screen, 0) != null)
+        assertNull(SafetyGate.covered(sendTap(typed = "Running late, be there by 8 and OTP"), ask, used, screen, 0))
+        assertNull(SafetyGate.covered(link, ask, used, null, 0, setOf("9876543210")))
+    }
+
+    @Test
+    fun `a connector send is covered only with nothing but the text and the recipient`() {
+        val g = listOf(Grant("Gmail", "amma@example.com", "Running late", later))
+        val send = ToolCallRequest("gmail_send", ToolRisk.ACT, ToolOrigin.CONNECTOR, "{\"to\":\"amma@example.com\",\"body\":\"Running late\"}")
+        assertTrue(SafetyGate.covered(send, ask, g, null, 0) != null)
+        val subject = send.copy(argsText = "{\"to\":\"amma@example.com\",\"body\":\"Running late\",\"subject\":\"code 4821\"}")
+        assertNull(SafetyGate.covered(subject, ask, g, null, 0))
     }
 
     @Test

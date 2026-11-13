@@ -233,26 +233,56 @@ object SafetyGate {
             return live.firstOrNull { g ->
                 sameApp(g.app, app) && mentions(screen, g.to) && when (val m = g.message) {
                     null -> !ask.unlocksEgress
-                    else -> normal(m) in shown && (g.linkUsed || call.typed?.let { normal(it) == normal(m) } == true)
+                    // After a covered link the hub clears `typed`, so anything typed since must equal it too.
+                    else -> normal(m) in shown && call.typed.let { t -> if (t == null) g.linkUsed else normal(t) == normal(m) }
                 }
             }
         }
-        if (call.egress || call.origin == ToolOrigin.CONNECTOR) {
+        if (call.origin == ToolOrigin.CONNECTOR) {
+            // Nothing but the message and the recipient: a subject or a second field is not approved.
             val values = argumentValues(call.argsText)
-            val digits = values.flatMap { v -> PHONE_RUN.findAll(v).map { it.value.takeLast(PHONE_TAIL) } }.toSet()
             return live.firstOrNull { g ->
                 g.message != null && !g.linkUsed && values.any { normal(it) == normal(g.message) } &&
-                    (values.any { mentions(it, g.to) } || digits.any { it in knownNumbers })
+                    values.any { mentions(it, g.to) } &&
+                    values.all { normal(it) == normal(g.message) || mentions(it, g.to) }
             }
         }
+        if (call.egress) {
+            val urls = argumentValues(call.argsText, withParts = false).filter { "://" in it || it.startsWith("sms") }
+            val url = urls.singleOrNull() ?: return null
+            return live.firstOrNull { g -> g.message != null && !g.linkUsed && linkCarriesOnly(url, g, knownNumbers) }
+        }
         return null
+    }
+
+    /**
+     * True when [url] goes to [grant]'s app by its own link host and carries nothing but the
+     * approved text and a recipient number the user said or `resolve_contact` returned.
+     */
+    private fun linkCarriesOnly(url: String, grant: Grant, knownNumbers: Set<String>): Boolean {
+        val hosts = APP_LINKS[grant.app.trim().lowercase()] ?: return false
+        val scheme = url.substringBefore(':').lowercase()
+        val host = url.substringAfter("://", "").substringBefore('/').substringBefore('?').lowercase()
+        if (!hosts.any { it == "$scheme:" || it == host }) return false
+        val parts = linkParts(url).filter { it.isNotBlank() }
+        var carriesText = false
+        val ok = parts.all { p ->
+            val digits = p.filter(Char::isDigit)
+            when {
+                normal(p) == normal(grant.message.orEmpty()) -> true.also { carriesText = true }
+                p.trimStart('+').all(Char::isDigit) && digits.takeLast(PHONE_TAIL) in knownNumbers -> true
+                p.lowercase() in LINK_ROUTING -> true
+                else -> false
+            }
+        }
+        return ok && carriesText
     }
 
     /**
      * Every string value in a call's JSON arguments, plus, for each that is a link, its path parts
      * and decoded query values: the pieces a sent text can be.
      */
-    internal fun argumentValues(argsText: String): List<String> {
+    internal fun argumentValues(argsText: String, withParts: Boolean = true): List<String> {
         val strings = mutableListOf<String>()
         fun walk(e: kotlinx.serialization.json.JsonElement) {
             when (e) {
@@ -262,11 +292,17 @@ object SafetyGate {
             }
         }
         runCatching { walk(kotlinx.serialization.json.Json.parseToJsonElement(argsText)) }
-        return strings + strings.filter { "://" in it || it.startsWith("intent:") || it.startsWith("sms") }.flatMap { url ->
-            val path = url.substringAfter("://", url.substringAfter(':')).substringBefore('?').substringBefore('#').split('/')
-            val query = url.substringAfter('?', "").substringBefore('#').split('&').map { it.substringAfter('=', "") }
-            (path + query).map { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
-        }
+        if (!withParts) return strings
+        return strings + strings.filter { "://" in it || it.startsWith("intent:") || it.startsWith("sms") }.flatMap(::linkParts)
+    }
+
+    /** A link's path parts (after the host), query names and values, and fragment, decoded. */
+    private fun linkParts(url: String): List<String> {
+        val rest = url.substringAfter("://", url.substringAfter(':'))
+        val path = rest.substringBefore('?').substringBefore('#').split('/').let { if ("://" in url) it.drop(1) else it }
+        val query = rest.substringAfter('?', "").substringBefore('#').split('&').flatMap { listOf(it.substringBefore('='), it.substringAfter('=', "")) }
+        val fragment = rest.substringAfter('#', "")
+        return (path + query + fragment).map { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
     }
 
     /** [grants] after [grant] covered [call]: a tap uses it up, a link marks it so a second link asks. */
@@ -281,7 +317,17 @@ object SafetyGate {
 
     private fun normal(text: String) = text.lowercase().replace(Regex("\\s+"), " ").trim()
 
-    private val PHONE_RUN = Regex("\\d{10,15}")
+    /** The link hosts and schemes each messaging app opens a chat with; a link elsewhere is not covered. */
+    private val APP_LINKS = mapOf(
+        "whatsapp" to setOf("wa.me", "api.whatsapp.com", "whatsapp:"),
+        "telegram" to setOf("t.me", "tg:"),
+        "messages" to setOf("sms:", "smsto:"),
+        "sms" to setOf("sms:", "smsto:"),
+        "signal" to setOf("signal.me", "sgnl:"),
+    )
+
+    /** Fixed path and parameter words a chat link may hold besides the text and the number. */
+    private val LINK_ROUTING = setOf("send", "msg", "message", "chat", "compose", "text", "body", "phone", "to")
 
     private fun commitAsks(call: ToolCallRequest, mode: ApprovalMode, taint: TurnTaint): Boolean = when (mode) {
         ApprovalMode.ASK_OFTEN, ApprovalMode.CONFIRM_SENDS -> true
