@@ -206,7 +206,11 @@ class AgentEngine(
         beforeTurn()
         val budget = ContextBudget.forWindow(main.contextWindow)
         val maxSteps = if (turn.mode == RunMode.BACKGROUND) limits.backgroundMaxSteps else Int.MAX_VALUE
-        var deadline = now() + limits.maxWallClockMs
+        val startedAt = now()
+        var deadline = startedAt + limits.maxWallClockMs
+        var seenAtProgress = 0
+        var planAtProgress = 0
+        var progressStep = 0
         val requestCap = maxRequests()
         var driving = false
         val history = run.messages
@@ -256,6 +260,10 @@ class AgentEngine(
                     turn.emit(AgentEvent.AssistantText(it, final = false))
                 }
                 val results = executeTools(reply, false).map { it.toMessagePart() }
+                val calls = reply.parts.filterIsInstance<MessagePart.Tool.Call>().associateBy { it.id }
+                results.filter { !it.isError && it.tool in ContextAssembler.SCREEN_CHANGING }.forEach { r ->
+                    turn.ledger.action("${r.tool} ${calls[r.id]?.args.orEmpty().take(60)} -> ${r.output.lineSequence().firstOrNull().orEmpty().take(60)}")
+                }
                 if (turn.handedOff) {
                     journal?.note(turn.runId, "Handed the task to the overlay, which continues this run")
                     // Everything but the reply whose calls asked for the screen: those calls have no
@@ -308,6 +316,20 @@ class AgentEngine(
                     turn.drainSteering().forEach { said ->
                         journal?.note(turn.runId, "You added a message while AURA worked", said)
                         appendPrompt { user { text(STEERING + said) } }
+                    }
+                    if (steps >= LEDGER_FROM_STEP && turn.mode == RunMode.FOREGROUND) {
+                        val minutes = (now() - startedAt) / 60_000
+                        appendPrompt { user { text(turn.ledger.render(turn.request, steps, minutes, turn.screens.span())) } }
+                    }
+                    // Going round in circles: no screen it has not seen and no plan step done in a while.
+                    if (turn.screens.distinct > seenAtProgress || turn.ledger.planDone > planAtProgress) {
+                        seenAtProgress = turn.screens.distinct
+                        planAtProgress = turn.ledger.planDone
+                        progressStep = steps
+                    } else if (steps - progressStep >= STUCK_AFTER_STEPS) {
+                        progressStep = steps
+                        journal?.note(turn.runId, "No progress in $STUCK_AFTER_STEPS steps; told the model", STUCK_NOTE)
+                        appendPrompt { user { text(STUCK_NOTE) } }
                     }
                     rewritePrompt { it.withMessages(ContextAssembler::evictStaleScreens) }
                     run.messages = prompt.messages
@@ -540,6 +562,13 @@ class AgentEngine(
         const val STEERING = "The user added this while you were working. Take it into account:\n"
         const val EMPTY_REPLY =
             "Your last reply had no words and no tool call. Either call a tool to carry on, or tell the user the result."
+        /** Short tasks keep their whole story in view; the ledger starts once a run gets long. */
+        const val LEDGER_FROM_STEP = 8
+        const val STUCK_AFTER_STEPS = 15
+        val STUCK_NOTE = "${ContextAssembler.STUCK} The last $STUCK_AFTER_STEPS steps showed no screen you had not seen " +
+            "already and finished no plan step. Stop repeating what you have tried. Take a different route " +
+            "(search inside the app, a direct link, another app), or ask the user what to do."
+
         /** The verbatim tail gets this fraction of the compaction threshold. */
         const val TAIL_SHARE = 3
         const val CONTINUE_ON_SCREEN = "[Continue this request on the phone's screen now; you have the screen tools.]"

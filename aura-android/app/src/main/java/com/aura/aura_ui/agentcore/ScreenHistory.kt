@@ -19,6 +19,15 @@ class ScreenHistory {
     private val entries = mutableListOf<Entry>()
     private var commits = 0
     private var diffs = 0
+    private val bodies = HashSet<Int>()
+
+    /**
+     * How many screens with content not seen before in this task. A run going round in circles
+     * (A, B, A, B) records new ids but no new content, so this is what stuck detection counts.
+     */
+    @Volatile
+    var distinct: Int = 0
+        private set
 
     /** Record a screen payload; returns its id, or null when [text] is not a screen. */
     @Synchronized
@@ -27,6 +36,8 @@ class ScreenHistory {
         val diff = ContextAssembler.isDiffScreen(text) && commits > 0
         val id = if (diff) "S$commits.${++diffs}" else "S${++commits}".also { diffs = 0 }
         entries += Entry(id, caption, text, diff)
+        val body = text.lines().filterNot(::isHeader)
+        if (!body.any { NO_CHANGES in it } && bodies.add(body.hashCode())) distinct++
         return id
     }
 
@@ -38,6 +49,10 @@ class ScreenHistory {
         if (hits.isEmpty()) return if (q == null) "No screens yet." else "No screen mentions \"$query\"."
         return hits.takeLast(MAX_LOG).joinToString("\n") { "${it.id}${if (it.diff) " (changes)" else ""}  ${it.caption}" }
     }
+
+    /** The first and last screen ids, e.g. "S1..S14", or null before any screen. */
+    @Synchronized
+    fun span(): String? = entries.takeIf { it.isNotEmpty() }?.let { "${it.first().id}..${it.last().id}" }
 
     @Synchronized
     fun show(id: String): String? = entries.firstOrNull { it.id.equals(id.trim(), ignoreCase = true) }?.text
@@ -55,6 +70,7 @@ class ScreenHistory {
 
     private companion object {
         const val SEEN = "SEEN:"
+        const val NO_CHANGES = "NO CHANGES since your last look"
         const val MAX_LOG = 60
 
         /**

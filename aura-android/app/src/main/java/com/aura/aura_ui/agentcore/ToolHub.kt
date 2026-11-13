@@ -123,6 +123,9 @@ class TurnState(
 
     /** Every screen this task saw; read by the `screens`, `screen` and `screen_diff` tools. */
     val screens = ScreenHistory()
+
+    /** What the run has done, for the ledger the engine shows the model on long tasks. */
+    val ledger = RunLedger()
     private val toolsets = mutableSetOf(ToolHub.CORE)
     private val images = ArrayDeque<ByteArray>()
     private val steering = ArrayDeque<String>()
@@ -452,6 +455,7 @@ class ToolHub(
         val steps = runCatching { args["steps"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull().orEmpty()
         val done = (args["done"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0).coerceIn(0, steps.size)
         turn.emit(AgentEvent.PlanUpdated(steps, done))
+        turn.ledger.plan(steps, done)
         SourceResult(if (done >= steps.size) "Plan complete." else "Plan saved. Next: ${steps[done]}")
     }
 

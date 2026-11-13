@@ -187,6 +187,12 @@ object ContextAssembler {
 
     const val STALE_SCREEN = "[an earlier screen; replaced by the newer one below]"
 
+    /** Starts the user message that carries the run ledger. Only the newest one is kept. */
+    const val LEDGER = "[RUN LEDGER]"
+
+    /** Starts the user message that tells the model it is going round in circles. */
+    const val STUCK = "[NOT MAKING PROGRESS]"
+
     /** Starts the user message that carries a screen the harness read after the model's action. */
     const val AFTER_ACTION = "[SCREEN AFTER YOUR ACTION]"
 
@@ -279,9 +285,11 @@ object ContextAssembler {
     fun evictStaleScreens(messages: List<Message>): List<Message> {
         val stale = staleIndices(messages.map { it.screenToolOrNull() }, messages.map { isDiffScreen(it.screenText()) })
         val newestImage = messages.indexOfLast { it.isScreenImage() }
+        val newestLedger = messages.indexOfLast { it.isLedger() }
         return messages.mapIndexedNotNull { index, message ->
             when {
                 message.isScreenImage() && index != newestImage -> null
+                message.isLedger() && index != newestLedger -> null
                 index in stale && message.isAfterAction() -> null
                 index in stale && message is Message.User -> message.copy(
                     parts = message.parts.map { part ->
@@ -436,6 +444,8 @@ Latest instruction: the user's most recent instruction or correction, word for w
     private fun Message.screenToolOrNull(): String? =
         parts.filterIsInstance<MessagePart.Tool.Result>().firstOrNull { it.tool in SCREEN_TOOLS }?.tool
             ?: "read_screen".takeIf { isAfterAction() }
+
+    private fun Message.isLedger(): Boolean = this is Message.User && textContent().startsWith(LEDGER)
 
     private fun Message.isAfterAction(): Boolean = this is Message.User && textContent().startsWith(AFTER_ACTION)
 

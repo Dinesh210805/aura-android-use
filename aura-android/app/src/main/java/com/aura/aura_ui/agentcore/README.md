@@ -56,7 +56,9 @@ also pulls the folder.
 | `SafetyGate.kt` | Allow, ask or deny for every tool call; taint tracking; secret patterns; the fence for untrusted text. |
 | `ToolHub.kt` | Merges tool sources, runs each call through the gate, owns `load_toolset`, `ask_user`, `update_plan`, and `UserBroker`. |
 | `ToolSources.kt` | Where tools come from: the phone (`:mcp-server`, in process) and remote MCP connectors (`ConnectorStore`). |
-| `ContextAssembler.kt` | System prompt, device context, stale-screen eviction, tool-output pruning, token budget. |
+| `ContextAssembler.kt` | System prompt, device context, stale-screen eviction, tool-output pruning, compaction (summarise the middle, keep the request and the tail verbatim), token budget. |
+| `RunLedger.kt` | The plot of a long run (request, plan, last actions, step and minutes), shown as one message from step 8; only the newest is kept. |
+| `ScreenHistory.kt` | Every screen a task saw (`S3`, diffs `S3.1`), read back by `screens`, `screen`, `screen_diff`; counts distinct screens for stuck detection. |
 | `ModelGateway.kt` | Resolves the model the user picked in Settings into a Koog client. |
 | `ThreadStore.kt` | Room database `agentcore.db`: threads, visible items, full-text search, memories, jobs. |
 | `Memory.kt` | Bounded always-in-context memory and its `remember`, `forget`, `search_history` tools. |
@@ -87,17 +89,26 @@ Tests are in `app/src/test/java/com/aura/aura_ui/agentcore/`. Run them with
 3. Each tool call goes through `ToolHub.HubTool`: `SafetyGate.evaluate`, then the user if the
    verdict is `Ask`, then the source. Results from untrusted origins are fenced and taint the turn.
 4. After a step whose action changed the screen, the engine reads the screen itself
-   (`ToolHub.observeScreen`) and appends it, so the model's next request already has it.
-5. Between steps the engine keeps only the newest screen read, clears old long tool outputs, and
-   summarises when the context passes half the model's window.
+   (`ToolHub.observeScreen`, a changes-only read) and appends it, so the model's next request
+   already has it; the action's own settle summary is then cut to settled/changed. When the server
+   proves the action changed nothing, the read is skipped.
+5. Between steps the engine keeps only the newest full screen and the diffs after it, clears old
+   long tool outputs, and past half the model's window summarises the middle of the conversation
+   (`ContextAssembler.compactionRange`), keeping the request and the recent tail verbatim. From
+   step 8 it adds the run ledger (`RunLedger`). Fifteen steps with no screen it had not seen and
+   no plan step done add a "not making progress" note. The context is saved after every step.
 6. The first time a turn loads the `screen` toolset, web research on the task starts beside it
    and is never awaited; its note arrives after a later tool result, fenced as web content.
 7. A reply with neither words nor a tool call gets one nudge. When the model says it is done
    after three or more successful phone actions, it is asked once to check the result against
    the request and name what it saw (`proofCheck`). Tool-call syntax written as text is removed
    from the answer (`ToolCallDebris`).
-8. The turn ends on an answer, the step or time limit (or the request cap set in Settings → Brain),
-   cancel, or failure. What was completed is saved either way.
+8. The turn ends on an answer, the time limit (60 minutes; the chat then offers "Keep going"),
+   the request cap set in Settings → Brain, cancel, or failure. Background turns also have a
+   small step limit. A foreground run marks itself in prefs while it runs; a mark left after the
+   app died shows "Continue" in the chat.
+9. A chat turn that needs the screen hands the task to the overlay, saving what it did; the
+   overlay's turn continues from it instead of sending the request again.
 
 A request to delete the user's data in bulk is refused before any model sees it. The screen is
 kept on for the length of a foreground turn.
