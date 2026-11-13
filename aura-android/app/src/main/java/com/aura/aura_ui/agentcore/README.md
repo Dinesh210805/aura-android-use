@@ -83,6 +83,8 @@ Tests are in `app/src/test/java/com/aura/aura_ui/agentcore/`. Run them with
 
 1. `AgentEngine.runTurn` loads the thread's saved context and taint, then appends the user's
    message. Saved memory goes in the first user message of a thread, device context in every one.
+   A chat idle for more than 6 hours starts the model over: the first message then carries a short
+   summary of the chat (FAST model, saved in `threads.summary`); the visible chat is unchanged.
    Neither goes in the system prompt, which stays byte-identical so provider prompt caches hit.
 2. The model sees the `core` toolset plus a one-line menu of the others. `core` holds the direct
    routes (system intents, deep links, contacts, files, media, notifications, web search), so most

@@ -146,6 +146,12 @@ interface AgentDao {
     )
     suspend fun search(query: String, limit: Int): List<ItemRow>
 
+    @Query("SELECT * FROM items WHERE threadId = :threadId AND kind IN ('USER', 'ASSISTANT') ORDER BY atMs DESC, rowid DESC LIMIT :limit")
+    suspend fun recentMessages(threadId: String, limit: Int): List<ItemRow>
+
+    @Query("UPDATE threads SET summary = :summary WHERE id = :id")
+    suspend fun setSummary(id: String, summary: String)
+
     @Query("SELECT * FROM items WHERE rowid = :id")
     suspend fun item(id: Long): ItemRow?
 
@@ -328,6 +334,14 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         if (terms.isEmpty()) return emptyList()
         return dao.search(terms.joinToString(" ") { "\"$it\"" }, limit)
     }
+
+    /** The last [limit] user and assistant messages of a thread, oldest first, as "user: ..." lines. */
+    suspend fun recentTranscript(threadId: String, limit: Int = 40): String =
+        dao.recentMessages(threadId, limit).reversed().joinToString("\n") { row ->
+            (if (row.kind == ItemKind.USER.name) "user: " else "assistant: ") + row.text.take(1_000)
+        }
+
+    suspend fun setSummary(threadId: String, summary: String) = dao.setSummary(threadId, summary)
 
     /** The user and assistant messages within [AROUND_MS] of item [id] in its thread, oldest first, at most [AROUND_MAX]. */
     suspend fun around(id: Long): List<ItemRow> {
