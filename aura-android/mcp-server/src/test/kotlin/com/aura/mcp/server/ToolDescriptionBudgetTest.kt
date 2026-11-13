@@ -68,7 +68,8 @@ class ToolDescriptionBudgetTest {
         "gestures" to 1_010,
         "assistant" to 1_160,
         "apps" to 745,
-        "other" to 1_080,
+        // +50 for `ask_user`, offered to outside MCP clients only (AskUserTool).
+        "other" to 1_130,
         "session" to 620,
     )
 

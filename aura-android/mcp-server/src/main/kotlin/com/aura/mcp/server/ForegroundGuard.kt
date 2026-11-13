@@ -65,7 +65,7 @@ internal object ForegroundGuard {
     /** READ tools deliberately NOT gated — none can see the foreground screen; coverage-tested. */
     val UNGATED_READ_TOOLS: Set<String> = setOf(
         "get_device_status", "request_screen_capture_permission",
-        "end_session", "lookup_app", "web_search",
+        "end_session", "ask_user", "lookup_app", "web_search",
         "list_app_deeplinks", "resolve_deeplink",
         "read_notifications", "get_media_sessions", "resolve_contact", "find_files",
         // Reads a web page in a browser session, not the device screen. Same

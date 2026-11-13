@@ -224,6 +224,13 @@ class AgentCore private constructor(private val app: Context) {
         return (answer ?: "I couldn't finish that.").also { onEvent(AgentStreamEvent.Finished(it)) }
     }
 
+    /**
+     * Hand [text] to a turn the overlay is running right now, without ever starting one.
+     * - Contract: true when a running turn took it; false when none is running, so the caller
+     *   can say so instead of a second task driving the phone alongside the first.
+     */
+    suspend fun steerRunning(text: String): Boolean = surfaceThreads.toList().any { engine.steer(it, text) }
+
     private suspend fun surfaceThread(): String {
         val recent = prefs.getString(KEY_SURFACE_THREAD, null)?.let { threads.thread(it) }
             ?.takeIf { System.currentTimeMillis() - it.updatedAtMs < SURFACE_THREAD_IDLE_MS }

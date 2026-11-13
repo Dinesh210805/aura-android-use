@@ -106,6 +106,8 @@ class McpServerController(
      * no run lifecycle to announce, so its call traffic is the whole signal.
      */
     private val onToolDispatched: (() -> Unit)? = null,
+    /** Forwarded to [McpServerBuilder.build]: the remote clients' `ask_user`. */
+    private val askUser: (suspend (question: String, options: List<String>) -> String)? = null,
 ) {
 
     /**
@@ -240,6 +242,7 @@ class McpServerController(
             pausedByHuman = pausedByHuman,
             readScreenImage = readScreenImage,
             onToolDispatched = onToolDispatched,
+            askUser = askUser,
             toolsets = trustedClients.clients.value.firstOrNull { it.tokenId == client.tokenId }
                 ?.enabledToolsets ?: Toolset.DEFAULT_REMOTE,
         )

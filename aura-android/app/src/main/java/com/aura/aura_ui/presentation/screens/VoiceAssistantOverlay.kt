@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -101,8 +102,6 @@ private fun rememberOverlayColors(): OverlayColorScheme = OverlayColors
 /**
  * Color scheme interface for overlay
  */
-// internal, not private: AskUserCard renders from this same scheme so the HITL card cannot drift
-// into a different palette from the window it floats in (it used to hardcode flat Mono tokens).
 internal data class OverlayColorScheme(
     val scrim: Color,
     val inputBarBackground: Color,
@@ -193,6 +192,8 @@ data class VoiceAssistantState(
     val isScreenSharing: Boolean = false,
     /** Space kept free under the prompt box, for the run controls while a run is paused. */
     val bottomLiftDp: Int = 0,
+    /** How AURA's last task went, shown above the prompt box until closed or the next task. */
+    val report: com.aura.aura_ui.services.RemoteRun.Report? = null,
 )
 
 /**
@@ -222,6 +223,7 @@ data class VoiceAssistantCallbacks(
     // Per-message feedback on an AI reply.
     val onMessageLike: (ConversationMessage) -> Unit = {},
     val onMessageDislike: (ConversationMessage) -> Unit = {},
+    val onReportClose: () -> Unit = {},
 )
 
 /**
@@ -293,23 +295,17 @@ fun VoiceAssistantOverlay(
                     },
                 verticalArrangement = Arrangement.Bottom
             ) {
-                // HITL question card — when the agent calls ask_user, this floats
-                // just above the pill with tap-choices + an "Other…" chip. Observes
-                // the process-wide AskUserBroker directly; hidden when nothing pends.
-                // "Other…" activates the input pill (the one focusable text path in
-                // this window); the submitted line is routed to the pending question.
-                //
-                // Collected HERE rather than inside each consumer so the card and the
-                // pill react to the same emission — the pill must be in text mode
-                // before "Other…" can hand it focus.
+                // A pending ask_user question is shown on the card at the top of the screen
+                // (QuestionCardOverlay); here it only forces the pill into text mode, so "Type"
+                // on that card has a field to focus.
                 val pendingQuestion by AskUserBroker.shared.pending.collectAsState()
 
-                AskUserCard(
-                    pending = pendingQuestion,
-                    onOtherTapped = callbacks.onInputActivate,
-                    colors = colors,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                // The report card sits on the prompt box, so the AURA button and the text field
+                // stay in reach after a task.
+                state.report?.let { report ->
+                    com.aura.aura_ui.presentation.overlay.RunReportCard(report, callbacks.onReportClose)
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
 
                 // Resume chip — floats just above the pill when an interrupted run is offered.
                 state.resumeOffer?.let { offer ->
@@ -643,13 +639,15 @@ private fun InputBar(
                 }
             }
             
-            // Primary action — the colored Aura logo on a white round (replaces the mic).
-            // Static; tap to start/stop listening or end an active Gemini Live session.
+            // The AURA button: the white mark on an ink round with a white ring. The mark is drawn
+            // white (AuraLogoAvatar), so the round must stay dark or the button reads empty.
+            // Tap to talk; tap again while listening to stop.
             Box(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(Color.White)
+                    .background(Color(0xFF0B0B0C))
+                    .border(1.5.dp, Color.White.copy(alpha = if (state.isListening) 0.9f else 0.35f), CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -663,7 +661,7 @@ private fun InputBar(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                AuraLogoAvatar(size = 40.dp)
+                AuraLogoAvatar(size = 34.dp)
             }
             
             // Send button (shown when text is entered)

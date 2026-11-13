@@ -22,6 +22,7 @@ import com.aura.mcp.cache.PerceptionCache
 import com.aura.mcp.tools.registerAppTools
 import com.aura.mcp.tools.registerDeepLinkTools
 import com.aura.mcp.tools.registerDeviceTools
+import com.aura.mcp.tools.registerAskUserTool
 import com.aura.mcp.tools.registerEndSessionTool
 import com.aura.mcp.tools.registerGestureTools
 import com.aura.mcp.tools.registerKeyTools
@@ -137,6 +138,11 @@ internal object McpServerBuilder {
          * Null = nothing to arm (unit tests, non-device hosts). See [DriverActivitySink].
          */
         onToolDispatched: (() -> Unit)? = null,
+        /**
+         * Puts a question to the person on the phone and returns their answer, for outside
+         * clients' `ask_user`. Null = no `ask_user` here: AURA's own agents bring their own.
+         */
+        askUser: (suspend (question: String, options: List<String>) -> String)? = null,
         /** Tool groups to register; a group left out is absent from `tools/list`. See [Toolset]. */
         toolsets: Set<Toolset> = Toolset.ALL,
     ): Server {
@@ -277,6 +283,7 @@ internal object McpServerBuilder {
         // bridge so a clean end_session restores the automation-suppressed
         // soft keyboard immediately.
         server.registerEndSessionTool(deviceBridge)
+        askUser?.let { server.registerAskUserTool(it) }
 
 
         // Phase 6 — web_search via Tavily for task-grounding documentation

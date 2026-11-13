@@ -36,6 +36,7 @@ object McpToolCatalog {
         "verify_action" to "Check whether the last action worked",
         "wait_for" to "Wait for something to appear on screen",
         "end_session" to "Mark the task as finished",
+        "ask_user" to "Ask you a question",
         "lookup_app" to "Find an installed app",
         "web_search" to "Search the web",
         "browser_open" to "Open a web page and read it",

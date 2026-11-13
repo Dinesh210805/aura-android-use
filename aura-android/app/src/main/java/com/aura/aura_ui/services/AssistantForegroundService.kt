@@ -190,6 +190,18 @@ class AssistantForegroundService : LifecycleService() {
                 ControlLockStore.shared.noteRemoteToolCall()
                 com.aura.aura_ui.telemetry.AuraAnalytics.mcpToolCall()
             },
+            // An outside client's question goes through the same broker as AURA's own agents,
+            // so it shows on the same card and is asked aloud in a voice conversation.
+            askUser = { question, options ->
+                when (val a = com.aura.aura_ui.agent.hitl.AskUserBroker.shared.ask(
+                    question, options, com.aura.aura_ui.agent.hitl.AskUserTools.DEFAULT_TIMEOUT_MS,
+                )) {
+                    is com.aura.aura_ui.agent.hitl.AskUserAnswer.Answered -> "The person answered: \"${a.text}\"."
+                    com.aura.aura_ui.agent.hitl.AskUserAnswer.Dismissed -> "The person closed the question without answering."
+                    com.aura.aura_ui.agent.hitl.AskUserAnswer.Timeout -> "The person did not answer within two minutes."
+                    com.aura.aura_ui.agent.hitl.AskUserAnswer.Busy -> "Another question is already waiting for the person; ask again later."
+                }
+            },
         )
     }
 

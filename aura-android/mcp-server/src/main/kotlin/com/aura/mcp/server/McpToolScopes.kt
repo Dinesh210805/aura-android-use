@@ -47,6 +47,7 @@ object McpToolScopes {
         "wait_for" to McpScope.READ,
         // Phase 10B — agent-callable session boundary marker.
         "end_session" to McpScope.READ,
+        "ask_user" to McpScope.READ,
         "lookup_app" to McpScope.READ,
         "web_search" to McpScope.READ,
         // Deep links — discovery is passive inspection.

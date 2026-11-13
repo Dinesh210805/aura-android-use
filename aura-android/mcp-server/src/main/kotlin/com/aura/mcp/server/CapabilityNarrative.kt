@@ -123,7 +123,7 @@ object CapabilityNarrative {
         ),
         Family(
             id = "safety",
-            tools = setOf("end_session"),
+            tools = setOf("end_session", "ask_user"),
             sentence = "stop to ask when a task needs a decision only the user can make",
         ),
     )

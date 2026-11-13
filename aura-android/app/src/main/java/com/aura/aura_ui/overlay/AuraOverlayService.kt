@@ -179,6 +179,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         /** Change together: `PausePillOverlay.BUTTON_DP` plus a gap. */
         private const val PANEL_LIFT_DP = 84
 
+        /** How long "Speak" on a question listens. */
+        private const val ANSWER_WINDOW_MS = 10_000L
+
         /**
          * Longest the status strip may outlive the run that allowed it, waiting for its
          * last caption to finish.
@@ -446,6 +449,15 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         com.aura.aura_ui.presentation.overlay.RunReportOverlay(this, this, this) {
             com.aura.aura_ui.services.RemoteRun.shared.dismissReport()
         }
+    }
+
+    /** The `ask_user` question card at the top of the screen; see [startHitlObserver]. */
+    private val questionCard by lazy {
+        com.aura.aura_ui.presentation.overlay.QuestionCardOverlay(
+            this, this, this,
+            onType = { answerByTyping() },
+            onSpeak = { answerBySpeaking() },
+        )
     }
 
     /** Previous value of the paused flag, so the paused report fires on the edge only. */
@@ -794,23 +806,17 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     /**
      * End of a run: show how it went, say it if this is a voice conversation, and stop listening
      * after phone work.
-     * - Contract: a run that drove the phone ends on the report card at the bottom, with the chat
-     *   panel left down; an answer alone brings the panel back. Typed work is never spoken.
+     * - Contract: the prompt box comes back; a run that drove the phone shows its report card on
+     *   it, and the mic closes. An answer alone gets a short follow-up window. Typed work is never
+     *   spoken.
      * - Why not for `external` runs: the app's chat handed them off and shows its own card;
      *   benchmark tasks want no card in their screenshots.
      */
     private fun finishRun(reply: String, card: com.aura.aura_ui.services.RemoteRun.Report?, showCard: Boolean) {
         agentDriving = false
         hitlAwaitingInput = false
-        if (card != null && showCard) {
-            com.aura.aura_ui.services.RemoteRun.shared.showOnDeviceReport(card)
-            if (_isMinimized.value) {
-                // The panel stays down under the card; the pill stops saying "Working".
-                _dotAnimJob?.cancel()
-                _dotAnimJob = null
-                updateNotification(true)
-            }
-        } else if (_isMinimized.value) {
+        if (card != null && showCard) com.aura.aura_ui.services.RemoteRun.shared.showOnDeviceReport(card)
+        if (_isMinimized.value) {
             restoreOverlay()
         } else {
             setOverlayTouchable(true)
@@ -979,10 +985,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                             "minimized=${_isMinimized.value}",
                     )
                     when {
-                        // HITL tool — keep the overlay open (restore if already minimized)
-                        // so the AskUserCard is visible.
-                        isHitlTool && _isMinimized.value -> restoreOverlay()
-                        isHitlTool -> { /* already visible — nothing to do */ }
+                        // HITL: the question card at the top shows it (startHitlObserver).
+                        isHitlTool -> Unit
                         // First device-driving action → get the chat out of the way and
                         // let the notch pill narrate the work.
                         isDeviceAction && _isOverlayVisible.value && !_isMinimized.value ->
@@ -1063,11 +1067,12 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         serviceScope.launch {
             if (handleControlUtterance(text)) return@launch
             conversationViewModel.addUserMessage(text)
-            // AgentCore hands a request made mid-turn to that turn and answers with a short ack.
-            // ponytail: if the turn ends in the same instant, this runs as its own untracked task.
-            val ack = withContext(Dispatchers.IO) {
-                com.aura.aura_ui.agentcore.AgentCore.get(this@AuraOverlayService).runTask(text) { }
+            // Only ever steers the running turn: a second task must never drive the phone
+            // alongside the first.
+            val taken = withContext(Dispatchers.IO) {
+                com.aura.aura_ui.agentcore.AgentCore.get(this@AuraOverlayService).steerRunning(text)
             }
+            val ack = if (taken) "Okay, I'll take that into account." else "I'm still finishing the last task. Say stop to drop it."
             conversationViewModel.addAssistantMessage(ack)
             if (voiceOn) voiceLoop.reply(ack, com.aura.aura_ui.voice.VoiceLoop.After.CLOSE)
         }
@@ -1107,7 +1112,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 .distinctUntilChanged()
                 .collect { micOpen ->
                     val modes = ListeningModeController.getInstance(this@AuraOverlayService)
-                    if (micOpen) modes.transitionToActive() else modes.transitionToPassive()
+                    // OFF, not ACTIVE: ACTIVE makes the wake-word service re-launch "show and
+                    // listen", which would loop back here. OFF only stops detection.
+                    if (micOpen) modes.transitionToOff() else modes.transitionToPassive()
                 }
         }
         serviceScope.launch { loop.level.collect { audioAmplitude.floatValue = it } }
@@ -1230,6 +1237,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         serviceScope.launch {
             com.aura.aura_ui.services.AgentStatusRegistry.speech.collect { statusStrip.setSpeech(it) }
         }
+        // Questions from any driver, for the service's whole life (remote runs never open the panel).
+        startHitlObserver()
         serviceScope.launch {
             // A run that ended with this service down, such as one cancelled by closing AURA, is
             // over: its card must not appear the next time AURA opens.
@@ -1237,12 +1246,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             com.aura.aura_ui.services.RemoteRun.shared.report.collect { report ->
                 if (report == null) {
                     reportCard.hide()
-                    // The card was all that was left of a finished run: closing it closes AURA.
-                    if (_isMinimized.value && agentRunJob?.isActive != true &&
-                        !com.aura.aura_ui.services.RemoteRun.shared.active.value
-                    ) {
-                        endVoiceConversation()
-                    }
+                } else if (report.onDevice) {
+                    // AURA's own runs show it on the prompt box instead (OverlayContent).
+                    reportCard.hide()
                 } else {
                     // Compose's recomposer is paused below STARTED, and a remote run can bring
                     // this service up through ACTION_ATTACH_RUN_SURFACE without showOverlay().
@@ -1274,12 +1280,14 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     statusStrip.setHiddenForCapture(true)
                     pausePill.setHiddenForCapture(true)
                     reportCard.setHiddenForCapture(true)
+                    questionCard.setHiddenForCapture(true)
                 }
 
                 override fun restoreAfterCapture() {
                     statusStrip.setHiddenForCapture(false)
                     pausePill.setHiddenForCapture(false)
                     reportCard.setHiddenForCapture(false)
+                    questionCard.setHiddenForCapture(false)
                 }
 
                 // Only the controls: the status strip cannot swallow a gesture.
@@ -1413,6 +1421,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         // user can no longer act on.
         pausePill.hide()
         reportCard.hide()
+        questionCard.hide()
         statusStrip.setEnabled(false)
         com.aura.aura_ui.services.AgentStatusRegistry.clear()
         // Leaving a hook pointing at a dead service would suspend every future capture on
@@ -1562,8 +1571,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             // Observe MCP device connection state — drives edge glow + Live Alert chip
             startMcpConnectionObserver()
 
-            // Observe HITL questions — restore from the pill so the ask_user card shows.
-            startHitlObserver()
 
             _isOverlayVisible.value = true
             updateNotification(true)
@@ -1623,8 +1630,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             mcpConnectionObserverJob?.cancel()
             mcpConnectionObserverJob = null
             isMcpDeviceConnected = false
-            hitlObserverJob?.cancel()
-            hitlObserverJob = null
 
             // Remove edge glow if automation was running
             hideEdgeGlow()
@@ -1873,7 +1878,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
      * fighting over show/hide.
      */
     private fun renderStatusStrip(runActive: Boolean) {
-        val allowed = runActive || _isOverlayVisible.value
+        // The question card replaces the strip while a question is up.
+        val allowed = (runActive || _isOverlayVisible.value) && AskUserBroker.shared.pending.value == null
         // A pending farewell is always cancelled first: the strip becoming allowed again
         // mid-goodbye must not be torn down a second later by a job from the last one.
         stripFarewell?.cancel()
@@ -2349,32 +2355,50 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     }
 
     /**
-     * Restore the chat from the automation pill whenever the agent poses a HITL
-     * question, so the ask_user card (rendered in the overlay) is actually on
-     * screen. The card itself lives in the Compose tree and clears when the
-     * broker resolves; this observer only handles the minimized→restored jump.
+     * Show every `ask_user` question, from AURA's agents and from MCP clients alike, on the
+     * question card at the top, and ask it aloud in a voice conversation.
+     * - Contract: runs for the service's whole life, so remote runs (which never open the panel)
+     *   get the card too. While a question is up the status strip steps aside and the panel may
+     *   take touches ([hitlAwaitingInput]), because the agent is waiting, not driving.
      */
     private fun startHitlObserver() {
         hitlObserverJob?.cancel()
         hitlObserverJob = serviceScope.launch {
-            var spokenFor: String? = null
+            var shownFor: String? = null
             AskUserBroker.shared.pending.collect { pending ->
                 if (pending == null) {
-                    spokenFor = null
+                    shownFor = null
+                    hitlAwaitingInput = false
+                    questionCard.hide()
+                    renderStatusStrip(
+                        runActive = com.aura.aura_ui.services.ControlLockStore.shared.localRunning.value ||
+                            com.aura.aura_ui.services.RemoteRun.shared.active.value,
+                    )
                     return@collect
                 }
-                if (_isMinimized.value) {
-                    Log.i(TAG, "ask_user pending — restoring overlay from pill")
-                    restoreOverlay()
+                if (shownFor == pending.id) return@collect
+                shownFor = pending.id
+                hitlAwaitingInput = true
+                if (!lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    lifecycleRegistry.currentState = Lifecycle.State.STARTED
                 }
-                // Ask out loud as well as on screen. Keyed on the question id so a recomposition
-                // or a re-emission cannot make AURA repeat itself mid-sentence.
-                if (spokenFor != pending.id) {
-                    spokenFor = pending.id
-                    speakQuestion(pending)
-                }
+                statusStrip.setEnabled(false)
+                questionCard.show(pending)
+                speakQuestion(pending)
             }
         }
+    }
+
+    /** "Type" on the question card: bring the prompt box up with the keyboard open. */
+    private fun answerByTyping() {
+        if (!_isOverlayVisible.value) showOverlay()
+        if (_isMinimized.value) restoreOverlay() else setOverlayTouchable(true)
+        activateTextInput()
+    }
+
+    /** "Speak" on the question card: listen for the answer, opening a voice conversation if needed. */
+    private fun answerBySpeaking() {
+        if (voiceOn) voiceLoop.listen(ANSWER_WINDOW_MS) else voiceLoop.start(greet = false)
     }
 
     /**
@@ -2444,6 +2468,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         val latestAgentOutput by conversationViewModel.latestAgentOutput.collectAsState()
         val taskProgress by conversationViewModel.taskProgress.collectAsState()
         val agentSteps by conversationViewModel.agentSteps.collectAsState()
+        val onDeviceReport = com.aura.aura_ui.services.RemoteRun.shared.report.collectAsState().value
+            ?.takeIf { it.onDevice }
         val screenCaptureEnabled by ThemeManager.enableScreenCapture.collectAsState()
         // "Sharing" = the pref is on AND a live MediaProjection session is held.
         val isSharingScreen = screenCaptureEnabled &&
@@ -2493,6 +2519,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             resumeOffer = conversationState.resumeOffer,
             isScreenSharing = isSharingScreen,
             bottomLiftDp = panelLiftDp.intValue,
+            report = onDeviceReport,
         )
 
         // Build 3: when the overlay is at rest (no messages, idle), check for an interrupted run
@@ -2599,6 +2626,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             },
             onMessageLike = { msg -> Log.i(TAG, "like ${msg.id}") },
             onMessageDislike = { msg -> Log.i(TAG, "dislike ${msg.id}") },
+            onReportClose = { com.aura.aura_ui.services.RemoteRun.shared.dismissReport() },
         )
 
         VoiceAssistantOverlay(
