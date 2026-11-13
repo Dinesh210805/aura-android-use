@@ -82,7 +82,7 @@ class AgentCore private constructor(private val app: Context) {
 
     val threads = ThreadStore(dao)
     val memory = MemoryStore(dao, installed = ::installedApp)
-    val skills = SkillStore(File(root, "skills"))
+    val skills = SkillStore(File(root, "skills"), installed = { installedApp(it) != null })
     val jobs = JobStore(dao)
     val telemetry = AgentTelemetry(File(root, "traces"), BuildConfig.VERSION_NAME, keepDays = { LogKeep.days(app) })
     val broker = UserBroker { turn, question, options ->
@@ -109,6 +109,9 @@ class AgentCore private constructor(private val app: Context) {
         settings = { SafetySettings(approvalMode, deniedApps, deniedContacts) },
         appLabel = { AppDeviceBridge(app).run { foregroundPackage()?.takeIf { it != app.packageName }?.let(::appLabelFor) } },
         opensInstalledApp = ::opensInstalledApp,
+        findTarget = phone::idsFor,
+        elementLabel = phone::labelAt,
+        onChain = { skill, ok -> skill?.let { withContext(Dispatchers.IO) { skills.noteChain(it, ok) } } },
     )
 
     /**
@@ -448,10 +451,11 @@ class AgentCore private constructor(private val app: Context) {
         )
     }
 
-    /** One pass of background work: due scheduled tasks, then the digest. */
+    /** One pass of background work: due scheduled tasks, the notification digest, the skill curator. */
     suspend fun tick() {
         jobRunner.runDue()
         if (alwaysOn) ambient.flush()
+        withContext(Dispatchers.IO) { runCatching { skills.curate() } }
     }
 
     private fun snapshot(): DeviceSnapshot {

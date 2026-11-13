@@ -82,6 +82,15 @@ class PhoneToolSource(context: Context) : ToolSource {
     @Volatile
     private var boundsOf: (Int) -> BBox? = { null }
 
+    @Volatile
+    private var idsOf: (String) -> List<Int> = { emptyList() }
+
+    /** The som_ids carrying [label] on the latest screen read; see `PerceptionCache.idsFor`. */
+    fun idsFor(label: String): List<Int> = idsOf(label)
+
+    /** [somId]'s label on the latest screen read, whatever the tool. */
+    fun labelAt(somId: Int): String? = labelOf(somId)
+
     /**
      * The visible label of the element a gesture is about to press, from the latest screen read.
      * - Contract: null when the call names no `som_id` or the element has no label. Give this
@@ -193,6 +202,7 @@ class PhoneToolSource(context: Context) : ToolSource {
                 actionGuard = guard,
                 labelLookup = { labelOf = it },
                 boundsLookup = { boundsOf = it },
+                targetLookup = { idsOf = it },
             )
             Client(clientInfo = Implementation(name = "aura-agentcore", version = "1")).also {
                 it.connect(server.clientTransport)

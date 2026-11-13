@@ -22,6 +22,18 @@ import kotlin.test.assertTrue
 class PerceptionCacheTest {
 
     @Test
+    fun `idsFor finds a label case-insensitively and prefers interactive elements`() {
+        val cache = PerceptionCache()
+        fun el(id: Int, label: String, interactive: Boolean = true) =
+            DetectedElement(somId = id, bbox = BBox(0, id * 100, 100, id * 100 + 90), elementType = "button", label = label, confidence = 1f, interactive = interactive)
+        cache.update(listOf(el(1, "Send", interactive = false), el(2, "send"), el(3, "Where  to?"), el(4, "Reply"), el(5, "Reply")))
+        assertEquals(listOf(2), cache.idsFor("SEND"))
+        assertEquals(listOf(3), cache.idsFor("where to?"))
+        assertEquals(listOf(4, 5), cache.idsFor("Reply"))
+        assertEquals(emptyList(), cache.idsFor("Book"))
+    }
+
+    @Test
     fun `update stores som_id to coordinates mapping`() {
         val cache = PerceptionCache()
         val elements = listOf(

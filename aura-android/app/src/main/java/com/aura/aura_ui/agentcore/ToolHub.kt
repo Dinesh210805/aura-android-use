@@ -289,8 +289,22 @@ class ToolHub(
      * a send-out. Fails closed: false when unsure.
      */
     private val opensInstalledApp: (url: String) -> Boolean = { false },
+    /** The som_ids carrying a label on the latest screen read, for `do_steps`. */
+    private val findTarget: (label: String) -> List<Int> = { emptyList() },
+    /** Any element's label on the latest screen read, for the run's trace. */
+    private val elementLabel: (somId: Int) -> String? = { null },
+    /** Hears each `do_steps` chain: the skill it came from and whether every step ran. */
+    private val onChain: suspend (skill: String?, ok: Boolean) -> Unit = { _, _ -> },
 ) {
-    private val control = NativeToolSource("control", listOf(loadToolsetTool(), askUserTool(), updatePlanTool(), proposeActionTool()) + screenHistoryTools())
+    private val control = NativeToolSource(
+        "control",
+        listOf(loadToolsetTool(), askUserTool(), updatePlanTool(), proposeActionTool()) + screenHistoryTools() +
+            doStepsTool(StepRunner({ turn, name, args -> runStep(turn, name, args) }, { findTarget(it) }), { skill, ok -> onChain(skill, ok) }),
+    )
+
+    /** Runs [name] as if the model had called it: gate, run log and chat events included. Null when there is no such tool. */
+    private suspend fun runStep(turn: TurnState, name: String, args: JsonObject): ToolOutcome? =
+        catalog[name]?.let { (spec, source) -> HubTool(spec, source, turn).run(args) }
 
     /**
      * What the user approved with `propose_action`, per chat. In memory: it survives a hand-off to
@@ -586,8 +600,9 @@ class ToolHub(
         /** What the call now running pressed. Calls in a turn run one at a time. */
         private var shot: StepShot? = null
 
-        override suspend fun execute(args: JSONObject): ToolOutcome {
-            val json = args.toKotlinxJsonObject()
+        override suspend fun execute(args: JSONObject): ToolOutcome = run(args.toKotlinxJsonObject())
+
+        suspend fun run(json: JsonObject): ToolOutcome {
             val callId = UUID.randomUUID().toString()
             val started = System.nanoTime()
             shot = null
@@ -615,6 +630,7 @@ class ToolHub(
                 return ToolOutcome("Handing this task to the overlay.")
             }
             val label = if (spec.risk == ToolRisk.ACT) targetLabel(spec.name, args) else null
+            val traceLabel = label ?: (args["som_id"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()?.let(elementLabel)
             val argsText = args.toString()
             val request = ToolCallRequest(
                 spec.name, spec.risk, spec.origin, argsText, sendsOut(argsText), label,
@@ -666,7 +682,7 @@ class ToolHub(
                 Verdict.Allow -> dispatch(args)
             }
             if (!outcome.isError) {
-                if (spec.origin == ToolOrigin.PHONE && spec.risk != ToolRisk.READ) turn.trace += Step.of(spec.name, args, label)
+                if (spec.origin == ToolOrigin.PHONE && spec.risk != ToolRisk.READ) turn.trace += Step.of(spec.name, args, traceLabel)
                 if (spec.name == SKILL_VIEW) turn.skillUsed = args["name"]?.jsonPrimitive?.contentOrNull
             }
             return outcome

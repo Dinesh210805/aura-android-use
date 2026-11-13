@@ -339,6 +339,21 @@ internal class PerceptionCache(
     fun labelFor(somId: Int): String? = capture.labels[somId]
 
     /**
+     * The som_ids at the last look whose label is [label] (case and spacing aside) and that
+     * nothing covers; interactive ones only, when any match. No staleness check: the caller acts
+     * through `tap`, which still refuses a stale id.
+     * - Contract: a host's `do_steps` stops unless this returns exactly one id.
+     */
+    fun idsFor(label: String): List<Int> {
+        fun norm(s: String) = s.trim().lowercase().replace(Regex("\\s+"), " ")
+        val want = norm(label).takeIf { it.isNotEmpty() } ?: return emptyList()
+        val c = capture
+        val hits = c.labels.filter { (id, l) -> norm(l) == want && c.coveredBy[id] == null }.keys
+        val interactive = c.elements.filter { it.somId in hits && it.interactive }.map { it.somId }
+        return interactive.ifEmpty { hits.toList() }.sorted()
+    }
+
+    /**
      * [somId]'s bounds from the last look, with NO staleness check — call [resolve] first and
      * only use this once it said Fresh. Null when the som_id is not cached.
      */
