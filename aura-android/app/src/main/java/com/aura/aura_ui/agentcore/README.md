@@ -100,8 +100,9 @@ Tests are in `app/src/test/java/com/aura/aura_ui/agentcore/`. Run them with
 6. The first time a turn loads the `screen` toolset, web research on the task starts beside it
    and is never awaited; its note arrives after a later tool result, fenced as web content.
 7. A reply with neither words nor a tool call gets one nudge. When the model says it is done
-   after three or more successful phone actions, it is asked once to check the result against
-   the request and name what it saw (`proofCheck`). Tool-call syntax written as text is removed
+   after three or more successful phone actions, the FAST model judges once, from the request,
+   the actions, the last screen and the answer, whether it is done (`notDone`). Only a "not done"
+   goes back to the main model; a judge that fails counts as done. Tool-call syntax written as text is removed
    from the answer (`ToolCallDebris`).
 8. The turn ends on an answer, the time limit (60 minutes; the chat then offers "Keep going"),
    the request cap set in Settings → Brain, cancel, or failure. Background turns also have a
