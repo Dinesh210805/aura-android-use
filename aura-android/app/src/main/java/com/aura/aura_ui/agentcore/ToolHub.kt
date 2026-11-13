@@ -127,6 +127,10 @@ class TurnState(
     /** What the run has done, for the ledger the engine shows the model on long tasks. */
     val ledger = RunLedger()
 
+    /** The text this turn last typed into a field; see [SafetyGate.covered]. */
+    @Volatile
+    var lastTyped: String? = null
+
     /** Last ten digits of every number `resolve_contact` returned this turn: recipients the user can mean. */
     val contactNumbers: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
 
@@ -285,10 +289,13 @@ class ToolHub(
      * What the user approved with `propose_action`, per chat. In memory: it survives a hand-off to
      * the overlay (same thread) but not an app restart, after which the user is asked again.
      */
-    private val grants = java.util.concurrent.ConcurrentHashMap<String, MutableList<Grant>>()
+    private val grants = java.util.concurrent.ConcurrentHashMap<String, List<Grant>>()
 
-    private fun grantsOf(threadId: String): MutableList<Grant> =
-        grants.getOrPut(threadId) { java.util.Collections.synchronizedList(mutableListOf()) }
+    private fun grantsOf(threadId: String): List<Grant> = grants[threadId].orEmpty()
+
+    private fun grant(threadId: String, vararg add: Grant) {
+        grants.merge(threadId, add.toList()) { old, new -> old + new }
+    }
 
     @Volatile
     private var catalog: Map<String, Pair<ToolSpec, ToolSource>> = emptyMap()
@@ -506,7 +513,7 @@ class ToolHub(
         val approved = "Approved. Send exactly this text to $to in $app; the steps that match it will not ask again."
         val expires = System.currentTimeMillis() + GRANT_MS
         if (s.mode == ApprovalMode.HANDS_FREE && !turn.taint.tainted) {
-            grantsOf(turn.threadId) += Grant(app, to, message, expires)
+            grant(turn.threadId, Grant(app, to, message, expires))
             return@NativeTool SourceResult(approved)
         }
         val options = listOfNotNull(SEND, SEND_IN_CHAT.takeIf { !turn.taint.tainted }, CANCEL)
@@ -518,12 +525,11 @@ class ToolHub(
             answer == null -> SourceResult("The user did not answer. Do not send.", isError = true)
             answer == CANCEL || answer.equals(UserBroker.DENY, true) -> SourceResult(SafetyGate.DECLINED, isError = true)
             answer == SEND_IN_CHAT -> {
-                grantsOf(turn.threadId) += Grant(app, to, message, expires)
-                grantsOf(turn.threadId) += Grant(app, to, null, Long.MAX_VALUE)
+                grant(turn.threadId, Grant(app, to, message, expires), Grant(app, to, null, Long.MAX_VALUE))
                 SourceResult("$approved The user will not be asked again in this chat for messages to $to in $app.")
             }
             answer == SEND || UserBroker.YES.matches(answer) -> {
-                grantsOf(turn.threadId) += Grant(app, to, message, expires)
+                grant(turn.threadId, Grant(app, to, message, expires))
                 SourceResult(approved)
             }
             else -> SourceResult("The user changed the message to: \u201C$answer\u201D. Call propose_action again with that text.")
@@ -611,6 +617,7 @@ class ToolHub(
                     null
                 },
                 screenTitle = if (label != null && CommitLabels.isCommit(label)) turn.screens.latestCaption() else null,
+                typed = turn.lastTyped,
             )
             if (turn.failuresOf(callKey(args)) >= BLOCK_AFTER_FAILURES) {
                 journal?.note(turn.runId, "Blocked a repeated call to ${spec.name}", argsText, ok = false)
@@ -624,12 +631,14 @@ class ToolHub(
             if (verdict !is Verdict.Allow) journal?.note(turn.runId, gateTitle(verdict), gateDetail(request, verdict, turn.taint.origins), ok = verdict !is Verdict.Deny)
             return when (verdict) {
                 is Verdict.Deny -> ToolOutcome(verdict.modelMessage, isError = true)
-                is Verdict.Ask -> if (SafetyGate.covered(request, verdict, grantsOf(turn.threadId).toList(), turn.screens.latest(), System.currentTimeMillis())) {
+                is Verdict.Ask -> SafetyGate.covered(
+                    request, verdict, grantsOf(turn.threadId), turn.screens.latest(), System.currentTimeMillis(), turn.contactNumbers.toSet(),
+                )?.let { used ->
+                    // Only this call goes through; a grant never unlocks the turn's other sends.
                     journal?.note(turn.runId, "Already approved on the send card: ${spec.name}", ok = true)
-                    SafetyGate.spent(request, grantsOf(turn.threadId).toList(), turn.screens.latest())?.let { grantsOf(turn.threadId).remove(it) }
-                    if (verdict.unlocksEgress) turn.taint.allowEgress()
+                    grants.computeIfPresent(turn.threadId) { _, list -> SafetyGate.used(list, used, request) }
                     dispatch(args)
-                } else {
+                } ?: run {
                     // The card: the gate's title ("Send in WhatsApp?"), then the model's own line
                     // saying who it goes to and what, which the system prompt tells it to write.
                     val said = turn.saying.takeIf { it.isNotBlank() && !verdict.unlocksEgress }
@@ -667,6 +676,9 @@ class ToolHub(
             val repeat = if (result.isError) turn.noteFailure(callKey(args)) else 0
             val hint = if (repeat >= WARN_AFTER_FAILURES) "\nThis exact call has now failed $repeat times. Do not repeat it." else ""
             // Each look gets an id in the task's screen history, so the model can come back to it.
+            if (!result.isError && spec.name in TYPING) {
+                (args["text"] ?: args["value"])?.jsonPrimitive?.contentOrNull?.let { turn.lastTyped = it }
+            }
             if (!result.isError && spec.name == RESOLVE_CONTACT) {
                 PHONE_IN_TEXT.findAll(result.text).forEach { turn.contactNumbers += it.value.filter(Char::isDigit).takeLast(PHONE_TAIL) }
             }
@@ -784,6 +796,7 @@ class ToolHub(
         private val PHONE_DIGITS = 10..15
         private const val PHONE_TAIL = 10
         private const val RESOLVE_CONTACT = "resolve_contact"
+        private val TYPING = setOf("type_text", "set_value")
 
         /** A phone number as people write it: digits with spaces or hyphens, optionally +. */
         internal val PHONE_IN_TEXT = Regex("\\+?\\d[\\d\\s-]{8,}\\d")

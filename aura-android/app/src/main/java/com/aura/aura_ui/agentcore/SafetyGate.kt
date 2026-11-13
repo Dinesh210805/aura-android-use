@@ -27,6 +27,8 @@ data class ToolCallRequest(
     val appLabel: String? = null,
     /** The newest screen's `SEEN:` caption (app and top labels), for the deny list on a commit tap. */
     val screenTitle: String? = null,
+    /** The text this turn last typed into a field (`type_text`, `set_value`), for a commit tap. */
+    val typed: String? = null,
 )
 
 /**
@@ -34,7 +36,7 @@ data class ToolCallRequest(
  * - [message] is the exact text approved; null means any text to [to] in [app] for the rest of the
  *   chat ("don't ask again in this chat"), which is never offered once untrusted text was read.
  */
-data class Grant(val app: String, val to: String, val message: String?, val expiresAt: Long)
+data class Grant(val app: String, val to: String, val message: String?, val expiresAt: Long, val linkUsed: Boolean = false)
 
 sealed interface Verdict {
     data object Allow : Verdict
@@ -200,51 +202,86 @@ object SafetyGate {
     }
 
     /**
-     * True when a [Grant] already covers this [ask], so the user is not asked twice.
-     * - A Send or Post tap: an unexpired grant for the app in front, and either the approved text is
-     *   on the screen (it was typed), or a chat-wide grant whose recipient is on the screen. A
-     *   chat-wide grant never covers the private-content egress ask.
-     * - A link or connector call carrying the approved text.
+     * The [Grant] that already covers this [ask], so the user is not asked twice; null to ask.
+     * - A Send or Post tap in the granted app (exact name), with the recipient named on screen and
+     *   the approved text on it, where the text in the box is known to be exactly the approved one:
+     *   the turn's last typed text ([ToolCallRequest.typed]) equals it, or it arrived through a link
+     *   this grant covered. Or a chat-wide grant for that recipient, which never covers the
+     *   private-content send-out ask.
+     * - A link or connector call, not after an earlier link: one of its argument values, or one of
+     *   the link's query values, equals the approved text exactly, and it names the recipient or
+     *   carries a number in [knownNumbers] (said by the user or returned by `resolve_contact`).
      * - Never orders, bookings or deletes: those always get their own card.
+     * - Why exact equality: "contains" let extra text ride along before or after the approved words.
+     * - Contract: the caller marks the grant used ([used]); a covered call never unlocks other sends.
      */
-    internal fun covered(call: ToolCallRequest, ask: Verdict.Ask, grants: List<Grant>, screen: String?, now: Long): Boolean {
+    internal fun covered(
+        call: ToolCallRequest,
+        ask: Verdict.Ask,
+        grants: List<Grant>,
+        screen: String?,
+        now: Long,
+        knownNumbers: Set<String> = emptySet(),
+    ): Grant? {
         val live = grants.filter { it.expiresAt > now }
-        if (live.isEmpty()) return false
+        if (live.isEmpty()) return null
         if (effectiveRisk(call) == ToolRisk.COMMIT) {
-            if (CommitLabels.kind(call.targetLabel) !in GRANTABLE) return false
-            val app = call.appLabel ?: return false
-            val shown = normal(screen ?: return false)
-            return live.any { g ->
-                sameApp(g.app, app) && when (val m = g.message) {
-                    null -> !ask.unlocksEgress && mentions(screen, g.to)
-                    else -> key(m) in shown
+            if (CommitLabels.kind(call.targetLabel) !in GRANTABLE) return null
+            val app = call.appLabel ?: return null
+            if (screen == null) return null
+            val shown = normal(screen)
+            return live.firstOrNull { g ->
+                sameApp(g.app, app) && mentions(screen, g.to) && when (val m = g.message) {
+                    null -> !ask.unlocksEgress
+                    else -> normal(m) in shown && (g.linkUsed || call.typed?.let { normal(it) == normal(m) } == true)
                 }
             }
         }
         if (call.egress || call.origin == ToolOrigin.CONNECTOR) {
-            val sent = normal(runCatching { java.net.URLDecoder.decode(call.argsText, "UTF-8") }.getOrDefault(call.argsText))
-            return live.any { g -> g.message != null && key(g.message) in sent }
+            val values = argumentValues(call.argsText)
+            val digits = values.flatMap { v -> PHONE_RUN.findAll(v).map { it.value.takeLast(PHONE_TAIL) } }.toSet()
+            return live.firstOrNull { g ->
+                g.message != null && !g.linkUsed && values.any { normal(it) == normal(g.message) } &&
+                    (values.any { mentions(it, g.to) } || digits.any { it in knownNumbers })
+            }
         }
-        return false
+        return null
     }
 
-    /** The grant a covered commit tap used up, so the same text cannot be sent twice on one yes. */
-    internal fun spent(call: ToolCallRequest, grants: List<Grant>, screen: String?): Grant? {
-        if (effectiveRisk(call) != ToolRisk.COMMIT || screen == null) return null
-        val shown = normal(screen)
-        return grants.firstOrNull { g -> g.message != null && key(g.message) in shown && call.appLabel?.let { sameApp(g.app, it) } == true }
+    /**
+     * Every string value in a call's JSON arguments, plus, for each that is a link, its path parts
+     * and decoded query values: the pieces a sent text can be.
+     */
+    internal fun argumentValues(argsText: String): List<String> {
+        val strings = mutableListOf<String>()
+        fun walk(e: kotlinx.serialization.json.JsonElement) {
+            when (e) {
+                is kotlinx.serialization.json.JsonObject -> e.values.forEach(::walk)
+                is kotlinx.serialization.json.JsonArray -> e.forEach(::walk)
+                is kotlinx.serialization.json.JsonPrimitive -> if (e.isString) strings += e.content
+            }
+        }
+        runCatching { walk(kotlinx.serialization.json.Json.parseToJsonElement(argsText)) }
+        return strings + strings.filter { "://" in it || it.startsWith("intent:") || it.startsWith("sms") }.flatMap { url ->
+            val path = url.substringAfter("://", url.substringAfter(':')).substringBefore('?').substringBefore('#').split('/')
+            val query = url.substringAfter('?', "").substringBefore('#').split('&').map { it.substringAfter('=', "") }
+            (path + query).map { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+        }
     }
 
-    private fun sameApp(a: String, b: String): Boolean {
-        val x = a.trim().lowercase()
-        val y = b.trim().lowercase()
-        return x.isNotEmpty() && y.isNotEmpty() && (x in y || y in x)
-    }
+    /** [grants] after [grant] covered [call]: a tap uses it up, a link marks it so a second link asks. */
+    internal fun used(grants: List<Grant>, grant: Grant, call: ToolCallRequest): List<Grant> =
+        if (effectiveRisk(call) == ToolRisk.COMMIT) {
+            if (grant.message == null) grants else grants - grant
+        } else {
+            grants.map { if (it == grant) it.copy(linkUsed = true) else it }
+        }
 
-    private fun normal(text: String) = text.lowercase().replace(Regex("\\s+"), " ")
+    private fun sameApp(a: String, b: String): Boolean = a.trim().equals(b.trim(), ignoreCase = true)
 
-    /** The start of an approved text: enough to know it, short enough to survive a narrow grid cell. */
-    private fun key(message: String) = normal(message).trim().take(KEY_CHARS)
+    private fun normal(text: String) = text.lowercase().replace(Regex("\\s+"), " ").trim()
+
+    private val PHONE_RUN = Regex("\\d{10,15}")
 
     private fun commitAsks(call: ToolCallRequest, mode: ApprovalMode, taint: TurnTaint): Boolean = when (mode) {
         ApprovalMode.ASK_OFTEN, ApprovalMode.CONFIRM_SENDS -> true
@@ -292,7 +329,6 @@ object SafetyGate {
     /** Phone actions that open something; ASK_OFTEN asks before each. */
     const val PROPOSE_ACTION = "propose_action"
     private val GRANTABLE = setOf(CommitKind.SEND, CommitKind.POST)
-    private const val KEY_CHARS = 24
     private const val PHONE_TAIL = 10
     private const val MIN_DENY_DIGITS = 6
 
