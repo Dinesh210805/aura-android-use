@@ -18,6 +18,12 @@ enum class ModelRole {
 
     /** An on-device model for background triage. Never plans and never calls tools. */
     LOCAL,
+
+    /**
+     * Another provider the user set up, used for the rest of a turn when [MAIN]'s provider is down
+     * (rate limit, server error, network) after its own retries. Null when there is none.
+     */
+    FALLBACK,
 }
 
 /**

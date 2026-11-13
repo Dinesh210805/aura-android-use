@@ -59,7 +59,7 @@ also pulls the folder.
 | `ContextAssembler.kt` | System prompt, device context, stale-screen eviction, tool-output pruning, compaction (summarise the middle, keep the request and the tail verbatim), token budget. |
 | `RunLedger.kt` | The plot of a long run (request, plan, last actions, step and minutes), shown as one message from step 8; only the newest is kept. |
 | `ScreenHistory.kt` | Every screen a task saw (`S3`, diffs `S3.1`), read back by `screens`, `screen`, `screen_diff`; counts distinct screens for stuck detection. |
-| `ModelGateway.kt` | Resolves the model the user picked in Settings into a Koog client. |
+| `ModelGateway.kt` | Resolves the model the user picked in Settings into a Koog client. FAST is that model at its lightest thinking (titles, compaction summaries). FALLBACK is the first other provider the user set up; `FallbackClient` switches a turn to it when the main provider is rate limited, erroring or unreachable after its retries, never on a rejected key, and says so in the chat. |
 | `ThreadStore.kt` | Room database `agentcore.db`: threads, visible items, full-text search, memories, jobs. |
 | `Memory.kt` | Bounded always-in-context memory and its `remember`, `forget`, `search_history` tools. |
 | `Skills.kt` | Saved procedures as `SKILL.md` folders under `files/agentcore/skills/`. |
@@ -153,7 +153,7 @@ stores (in `ModelGateway.kt`); and in `AgentCore.kt`, `TaskResearch` and `WebRes
 
 - A local model. `Ambient.kt` has the `LocalModel` seam; digests are written by rules until one
   is plugged in. It has to be LiteRT-LM: ML Kit's Gemini Nano refuses to run in the background.
-- Streaming replies, a fallback model, and separate FAST model selection (FAST resolves to MAIN).
+- Streaming replies, and a separate FAST model setting (FAST is MAIN at its lightest thinking).
 - Remote trace export UI (`RemoteTraces` exists, nothing sets it).
 - Resuming a turn after the app is killed. The overlay's resume chip still offers the other
   agent's runs only.

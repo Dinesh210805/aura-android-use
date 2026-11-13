@@ -6,6 +6,8 @@ import ai.koog.agents.core.agent.functionalStrategy
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
 import ai.koog.agents.features.opentelemetry.feature.OpenTelemetry
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
+import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import ai.koog.prompt.message.Message
@@ -399,7 +401,7 @@ class AgentEngine(
         }
 
         val agent = AIAgent(
-            promptExecutor = main.executor(),
+            promptExecutor = executorFor(main, turn),
             agentConfig = AIAgentConfig(
                 prompt = prompt("aura-chat", main.params) {
                     system(SystemPrompt.build(profile(), hub.toolsetMenu(), skillIndex(), deviceLine()))
@@ -479,18 +481,11 @@ class AgentEngine(
         }
         val original = prompt.messages
         val range = ContextAssembler.compactionRange(original, budget.compactAtTokens / TAIL_SHARE) ?: return
-        // The summary is asked of a prompt holding only the transcript: no tools, no screens, and
-        // no tool-call structure the provider would have to validate.
-        rewritePrompt {
-            it.withMessages {
-                listOf(
-                    ContextAssembler.systemText(ContextAssembler.SUMMARY_SYSTEM),
-                    ContextAssembler.userText(ContextAssembler.transcript(original.subList(range.first, range.last + 1))),
-                )
-            }
-        }
-        val summary = runCatching { requestLLMWithoutTools().textContent() }.getOrNull()?.takeIf { it.isNotBlank() }
-        rewritePrompt { it.withMessages { if (summary == null) original else ContextAssembler.withSummary(original, range, summary) } }
+        // The summary is a side job on the FAST model (main at its lightest thinking), over a plain
+        // transcript: no tools, no screens, no tool-call structure for the provider to validate.
+        val transcript = ContextAssembler.transcript(original.subList(range.first, range.last + 1))
+        val summary = models.resolve(ModelRole.FAST)?.ask(ContextAssembler.SUMMARY_SYSTEM, transcript)
+        if (summary != null) rewritePrompt { it.withMessages { ContextAssembler.withSummary(original, range, summary) } }
         if (summary == null) {
             journal?.note(turn.runId, "Could not summarise the conversation; kept it as it was", ok = false)
             return
@@ -502,6 +497,17 @@ class AgentEngine(
                 "${ContextAssembler.estimateTokens(prompt.messages)} tokens",
             summary,
         )
+    }
+
+    /** [main]'s executor, switching to the fallback provider for the rest of the turn if [main]'s is down. */
+    private fun executorFor(main: ResolvedModel, turn: TurnState): PromptExecutor {
+        val fallback = models.resolve(ModelRole.FALLBACK)?.takeIf { it.label != main.label } ?: return main.executor()
+        val client = FallbackClient(main.client, fallback) { reason ->
+            val notice = "${main.label.substringBefore(" /")} is $reason, so I continued with ${fallback.label}."
+            journal?.note(turn.runId, notice, ok = false)
+            runCatching { threads.append(turn.threadId, ItemKind.NOTICE, notice) }
+        }
+        return MultiLLMPromptExecutor(main.model.provider to client)
     }
 
     /** Puts the model's thinking for [reply] in the run log: reasoning parts and inline `<think>` blocks. */

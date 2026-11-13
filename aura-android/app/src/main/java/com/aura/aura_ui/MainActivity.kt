@@ -49,6 +49,8 @@ import com.aura.aura_ui.agent.mcpbridge.client.McpOAuthCoordinator
 import com.aura.aura_ui.data.preferences.OnboardingPreferences
 import com.aura.aura_ui.data.preferences.ThemeManager
 import com.aura.aura_ui.mcp.bridge.AppBrowserBridge
+import com.aura.aura_ui.presentation.components.shouldPlayLaunchSplash
+import com.aura.aura_ui.presentation.components.showLaunchSplash
 import com.aura.aura_ui.presentation.navigation.AuraAppShell
 import com.aura.aura_ui.presentation.navigation.AuraRoutes
 import com.aura.aura_ui.presentation.screens.*
@@ -248,18 +250,12 @@ class MainActivity : FragmentActivity() {
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Splash (Theme.Aura.Splash): mono field + ink badge; must install before super.
-        val splashScreen = installSplashScreen()
-        
-        var keepSplashScreen = true
-        splashScreen.setKeepOnScreenCondition { keepSplashScreen }
-        
-        lifecycleScope.launch {
-            delay(750) // 0.75 seconds delay
-            keepSplashScreen = false
-        }
+        // Splash (Theme.Aura.Splash) is a blank black field that hands straight over to the
+        // animated mark drawn by showLaunchSplash(); must install before super.
+        installSplashScreen()
 
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null && shouldPlayLaunchSplash()) showLaunchSplash()
         com.aura.aura_ui.agentcore.AgentCore.noteLaunch(intent)
 
         Log.d(TAG, "onCreate: Starting AURA UI")

@@ -374,7 +374,6 @@ object ContextAssembler {
     /** A plain user message, built with Koog's own DSL so its metadata is right. */
     fun userText(text: String): Message = ai.koog.prompt.dsl.prompt("m") { user(text) }.messages.single()
 
-    fun systemText(text: String): Message = ai.koog.prompt.dsl.prompt("m") { system(text) }.messages.single()
 
     /**
      * True when [text] holds a call to one of [tools] written as text instead of made: a

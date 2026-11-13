@@ -9,8 +9,8 @@ Everything the user sees in the AURA **app** (Settings, onboarding, the MCP cent
 plus the **overlay UI** the assistant draws on top of other apps. All of it is Jetpack Compose.
 
 Colours, typography and shapes come from `../ui/theme/` (`Mono`, `MonoScheme`, `Capsule`), not
-from this folder. `res/values/colors.xml` is not the palette: it only holds the launcher icon
-background.
+from this folder. There is no `res/values/colors.xml`; the launcher icon is bitmap layers in
+`res/mipmap-*`.
 
 ---
 
@@ -95,6 +95,7 @@ story view). Every build records, shows and exports the same full log.
 | `AuraScreenScaffold.kt` | Standard screen frame: title and content padding. Back navigation comes from `AuraAppShell`'s contextual bar, not a top arrow. |
 | `AuraSwitch.kt`, `PermissionToggleRow.kt`, `PermissionIcons.kt` | Toggles and permission rows |
 | `AuraLogoMark.kt` (animated AGSL shader), `AuraLogoBubble.kt` | The AURA logo |
+| `AuraSplash.kt` | The launch animation: light draws the mark, the glass fills, the word AURA lands. `MainActivity` adds it over its window on a launcher start only (`shouldPlayLaunchSplash`); the system splash before it is blank black (`Theme.Aura.Splash`). |
 | `AiDisclaimer.kt` | The "AI can make mistakes" line |
 
 ### `permissions/`

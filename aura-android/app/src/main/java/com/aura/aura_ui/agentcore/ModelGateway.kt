@@ -79,20 +79,31 @@ class SavedSettingsModelProvider(context: Context) : ModelProvider {
     private val app = context.applicationContext
 
     override fun resolve(role: ModelRole): ResolvedModel? = when (role) {
-        ModelRole.MAIN -> runCatching { saved(sideJob = false) }.getOrNull()
-        ModelRole.FAST -> runCatching { saved(sideJob = true) }.getOrNull()
+        ModelRole.MAIN -> runCatching { saved(ProviderKeyStore(app).getSelectedEndpointId(), sideJob = false) }.getOrNull()
+        ModelRole.FAST -> runCatching { saved(ProviderKeyStore(app).getSelectedEndpointId(), sideJob = true) }.getOrNull()
         ModelRole.LOCAL -> null
+        ModelRole.FALLBACK -> runCatching { fallback() }.getOrNull()
+    }
+
+    /** The first other provider with a key and a model, at the user's saved settings for it. */
+    private fun fallback(): ResolvedModel? {
+        val keys = ProviderKeyStore(app)
+        val main = keys.getSelectedEndpointId()
+        val others = LlmEndpointCatalog.BUILTINS.map { it.id } +
+            CustomEndpointStore(EncryptedJsonStore(app, CustomEndpointStore.STORE_NAME)).allEndpoints().map { it.id }
+        return others.distinct().filter { it != main }.firstNotNullOfOrNull { id -> runCatching { saved(id, sideJob = false) }.getOrNull() }
     }
 
     /**
      * The saved model. [sideJob] runs it at its cheapest thinking level: a chat title or a summary
      * must not pay for the reasoning the user chose for tasks.
      */
-    private fun saved(sideJob: Boolean): ResolvedModel? {
+    private fun saved(endpointId: String, sideJob: Boolean): ResolvedModel? {
         val keys = ProviderKeyStore(app)
-        val endpointId = keys.getSelectedEndpointId()
         val endpoint = endpointFor(endpointId) ?: return null
         val apiKey = if (endpoint.requiresKey) keys.getKey(endpointId) ?: return null else ""
+        // A keyless endpoint (a local server) counts only when the user picked a model for it.
+        if (!endpoint.requiresKey && endpointId != keys.getSelectedEndpointId() && keys.getSelectedModel(endpointId) == null) return null
         val modelId = keys.getSelectedModel(endpointId) ?: endpoint.defaultModelId.ifBlank { return null }
         val vision = keys.getSelectedModelVisionCapable(endpointId)
         val reasoning = keys.getSelectedModelReasoning(endpointId)
@@ -119,4 +130,70 @@ class SavedSettingsModelProvider(context: Context) : ModelProvider {
         LlmEndpointCatalog.builtinById(id)
             ?: CustomEndpointStore(EncryptedJsonStore(app, CustomEndpointStore.STORE_NAME)).allEndpoints()
                 .firstOrNull { it.id == id }
+}
+
+/**
+ * The main model's client that switches to [fallback] for the rest of the turn when the main
+ * provider is down.
+ *
+ * - Contract: a call that fails with a rate limit, a server error or a network error (after the
+ *   main client's own retries) is sent to [fallback] instead, and so is every later call; [onSwitch]
+ *   is called once with the reason. A rejected key (401/403) or any other error is thrown as it is:
+ *   the user must hear about a bad key, not have it hidden behind another provider.
+ * - Why per turn: switching back and forth would mix two models' styles inside one task.
+ */
+class FallbackClient(
+    private val main: LLMClient,
+    private val fallback: ResolvedModel,
+    private val onSwitch: suspend (reason: String) -> Unit,
+) : LLMClient() {
+    @Volatile
+    private var switched = false
+
+    override fun llmProvider(): ai.koog.prompt.llm.LLMProvider = main.llmProvider()
+
+    override suspend fun execute(
+        prompt: ai.koog.prompt.Prompt,
+        model: LLModel,
+        tools: List<ai.koog.agents.core.tools.ToolDescriptor>,
+    ): Message.Assistant {
+        if (!switched) {
+            try {
+                return main.execute(prompt, model, tools)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val reason = ProviderOutage.reason(e) ?: throw e
+                switched = true
+                onSwitch(reason)
+            }
+        }
+        return fallback.client.execute(prompt.withParams(fallback.params), fallback.model, tools)
+    }
+
+    override suspend fun moderate(prompt: ai.koog.prompt.Prompt, model: LLModel): ai.koog.prompt.dsl.ModerationResult =
+        main.moderate(prompt, model)
+
+    // Both clients belong to their ResolvedModels, which outlive this turn.
+    override fun close() = Unit
+}
+
+/** Which failures mean the provider is down rather than the request or the key being wrong. */
+object ProviderOutage {
+    private val AUTH = Regex("\\b(401|403)\\b|(?i)unauthori[sz]ed|invalid api key|permission denied")
+    private val QUOTA = Regex("\\b429\\b|(?i)rate limit|quota|resource_exhausted|overloaded")
+    private val SERVER = Regex("\\b(500|502|503|504|529)\\b|(?i)service unavailable|bad gateway|internal server error")
+    private val NETWORK = Regex("(?i)UnknownHost|ConnectException|SocketTimeout|timed? ?out|unable to resolve host|SSLException")
+
+    /** "rate limited", "a server error" or "unreachable"; null when this is not an outage. */
+    fun reason(e: Throwable): String? {
+        val detail = generateSequence(e) { it.cause }.take(4).joinToString(" ") { "${it::class.simpleName} ${it.message.orEmpty()}" }
+        return when {
+            AUTH.containsMatchIn(detail) -> null
+            QUOTA.containsMatchIn(detail) -> "rate limited"
+            SERVER.containsMatchIn(detail) -> "having a server error"
+            NETWORK.containsMatchIn(detail) -> "unreachable"
+            else -> null
+        }
+    }
 }

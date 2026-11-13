@@ -3,12 +3,12 @@
 
     <style name="Theme.Aura_ui" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <!-- Splash: mono canvas field with the ink badge / white mark. Hands off to the
+    <!-- Splash: a blank black field; MainActivity draws the animated mark over it
+         (presentation/components/AuraSplash.kt). Hands off to the
          transparent theme so every post-splash window behavior stays as before. -->
     <style name="Theme.Aura.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#000000</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
-        <item name="windowSplashScreenAnimationDuration">400</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
         <item name="postSplashScreenTheme">@style/Theme.Aura_Transparent</item>
     </style>
     
