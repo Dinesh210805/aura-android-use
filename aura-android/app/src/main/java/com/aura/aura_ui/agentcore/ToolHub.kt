@@ -67,6 +67,8 @@ data class ToolSpec(
     val resultOrigin: Origin?,
     /** True when the arguments travel to a host the user did not choose. */
     val egress: Boolean = false,
+    /** For a tool that runs other tools: the risk of one call, read from its arguments. Overrides [risk]. */
+    val riskFor: ((JsonObject) -> ToolRisk)? = null,
 ) {
     val name: String get() = descriptor.name
 }
@@ -633,7 +635,7 @@ class ToolHub(
             val traceLabel = label ?: (args["som_id"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()?.let(elementLabel)
             val argsText = args.toString()
             val request = ToolCallRequest(
-                spec.name, spec.risk, spec.origin, argsText, sendsOut(argsText), label,
+                spec.name, spec.riskFor?.invoke(args) ?: spec.risk, spec.origin, argsText, sendsOut(argsText), label,
                 appLabel = if ((label != null && CommitLabels.isCommit(label)) || (spec.risk != ToolRisk.READ && settings().deniedApps.isNotEmpty())) {
                     runCatching { appLabel() }.getOrNull()
                 } else {

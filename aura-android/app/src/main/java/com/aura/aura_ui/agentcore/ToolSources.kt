@@ -284,6 +284,11 @@ data class ConnectorConfig(
     val url: String,
     /** Tool name to the [ConnectorPins.fingerprint] the user approved. */
     val approvedTools: Map<String, String> = emptyMap(),
+    /**
+     * The header the secret goes in, for servers keyed by header (`x-consumer-api-key` for
+     * Composio); null sends it as `Authorization: Bearer`.
+     */
+    val keyHeader: String? = null,
 )
 
 /**
@@ -322,7 +327,7 @@ class ConnectorToolSource(
         val tools = connected().listTools()?.tools.orEmpty()
         val current = tools.associate { it.name to ConnectorPins.fingerprint(it.name, it.description.orEmpty(), it.inputSchema.toString()) }
         val approved = ConnectorPins.approved(current, config.approvedTools)
-        return tools.filter { it.name in approved }.map { tool ->
+        return tools.filter { it.name in approved && it.name !in ConnectorRisk.HIDDEN }.map { tool ->
             val parsed = McpToolSchemaParser.parse(tool)
             ToolSpec(
                 descriptor = ai.koog.agents.core.tools.ToolDescriptor(
@@ -331,11 +336,12 @@ class ConnectorToolSource(
                     requiredParameters = parsed.requiredParameters,
                     optionalParameters = parsed.optionalParameters,
                 ),
-                risk = if (ConnectorPins.looksReadOnly(tool.name)) ToolRisk.READ else ToolRisk.COMMIT,
+                risk = ConnectorRisk.of(tool),
                 origin = ToolOrigin.CONNECTOR,
                 toolset = config.id,
                 resultOrigin = Origin.CONNECTOR,
                 egress = true,
+                riskFor = ConnectorRisk.forCall(tool.name),
             )
         }
     }
@@ -349,9 +355,12 @@ class ConnectorToolSource(
     }
 
     private suspend fun connected(): Client = client ?: run {
-        val bearer = token()
+        val secret = token()
         val transport = http.mcpStreamableHttpTransport(config.url, requestBuilder = {
-            if (!bearer.isNullOrBlank()) header("Authorization", "Bearer $bearer")
+            if (!secret.isNullOrBlank()) {
+                val name = config.keyHeader?.takeIf { it.isNotBlank() }
+                if (name == null) header("Authorization", "Bearer $secret") else header(name, secret)
+            }
         })
         Client(clientInfo = Implementation(name = "aura-agentcore", version = "1")).also {
             it.connect(transport)
@@ -393,10 +402,9 @@ object ConnectorPins {
         current.keys - approved(current, approved)
 
     /**
-     * ponytail: a name heuristic. A server that lies about a tool's name gets a write past the
-     * confirmation prompt, though not past the egress and secret checks. Upgrade path: read MCP
-     * tool annotations once the MCP SDK in `:mcp-server` is upgraded past 0.8.3, and let the user
-     * mark tools read-only per connector.
+     * The fallback for a tool with no MCP annotations ([ConnectorRisk.of]).
+     * - ponytail: a name heuristic. A server that lies about a tool's name gets a write past the
+     *   confirmation card, though not past the egress and secret checks.
      */
     fun looksReadOnly(tool: String): Boolean = READ_PREFIXES.any { tool.startsWith(it) }
 }
@@ -423,11 +431,13 @@ class ConnectorStore(private val prefs: SharedPreferences, private val keys: Pro
     fun sources(): List<ToolSource> = live
 
     /** Returns how many tools were approved. */
-    suspend fun add(name: String, url: String, token: String?): Result<Int> = try {
+    suspend fun add(name: String, url: String, token: String?, keyHeader: String? = null): Result<Int> = try {
         val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').take(MAX_ID)
         require(id.isNotEmpty() && id !in RESERVED) { "Pick a different name." }
         require(url.startsWith("https://")) { "The address must start with https://" }
-        val probe = ConnectorToolSource(ConnectorConfig(id, name.trim(), url.trim())) { token }
+        val header = keyHeader?.trim()?.takeIf { it.isNotEmpty() }
+        require(header == null || header.matches(Regex("[A-Za-z0-9-]{1,64}"))) { "A header name is letters, digits and hyphens." }
+        val probe = ConnectorToolSource(ConnectorConfig(id, name.trim(), url.trim(), keyHeader = header)) { token }
         val pins = try {
             probe.fingerprints()
         } finally {
@@ -435,7 +445,7 @@ class ConnectorStore(private val prefs: SharedPreferences, private val keys: Pro
         }
         require(pins.isNotEmpty()) { "The server listed no tools. Check the address and the token." }
         if (token.isNullOrBlank()) keys.clearKey(keyFor(id)) else keys.setKey(keyFor(id), token)
-        save(configs().filterNot { it.id == id } + ConnectorConfig(id, name.trim(), url.trim(), pins))
+        save(configs().filterNot { it.id == id } + ConnectorConfig(id, name.trim(), url.trim(), pins, header))
         Result.success(pins.size)
     } catch (e: CancellationException) {
         throw e

@@ -180,9 +180,9 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
         core.telemetry.prune()
     }
 
-    fun addConnector(name: String, url: String, token: String) = viewModelScope.launch {
+    fun addConnector(name: String, url: String, token: String, keyHeader: String = "") = viewModelScope.launch {
         connectorStatus.value = "Connecting"
-        connectorStatus.value = core.connectors.add(name, url, token.ifBlank { null }).fold(
+        connectorStatus.value = core.connectors.add(name, url, token.ifBlank { null }, keyHeader).fold(
             onSuccess = { "$it tools approved. A tool that changes later stays hidden until you connect again." },
             onFailure = { it.message ?: "Could not connect." },
         )
@@ -589,6 +589,7 @@ fun ConnectorsPage(vm: AgentPagesViewModel = viewModel()) {
     var name by rememberSaveable { mutableStateOf("") }
     var url by rememberSaveable { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
+    var keyHeader by rememberSaveable { mutableStateOf("") }
 
     AuraPage("Connectors") {
         AuraSection(title = "Connected") {
@@ -598,21 +599,32 @@ fun ConnectorsPage(vm: AgentPagesViewModel = viewModel()) {
                 DeletableRow(connector.displayName, "${connector.approvedTools.size} tools", "Remove ${connector.displayName}", { vm.removeConnector(connector.id) })
             }
         }
-        AuraSection(title = "Add a connector", footer = status) {
+        AuraSection(
+            title = "Add a connector",
+            footer = status ?: "What AURA sends a connector and what it reads back pass through that provider's servers. AURA treats what comes back as untrusted.",
+        ) {
             Field(name, { name = it }, "Name")
             AuraDivider(16.dp)
             Field(url, { url = it }, "MCP server address (https)")
             AuraDivider(16.dp)
-            Field(token, { token = it }, "Access token (optional)", secret = true)
+            Field(token, { token = it }, "Access token or API key (optional)", secret = true)
+            AuraDivider(16.dp)
+            Field(keyHeader, { keyHeader = it }, "Key header, if not Authorization (e.g. x-consumer-api-key)")
         }
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AuraButton("Use GitHub", {
                 name = "GitHub"
                 url = GITHUB_MCP_URL
+                keyHeader = ""
+            }, Modifier.weight(1f), primary = false)
+            AuraButton("Use Composio", {
+                name = "Composio"
+                url = COMPOSIO_MCP_URL
+                keyHeader = COMPOSIO_KEY_HEADER
             }, Modifier.weight(1f), primary = false)
             AuraButton("Connect", {
-                vm.addConnector(name, url, token)
+                vm.addConnector(name, url, token, keyHeader)
                 token = ""
             }, Modifier.weight(1f), enabled = name.isNotBlank() && url.isNotBlank())
         }
@@ -621,6 +633,10 @@ fun ConnectorsPage(vm: AgentPagesViewModel = viewModel()) {
 
 /** GitHub's hosted MCP server; it takes a personal access token as the bearer. */
 private const val GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
+
+/** Composio Connect: Gmail, Calendar, Drive and more through one endpoint, keyed by the user's own consumer key. */
+private const val COMPOSIO_MCP_URL = "https://connect.composio.dev/mcp"
+private const val COMPOSIO_KEY_HEADER = "x-consumer-api-key"
 
 // ── Pieces ───────────────────────────────────────────────────────────────────
 
