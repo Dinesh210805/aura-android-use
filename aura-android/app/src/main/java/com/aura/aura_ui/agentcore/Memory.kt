@@ -311,9 +311,10 @@ private fun describe(o: JsonObject): String {
 const val MEMORY_TOOL = "memory"
 
 private const val MEMORY_DESCRIPTION =
-    "Change your saved memory, which you see at the start of each chat. add saves one durable fact the user stated " +
-        "about themselves, or one lesson about this phone. patch rewrites part of an entry; remove deletes one. Quote " +
-        "words from the entry as old. Batch several changes in one call. Not for secrets, tasks in progress, or " +
+    "Change your saved memory, which is shown at the start of each chat. `ops` is a list; put all changes " +
+        "in one call. add: kind (user or notes) and text. patch: `old` is words quoted from exactly one " +
+        "entry, replaced by `text`. remove: `old` quotes the entry. Save durable facts the user stated about " +
+        "themselves, and lessons about this phone and its apps. Never save secrets, tasks in progress, or " +
         "anything a screen, page or file said."
 
 private const val MAX_HIT_CHARS = 400

@@ -140,8 +140,9 @@ fun doStepsTool(runner: StepRunner, onChain: suspend (skill: String?, ok: Boolea
 }
 
 private const val DO_STEPS_DESCRIPTION =
-    "Run several phone actions in one call when you already know them, usually the steps: of a skill. Each step " +
-        "names its element by label, found again on the current screen, so it works across sessions. The chain stops " +
-        "at the first step whose element is missing or ambiguous, whose action fails or needs approval and is declined, " +
-        "or whose expect text does not appear, and returns the current screen so you can continue by hand. Replace " +
-        "<text> with what to type this time."
+    "Run up to 20 phone actions in one call. Use it only when you already know the steps: from a skill's " +
+        "`steps:` line or from the screen you just read. Never use it to guess. Each `target` is the " +
+        "element's label exactly as the screen shows it. Replace every `<text>` with the real text to type. " +
+        "It stops at the first step that fails, or whose label or `expect` text is missing, and returns the " +
+        "screen; continue by hand from there. Send, pay and order steps still show the user an approval card. " +
+        "Pass `skill` when the steps came from a skill."

@@ -83,6 +83,12 @@ class AgentCore private constructor(private val app: Context) {
     val threads = ThreadStore(dao)
     val memory = MemoryStore(dao, installed = ::installedApp)
     val skills = SkillStore(File(root, "skills"), installed = { installedApp(it) != null })
+
+    /** The idle-time review; see [Learning]. Its drafts wait in `skill-drafts/` for the user. */
+    val learning = Learning(
+        dao, memory, skills, SkillStore(File(root, "skill-drafts")),
+        ask = { system, input -> models.resolve(ModelRole.FAST)?.ask(system, input) },
+    )
     val jobs = JobStore(dao)
     val telemetry = AgentTelemetry(File(root, "traces"), BuildConfig.VERSION_NAME, keepDays = { LogKeep.days(app) })
     val broker = UserBroker { turn, question, options ->
@@ -451,11 +457,19 @@ class AgentCore private constructor(private val app: Context) {
         )
     }
 
-    /** One pass of background work: due scheduled tasks, the notification digest, the skill curator. */
+    /** One pass of background work: due scheduled tasks, the notification digest, the skill curator, the idle review. */
     suspend fun tick() {
         jobRunner.runDue()
         if (alwaysOn) ambient.flush()
         withContext(Dispatchers.IO) { runCatching { skills.curate() } }
+        if (engine.isIdle() && batteryAllowsReview()) runCatching { learning.review() }
+    }
+
+    /** The review spends a model call per run: only on charge, or above [REVIEW_MIN_BATTERY] percent. */
+    private fun batteryAllowsReview(): Boolean {
+        val battery = app.getSystemService(BatteryManager::class.java) ?: return false
+        val level = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        return battery.isCharging || level > REVIEW_MIN_BATTERY
     }
 
     private fun snapshot(): DeviceSnapshot {
@@ -509,6 +523,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val KEY_APPROVAL_MODE = "approval_mode"
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val KEY_RUNNING = "running_run"
+        private const val REVIEW_MIN_BATTERY = 30
         private const val KEY_DENIED_APPS = "denied_apps"
         private const val KEY_DENIED_CONTACTS = "denied_contacts"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L

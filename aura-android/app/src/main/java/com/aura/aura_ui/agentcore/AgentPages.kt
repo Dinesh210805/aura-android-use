@@ -85,6 +85,8 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
     val jobs = MutableStateFlow(emptyList<JobRow>())
     val memories = MutableStateFlow(emptyList<MemoryRow>())
     val skills = MutableStateFlow(emptyList<Skill>())
+    val drafts = MutableStateFlow(emptyList<Skill>())
+    val staleSkills = MutableStateFlow(emptySet<String>())
     val log = MutableStateFlow<List<RunLog>?>(null)
 
     fun deleteThread(id: String) = viewModelScope.launch { core.threads.delete(id) }
@@ -121,7 +123,29 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun approve(ids: Collection<Long>): String? =
         ids.firstNotNullOfOrNull { core.memory.approve(it) }.also { loadMemories() }
 
-    fun loadSkills() = viewModelScope.launch { skills.value = withContext(Dispatchers.IO) { core.skills.list() } }
+    fun loadSkills() = viewModelScope.launch {
+        withContext(Dispatchers.IO) {
+            val all = core.skills.list()
+            skills.value = all
+            staleSkills.value = all.filter(core.skills::isStale).map { it.name }.toSet()
+            drafts.value = core.learning.drafts.list()
+        }
+    }
+
+    suspend fun draftBody(name: String): String = withContext(Dispatchers.IO) { core.learning.drafts.read(name).orEmpty() }
+
+    /** Keeps a drafted skill; returns why it could not, or null. */
+    suspend fun keepDraft(name: String): String? = withContext(Dispatchers.IO) { core.learning.keepDraft(name) }.also { loadSkills() }
+
+    fun discardDraft(name: String) = viewModelScope.launch {
+        withContext(Dispatchers.IO) { core.learning.drafts.delete(name) }
+        loadSkills()
+    }
+
+    fun pinSkill(name: String, pinned: Boolean) = viewModelScope.launch {
+        withContext(Dispatchers.IO) { core.skills.setPinned(name, pinned) }
+        loadSkills()
+    }
 
     suspend fun skillBody(name: String): String = withContext(Dispatchers.IO) { core.skills.read(name).orEmpty() }
 
@@ -472,11 +496,38 @@ private fun MemoryEditDialog(memory: MemoryRow, onDismiss: () -> Unit, onSave: s
 fun SkillsPage(vm: AgentPagesViewModel = viewModel()) {
     val aura = LocalAura.current
     val skills by vm.skills.collectAsState()
+    val drafts by vm.drafts.collectAsState()
+    val stale by vm.staleSkills.collectAsState()
     val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf<String?>(null) }
     var body by remember { mutableStateOf("") }
+    var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { vm.loadSkills() }
     AuraPage("Skills") {
+        if (drafts.isNotEmpty()) {
+            AuraSection(
+                title = "AURA drafted ${drafts.size} ${if (drafts.size == 1) "skill" else "skills"}",
+                footer = notice ?: "From tasks that worked. Read the steps; keep only what you want AURA to follow.",
+            ) {
+                drafts.forEachIndexed { i, draft ->
+                    if (i > 0) AuraDivider(16.dp)
+                    Column(
+                        Modifier.fillMaxWidth().clickable {
+                            open = if (open == "draft:" + draft.name) null else "draft:" + draft.name
+                            scope.launch { body = vm.draftBody(draft.name) }
+                        }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Text(draft.name, style = AuraType.body, color = aura.label)
+                        Text(draft.description, style = AuraType.footnote, color = aura.secondary)
+                        if (open == "draft:" + draft.name) RichText(body, AuraType.footnote, aura.label)
+                        Row {
+                            TextButton(onClick = { vm.discardDraft(draft.name) }) { Text("Discard") }
+                            TextButton(onClick = { scope.launch { notice = vm.keepDraft(draft.name) } }) { Text("Keep") }
+                        }
+                    }
+                }
+            }
+        }
         AuraSection(footer = "After a task works, ask AURA to save it as a skill, and it follows the same steps next time.") {
             if (skills.isEmpty()) AuraHint("No skills yet.")
             skills.forEachIndexed { i, skill ->
@@ -496,12 +547,21 @@ fun SkillsPage(vm: AgentPagesViewModel = viewModel()) {
                         Column(Modifier.weight(1f)) {
                             Text(skill.name, style = AuraType.body, color = aura.label)
                             Text(skill.description, style = AuraType.footnote, color = aura.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            val state = listOfNotNull(
+                                "Pinned".takeIf { skill.usage.pinned },
+                                "Steps stopped working".takeIf { skill.usage.needsRelearning },
+                                "Unused for a month; archived after two".takeIf { skill.name in stale },
+                            )
+                            if (state.isNotEmpty()) Text(state.joinToString(" · "), style = AuraType.footnote, color = aura.tertiary)
                         }
                         FoldArrow(open == skill.name, aura.tertiary)
                     }
                     if (open == skill.name) {
                         Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             RichText(body, AuraType.footnote, aura.label)
+                            TextButton(onClick = { vm.pinSkill(skill.name, !skill.usage.pinned) }) {
+                                Text(if (skill.usage.pinned) "Unpin" else "Pin: never archive this skill")
+                            }
                             AuraButton("Delete skill", {
                                 vm.deleteSkill(skill.name)
                                 open = null

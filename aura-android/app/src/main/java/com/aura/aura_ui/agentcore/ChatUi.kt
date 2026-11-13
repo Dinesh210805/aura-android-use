@@ -178,6 +178,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /** A run the app died in the middle of, as (thread, request); the chat offers to continue it. */
     val interrupted = MutableStateFlow(core.interrupted()?.takeIf { core.engine.isIdle() })
+
+    /** What the idle review left for the user: (staged memories, skill drafts). */
+    val learned = MutableStateFlow(0 to 0)
+
+    fun refreshLearned() = viewModelScope.launch {
+        learned.value = withContext(Dispatchers.IO) { core.memory.staged().size to core.learning.drafts.list().size }
+    }
     val models = MutableStateFlow(emptyList<ModelChoice>())
     val catalog = MutableStateFlow<Catalog?>(null)
     val profile = MutableStateFlow(Profile())
@@ -382,6 +389,7 @@ fun AgentChatScreen(
     val plan by vm.plan.collectAsState()
     val outOfTime by vm.outOfTime.collectAsState()
     val interrupted by vm.interrupted.collectAsState()
+    val learned by vm.learned.collectAsState()
     val profile by vm.profile.collectAsState()
     var draft by rememberSaveable { mutableStateOf("") }
     var modelsOpen by remember { mutableStateOf(false) }
@@ -460,6 +468,13 @@ fun AgentChatScreen(
                                 Spacer(Modifier.width(8.dp))
                                 PillButton("Dismiss") { vm.resume(false) }
                             }
+                        }
+                    }
+                    LaunchedEffect(running) { if (!running) vm.refreshLearned() }
+                    AnimatedVisibility(!running && learned.first + learned.second > 0) {
+                        val n = learned.first + learned.second
+                        PillButton("AURA learned $n ${if (n == 1) "thing" else "things"}", Modifier.padding(start = 16.dp, bottom = 8.dp)) {
+                            onNavigate(if (learned.first > 0) AuraRoutes.AGENT_MEMORY else AuraRoutes.AGENT_SKILLS)
                         }
                     }
                     AnimatedVisibility(outOfTime && !running) {
