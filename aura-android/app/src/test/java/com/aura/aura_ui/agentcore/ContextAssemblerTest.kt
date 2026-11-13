@@ -181,4 +181,15 @@ class ContextAssemblerTest {
         assertTrue("ASSISTANT: tap({\"som_id\":1})" in t)
         assertTrue("RESULT tap: step 1 done" in t)
     }
+
+    @Test
+    fun `a tool call written as text is caught, prose naming a tool is not`() {
+        val tools = setOf("tap", "read_screen", "end_session")
+        assertTrue(ContextAssembler.writtenToolCall("<tool_call>{\"name\":\"tap\"}</tool_call>", tools))
+        assertTrue(ContextAssembler.writtenToolCall("{\"name\": \"read_screen\", \"arguments\": {}}", tools))
+        assertTrue(ContextAssembler.writtenToolCall("Now tap({\"som_id\": 12})", tools))
+        assertTrue(ContextAssembler.writtenToolCall("tap(som_id=12)", tools))
+        assertFalse(ContextAssembler.writtenToolCall("I'll tap (the blue button) next. Done!", tools))
+        assertFalse(ContextAssembler.writtenToolCall("Sent it. {\"name\": \"Amma\"}", tools))
+    }
 }

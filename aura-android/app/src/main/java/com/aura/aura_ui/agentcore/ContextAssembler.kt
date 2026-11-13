@@ -376,6 +376,22 @@ object ContextAssembler {
 
     fun systemText(text: String): Message = ai.koog.prompt.dsl.prompt("m") { system(text) }.messages.single()
 
+    /**
+     * True when [text] holds a call to one of [tools] written as text instead of made: a
+     * `<tool_call>` block, `{"name": "tap", ...}`, or `tap({...})` / `tap(som_id=3)`.
+     * - Why only known names and call shapes: prose says "tap (the blue button)"; it never writes
+     *   a brace or a `name=` argument after a tool's exact name.
+     */
+    fun writtenToolCall(text: String, tools: Set<String>): Boolean {
+        if (TOOL_CALL_TAG.containsMatchIn(text)) return true
+        if (JSON_NAME.findAll(text).any { it.groupValues[1] in tools }) return true
+        return CALL_SHAPE.findAll(text).any { it.groupValues[1] in tools }
+    }
+
+    private val TOOL_CALL_TAG = Regex("""(?i)<\s*(?:tool_call|function_call|tool_use)\b""")
+    private val JSON_NAME = Regex(""""(?:name|tool)"\s*:\s*"([a-z_][a-z0-9_]*)"""")
+    private val CALL_SHAPE = Regex("""\b([a-z_][a-z0-9_]*)\s*\(\s*(?:\{|[a-z_][a-z0-9_]*\s*[=:])""")
+
     /** Marks a summary of earlier steps. */
     const val SUMMARY_HEADER = "[EARLIER IN THIS TASK, summarised to save space. The messages after this are verbatim.]"
 

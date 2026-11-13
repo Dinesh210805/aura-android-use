@@ -237,6 +237,7 @@ class AgentEngine(
             var steps = 0
             var proofAsked = false
             var nudged = false
+            var repaired = false
             while (true) {
             while (reply.parts.any { it is MessagePart.Tool.Call }) {
                 // A paused phone refuses every tool; calling into it only burns requests. Only a
@@ -358,6 +359,18 @@ class AgentEngine(
                     journal?.note(turn.runId, "The reply was empty; nudged the model once", EMPTY_REPLY)
                     reply = llm.writeSession {
                         appendPrompt { user { text(EMPTY_REPLY) } }
+                        tools = hub.visible(turn)
+                        requestLLM()
+                    }
+                    noteThinking(turn, reply)
+                    continue
+                }
+                // A call written as text ran nothing; the turn would end on it. Ask for the real call once.
+                if (!repaired && ContextAssembler.writtenToolCall(reply.textContent(), hub.names())) {
+                    repaired = true
+                    journal?.note(turn.runId, "The model wrote a tool call as text; asked it to make the call", TEXT_CALL)
+                    reply = llm.writeSession {
+                        appendPrompt { user { text(TEXT_CALL) } }
                         tools = hub.visible(turn)
                         requestLLM()
                     }
@@ -562,6 +575,9 @@ class AgentEngine(
         const val STEERING = "The user added this while you were working. Take it into account:\n"
         const val EMPTY_REPLY =
             "Your last reply had no words and no tool call. Either call a tool to carry on, or tell the user the result."
+        const val TEXT_CALL = "Your last reply wrote a tool call as text, so nothing ran. Make that call as a real " +
+            "tool call now. If a tool you need is not loaded, call load_toolset first."
+
         /** Short tasks keep their whole story in view; the ledger starts once a run gets long. */
         const val LEDGER_FROM_STEP = 8
         const val STUCK_AFTER_STEPS = 15

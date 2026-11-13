@@ -316,6 +316,9 @@ class ToolHub(
         catalog.values.forEach { (spec, source) -> tool(HubTool(spec, source, turn)) }
     }
 
+    /** Every tool name the model could call. */
+    fun names(): Set<String> = catalog.keys
+
     /** The schemas to send with the next request: only the toolsets this turn has loaded. */
     fun visible(turn: TurnState): List<ToolDescriptor> {
         val loaded = turn.loaded()
