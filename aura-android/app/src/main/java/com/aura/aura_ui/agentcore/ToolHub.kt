@@ -572,10 +572,13 @@ class ToolHub(
                 description = PROPOSE_DESCRIPTION,
                 requiredParameters = listOf(
                     ToolParameterDescriptor("app", "The app it goes out through.", ToolParameterType.String),
-                    ToolParameterDescriptor("to", "Who receives it, as the user would say it.", ToolParameterType.String),
+                    ToolParameterDescriptor("to", "Who receives it: the email address or number you will send to when you have it, else the name.", ToolParameterType.String),
                     ToolParameterDescriptor("message", "The exact final text, word for word.", ToolParameterType.String),
                 ),
-                optionalParameters = listOf(ToolParameterDescriptor("summary", "One line, optional.", ToolParameterType.String)),
+                optionalParameters = listOf(
+                    ToolParameterDescriptor("subject", "For an email: the exact subject.", ToolParameterType.String),
+                    ToolParameterDescriptor("summary", "One line, optional.", ToolParameterType.String),
+                ),
             ),
             risk = ToolRisk.READ,
             origin = ToolOrigin.NATIVE,
@@ -586,6 +589,7 @@ class ToolHub(
         val app = args["app"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
         val to = args["to"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
         val message = args["message"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val subject = args["subject"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
         if (app.isEmpty() || to.isEmpty() || message.isBlank()) {
             return@NativeTool SourceResult("Give app, to and the exact message.", isError = true)
         }
@@ -595,17 +599,17 @@ class ToolHub(
         val s = settings()
         SafetyGate.blocked(ToolCallRequest(SafetyGate.PROPOSE_ACTION, ToolRisk.READ, ToolOrigin.NATIVE, args.toString()), s)
             ?.let { return@NativeTool SourceResult(it, isError = true) }
-        if (SecretPatterns.containsSecret(message)) {
+        if (SecretPatterns.containsSecret(message) || subject?.let(SecretPatterns::containsSecret) == true) {
             return@NativeTool SourceResult("policy_blocked: the message contains a password, key, card number or code.", isError = true)
         }
         val approved = "Approved. Send exactly this text to $to in $app; the steps that match it will not ask again."
         val expires = System.currentTimeMillis() + GRANT_MS
         if (s.mode == ApprovalMode.HANDS_FREE && !turn.taint.tainted) {
-            grant(turn.threadId, Grant(app, to, message, expires))
+            grant(turn.threadId, Grant(app, to, message, expires, subject = subject))
             return@NativeTool SourceResult(approved)
         }
         val options = listOfNotNull(SEND, SEND_IN_CHAT.takeIf { !turn.taint.tainted }, CANCEL)
-        val card = "Send in $app to $to?\n\n\u201C$message\u201D"
+        val card = "Send in $app to $to?\n\n" + subject?.let { "Subject: $it\n" }.orEmpty() + "\u201C$message\u201D"
         journal?.ask(turn.runId, card)
         val answer = broker.ask(turn, card, options)?.trim()
         journal?.note(turn.runId, "You answered the send card: ${answer ?: "no answer"}", ok = answer != null && answer != CANCEL)
@@ -613,11 +617,11 @@ class ToolHub(
             answer == null -> SourceResult("The user did not answer. Do not send.", isError = true)
             answer == CANCEL || answer.equals(UserBroker.DENY, true) -> SourceResult(SafetyGate.DECLINED, isError = true)
             answer == SEND_IN_CHAT -> {
-                grant(turn.threadId, Grant(app, to, message, expires), Grant(app, to, null, Long.MAX_VALUE))
+                grant(turn.threadId, Grant(app, to, message, expires, subject = subject), Grant(app, to, null, Long.MAX_VALUE))
                 SourceResult("$approved The user will not be asked again in this chat for messages to $to in $app.")
             }
             answer == SEND || UserBroker.YES.matches(answer) -> {
-                grant(turn.threadId, Grant(app, to, message, expires))
+                grant(turn.threadId, Grant(app, to, message, expires, subject = subject))
                 SourceResult(approved)
             }
             else -> SourceResult("The user changed the message to: \u201C$answer\u201D. Call propose_action again with that text.")

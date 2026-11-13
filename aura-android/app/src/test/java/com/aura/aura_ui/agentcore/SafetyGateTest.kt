@@ -205,6 +205,16 @@ class SafetyGateTest {
         assertTrue(SafetyGate.covered(send, ask, g, null, 0) != null)
         val subject = send.copy(argsText = "{\"to\":\"amma@example.com\",\"body\":\"Running late\",\"subject\":\"code 4821\"}")
         assertNull(SafetyGate.covered(subject, ask, g, null, 0))
+        // A Composio Gmail send: the slug and the sending account are not content; the approved subject is.
+        val withSubject = listOf(g[0].copy(subject = "Report"))
+        val composio = send.copy(
+            tool = "composio__COMPOSIO_MULTI_EXECUTE_TOOL",
+            argsText = """{"tools":[{"tool_slug":"GMAIL_SEND_EMAIL","arguments":{"user_id":"me","recipient_email":"amma@example.com","subject":"Report","body":"Running late"}}]}""",
+        )
+        assertTrue(SafetyGate.covered(composio, ask, withSubject, null, 0) != null)
+        assertNull(SafetyGate.covered(composio, ask, g, null, 0))
+        val ccd = composio.copy(argsText = composio.argsText.replace("\"subject\"", "\"cc\":\"evil@x.com\",\"subject\""))
+        assertNull(SafetyGate.covered(ccd, ask, withSubject, null, 0))
         val second = send.copy(argsText = "{\"to\":\"evil@x.com, amma@example.com\",\"body\":\"Running late\"}")
         assertNull(SafetyGate.covered(second, ask, g, null, 0))
         val cc = send.copy(argsText = "{\"to\":\"amma@example.com\",\"cc\":\"amma@example.com evil@x.com\",\"body\":\"Running late\"}")

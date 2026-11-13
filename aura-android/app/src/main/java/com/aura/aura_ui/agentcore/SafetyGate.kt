@@ -36,7 +36,15 @@ data class ToolCallRequest(
  * - [message] is the exact text approved; null means any text to [to] in [app] for the rest of the
  *   chat ("don't ask again in this chat"), which is never offered once untrusted text was read.
  */
-data class Grant(val app: String, val to: String, val message: String?, val expiresAt: Long, val linkUsed: Boolean = false)
+data class Grant(
+    val app: String,
+    val to: String,
+    val message: String?,
+    val expiresAt: Long,
+    val linkUsed: Boolean = false,
+    /** An email's subject, shown on the card with the text; a connector call may carry it too. */
+    val subject: String? = null,
+)
 
 sealed interface Verdict {
     data object Allow : Verdict
@@ -240,13 +248,14 @@ object SafetyGate {
             }
         }
         if (call.origin == ToolOrigin.CONNECTOR) {
-            // Every value is exactly the message or exactly the recipient: a subject, a cc, or a
-            // "to" listing a second address is not approved. A name grant vs an address arg asks.
-            val values = argumentValues(call.argsText, withParts = false)
+            // Every value is exactly the message, the recipient or the approved subject: a cc, a
+            // second address or an unapproved subject is not. A name grant vs an address arg asks.
+            val values = connectorValues(call.argsText)
             return live.firstOrNull { g ->
                 val m = g.message ?: return@firstOrNull false
+                val allowed = listOfNotNull(m, g.to, g.subject).map(::normal).toSet()
                 !g.linkUsed && values.any { normal(it) == normal(m) } && values.any { normal(it) == normal(g.to) } &&
-                    values.all { normal(it) == normal(m) || normal(it) == normal(g.to) }
+                    values.all { normal(it) in allowed }
             }
         }
         if (call.egress) {
@@ -284,6 +293,26 @@ object SafetyGate {
      * Every string value in a call's JSON arguments, plus, for each that is a link, its path parts
      * and decoded query values: the pieces a sent text can be.
      */
+    /**
+     * A connector call's string values, except under [STRUCTURAL] keys: which tool to run and
+     * which of the user's own accounts sends it, not content that reaches the recipient.
+     */
+    private fun connectorValues(argsText: String): List<String> {
+        val strings = mutableListOf<String>()
+        fun walk(e: kotlinx.serialization.json.JsonElement) {
+            when (e) {
+                is kotlinx.serialization.json.JsonObject -> e.forEach { (k, v) -> if (k !in STRUCTURAL) walk(v) }
+                is kotlinx.serialization.json.JsonArray -> e.forEach(::walk)
+                is kotlinx.serialization.json.JsonPrimitive -> if (e.isString) strings += e.content
+            }
+        }
+        runCatching { walk(kotlinx.serialization.json.Json.parseToJsonElement(argsText)) }
+        return strings
+    }
+
+    /** Keys that name a tool or the sending account (`tool_slug` in Composio, Gmail's `user_id`). */
+    private val STRUCTURAL = setOf("tool_slug", "user_id")
+
     internal fun argumentValues(argsText: String, withParts: Boolean = true): List<String> {
         val strings = mutableListOf<String>()
         fun walk(e: kotlinx.serialization.json.JsonElement) {
