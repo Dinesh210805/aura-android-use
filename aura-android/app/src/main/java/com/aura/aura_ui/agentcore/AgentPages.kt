@@ -110,6 +110,17 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
         loadMemories()
     }
 
+    /** Saves an edit; returns why it was refused, or null. */
+    suspend fun editMemory(id: Long, text: String, pinned: Boolean): String? =
+        core.memory.edit(id, text).also {
+            if (it == null) core.memory.setPinned(id, pinned)
+            loadMemories()
+        }
+
+    /** Keeps staged memories; returns the first refusal (a full memory), or null. */
+    suspend fun approve(ids: Collection<Long>): String? =
+        ids.firstNotNullOfOrNull { core.memory.approve(it) }.also { loadMemories() }
+
     fun loadSkills() = viewModelScope.launch { skills.value = withContext(Dispatchers.IO) { core.skills.list() } }
 
     suspend fun skillBody(name: String): String = withContext(Dispatchers.IO) { core.skills.read(name).orEmpty() }
@@ -350,26 +361,53 @@ fun SchedulesPage(vm: AgentPagesViewModel = viewModel()) {
 
 // ── Memory ───────────────────────────────────────────────────────────────────
 
-/** What the agent remembers about the user. Long-press a memory to select several to forget. */
+/**
+ * What the agent remembers about the user. Tap a memory to edit or pin it; long-press to select
+ * several to forget. Memories learned from a task that read outside content wait at the top
+ * until the user keeps or discards them.
+ */
 @Composable
 fun MemoryPage(vm: AgentPagesViewModel = viewModel()) {
-    val memories by vm.memories.collectAsState()
+    val all by vm.memories.collectAsState()
+    val (staged, memories) = all.partition { it.staged }
     var selected by remember { mutableStateOf(emptySet<Long>()) }
     var confirm by remember { mutableStateOf<Set<Long>?>(null) }
+    var editing by remember { mutableStateOf<MemoryRow?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { vm.loadMemories() }
     Box(Modifier.fillMaxSize()) {
         AuraPage("Memory") {
-            AuraSection(footer = "AURA uses these in later chats.") {
+            if (staged.isNotEmpty()) {
+                AuraSection(
+                    title = "AURA learned ${staged.size} ${if (staged.size == 1) "thing" else "things"}",
+                    footer = notice ?: "From tasks that read screens, pages or messages. Keep only what is true.",
+                ) {
+                    staged.forEachIndexed { i, memory ->
+                        if (i > 0) AuraDivider(16.dp)
+                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(memory.text, style = AuraType.body, color = LocalAura.current.label, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { vm.forget(setOf(memory.rowid)) }) { Text("Discard") }
+                            TextButton(onClick = { scope.launch { notice = vm.approve(listOf(memory.rowid)) } }) { Text("Keep") }
+                        }
+                    }
+                    if (staged.size > 1) {
+                        AuraDivider(16.dp)
+                        AuraRow("Keep all", onClick = { scope.launch { notice = vm.approve(staged.map { it.rowid }) } })
+                    }
+                }
+            }
+            AuraSection(footer = "AURA uses these in later chats. Tap one to edit or pin it.") {
                 if (memories.isEmpty()) AuraHint("Nothing saved yet. Tell AURA something about yourself, like \"I'm vegetarian\".")
                 memories.forEachIndexed { i, memory ->
                     if (i > 0) AuraDivider(16.dp)
-                    val detail = listOfNotNull(memory.kind.lowercase().replaceFirstChar { it.uppercase() }, memory.app).joinToString(" · ")
                     val id = memory.rowid
                     DeletableRow(
                         memory.text,
-                        detail,
+                        memoryDetail(memory),
                         "Forget this",
                         onDelete = { confirm = setOf(id) },
+                        onOpen = { editing = memory },
                         selected = if (selected.isEmpty()) null else id in selected,
                         onSelect = { selected = if (id in selected) selected - id else selected + id },
                     )
@@ -388,6 +426,43 @@ fun MemoryPage(vm: AgentPagesViewModel = viewModel()) {
             confirm = null
         }
     }
+    editing?.let { memory ->
+        MemoryEditDialog(memory, onDismiss = { editing = null }) { text, pinned -> vm.editMemory(memory.rowid, text, pinned).also { if (it == null) editing = null } }
+    }
+}
+
+/** "You said · User · Pinned": who the memory came from and what it is about. */
+private fun memoryDetail(memory: MemoryRow): String = listOfNotNull(
+    when (memory.source) {
+        MemorySource.LEARNED.name -> "Learned from a task"
+        MemorySource.IMPORTED.name -> "Imported"
+        else -> "You said"
+    },
+    memory.kind.lowercase().replaceFirstChar { it.uppercase() },
+    memory.app,
+    "Pinned".takeIf { memory.pinned },
+).joinToString(" · ")
+
+/** Edits one memory's text and pin. [onSave] returns why the text was refused, or null. */
+@Composable
+private fun MemoryEditDialog(memory: MemoryRow, onDismiss: () -> Unit, onSave: suspend (String, Boolean) -> String?) {
+    var text by remember { mutableStateOf(memory.text) }
+    var pinned by remember { mutableStateOf(memory.pinned) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit memory") },
+        text = {
+            Column {
+                androidx.compose.material3.OutlinedTextField(value = text, onValueChange = { text = it; error = null }, isError = error != null)
+                error?.let { Text(it, style = AuraType.footnote, color = LocalAura.current.secondary) }
+                TextButton(onClick = { pinned = !pinned }) { Text(if (pinned) "Pinned: kept when you clear learned memories" else "Pin this memory") }
+            }
+        },
+        confirmButton = { TextButton(onClick = { scope.launch { error = onSave(text, pinned) } }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 // ── Skills ───────────────────────────────────────────────────────────────────
