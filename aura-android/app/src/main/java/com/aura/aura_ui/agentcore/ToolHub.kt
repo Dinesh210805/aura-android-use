@@ -581,17 +581,25 @@ class ToolHub(
             // A phone number is routing only where an app expects a recipient; anywhere else a long
             // number could be an account number read off the screen.
             fun recipient(text: String) = text.trimStart('+').let { it.all(Char::isDigit) && it.length in PHONE_DIGITS }
+            val scheme = url.substringBefore(':').lowercase()
             val afterScheme = url.substringAfter("://", url.substringAfter(':'))
-            val authority = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#')
-            // No `user@`, no port, and a host of short labels without long digit runs: data can
-            // hide in a subdomain as easily as in a path.
-            val hostOk = '@' !in authority && ':' !in authority &&
-                authority.split('.').let { labels -> labels.size <= MAX_HOST_LABELS && labels.all { HOST_LABEL.matches(it) && !LONG_DIGITS.containsMatchIn(it) } }
+            val authority = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#').lowercase()
+            val web = scheme == "http" || scheme == "https"
+            // The host is data unless it is a known destination: a web link must point at a known
+            // app's domain; a custom scheme's host must be a routing word or the user's words.
+            val hostOk = '@' !in authority && ':' !in authority && when {
+                web -> authority.split('.').let { labels ->
+                    labels.takeLast(2).joinToString(".") in KNOWN_WEB_DOMAINS &&
+                        (labels.size == 2 || (labels.size == 3 && labels[0] in KNOWN_SUBDOMAINS))
+                }
+                else -> authority.split('.').filter(String::isNotBlank).all { it in ROUTING_WORDS || spoken(it) }
+            }
+            val recipientSlot = scheme in PHONE_SCHEMES || (web && authority.split('.').takeLast(2).joinToString(".") in RECIPIENT_DOMAINS)
             val path = afterScheme.substringBefore('?').substringBefore('#').split('/').drop(1).filter(String::isNotBlank).map(::decode)
             val query = afterScheme.substringAfter('?', "").substringBefore('#')
             val fragment = afterScheme.substringAfter('#', "")
             val pathOk = path.withIndex().all { (i, seg) ->
-                seg.lowercase() in ROUTING_WORDS || (i == 0 && recipient(seg)) || spoken(seg)
+                seg.lowercase() in ROUTING_WORDS || (i == 0 && recipientSlot && recipient(seg)) || spoken(seg)
             }
             val queryOk = query.split('&', ';').filter(String::isNotBlank).all { pair ->
                 val name = decode(pair.substringBefore('=')).lowercase()
@@ -608,9 +616,25 @@ class ToolHub(
 
         private val PHONE_DIGITS = 10..15
         private val RECIPIENT_NAMES = setOf("phone", "to")
-        private const val MAX_HOST_LABELS = 4
-        private val HOST_LABEL = Regex("[A-Za-z0-9-]{1,24}")
-        private val LONG_DIGITS = Regex("\\d{5,}")
+
+        /** Schemes whose first path part is a phone number by definition. */
+        private val PHONE_SCHEMES = setOf("sms", "smsto", "mms", "mmsto", "tel")
+
+        /** The only subdomains of a known domain that pass; any other could carry data. */
+        private val KNOWN_SUBDOMAINS = setOf("www", "m", "api", "open", "music", "maps", "mobile")
+
+        /** Web domains whose first path part is a phone number (`wa.me/<number>`). */
+        private val RECIPIENT_DOMAINS = setOf("wa.me", "whatsapp.com")
+
+        /**
+         * Web domains of apps people commonly reach by link. A link elsewhere is checked after a
+         * private read, because its host could carry data. Compared on the last two labels.
+         */
+        private val KNOWN_WEB_DOMAINS = setOf(
+            "wa.me", "whatsapp.com", "t.me", "telegram.me", "m.me", "google.com", "youtube.com", "youtu.be",
+            "spotify.com", "instagram.com", "x.com", "twitter.com", "apple.com", "amazon.com", "amazon.in",
+            "flipkart.com", "zomato.com", "swiggy.com", "uber.com", "olacabs.com",
+        )
 
         /** Path words apps use to route a link; they carry no user data. */
         private val ROUTING_WORDS = setOf(

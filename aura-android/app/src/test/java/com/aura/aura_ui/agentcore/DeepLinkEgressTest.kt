@@ -29,6 +29,10 @@ class DeepLinkEgressTest {
         assertFalse(ToolHub.dictatedOnly("myapp://open/home/123456789012", "open my app"))
         assertFalse(ToolHub.dictatedOnly("https://wa.me/919876543210?text=123456789012", "send it"))
         assertFalse(ToolHub.dictatedOnly("https://acct123456789.example.app/open", "open my app"))
+        assertFalse(ToolHub.dictatedOnly("https://secretword.wa.me.evil.app/send", "send it"))
+        assertFalse(ToolHub.dictatedOnly("https://example.app/919876543210", "open my app"))
+        assertFalse(ToolHub.dictatedOnly("https://secretword.wa.me/919876543210", "send it"))
+        assertTrue(ToolHub.dictatedOnly("https://open.spotify.com/search/lofi", "play lofi"))
         assertFalse(ToolHub.dictatedOnly("https://secret:pw@example.app/open", "open my app"))
         assertTrue(ToolHub.dictatedOnly("smsto://compose?to=919876543210", "text Amma"))
         // A number the user said is theirs to send.
