@@ -33,6 +33,16 @@ class RunLedgerTest {
     }
 
     @Test
+    fun `the ledger and the stuck note are not saved for the next turn`() {
+        val messages = prompt("t") {
+            user("task")
+            user("${ContextAssembler.LEDGER} Task: task")
+            user("${ContextAssembler.STUCK} change route")
+        }.messages
+        assertEquals(listOf("task"), ContextAssembler.forStorage(messages).map { it.textContent() })
+    }
+
+    @Test
     fun `going back and forth between two screens adds no distinct screens`() {
         val h = ScreenHistory()
         val a = "SEEN: app | A\nSCREEN 1x1\n| 1 A |"

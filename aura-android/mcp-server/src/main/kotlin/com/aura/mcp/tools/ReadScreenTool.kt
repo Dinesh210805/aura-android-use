@@ -112,7 +112,7 @@ internal fun Server.registerReadScreenTool(
         ),
     ) { request ->
         val query = request.arguments?.stringArg("query")?.trim()?.takeIf { it.isNotEmpty() }
-        val changesOnly = request.arguments?.boolArg("changes_only") == true
+        val changesOnly = request.arguments?.boolArg("changes_only") == true && !perceptionCache.lastWasVision
         val wantsImage = request.arguments?.boolArg("image") == true
         // Compare against the last time the server LOOKED, by either route — a perceive
         // or the settle after the previous gesture. Anchoring anywhere else would make

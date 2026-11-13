@@ -495,7 +495,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val KEY_RUNNING = "running_run"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
-        private const val KEEP_GOING_HINT = " I stopped at the time limit. Say \"keep going\" to continue."
+        private const val KEEP_GOING_HINT = " I stopped before finishing. Say \"keep going\" to continue."
         private const val ASK_TIMEOUT_MS = 120_000L
         private const val CHANNEL = "aura_agentcore"
         private const val WORK = "agentcore-tick"

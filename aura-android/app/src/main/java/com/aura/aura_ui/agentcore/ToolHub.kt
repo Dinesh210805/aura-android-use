@@ -126,6 +126,10 @@ class TurnState(
 
     /** What the run has done, for the ledger the engine shows the model on long tasks. */
     val ledger = RunLedger()
+
+    /** Estimated prompt size right after the last compaction; see `AgentEngine.compactIfOver`. */
+    @Volatile
+    var compactedAt: Int = 0
     private val toolsets = mutableSetOf(ToolHub.CORE)
     private val images = ArrayDeque<ByteArray>()
     private val steering = ArrayDeque<String>()

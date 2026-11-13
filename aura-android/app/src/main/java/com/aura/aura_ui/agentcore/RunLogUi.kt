@@ -162,7 +162,7 @@ internal fun OutcomePill(end: TurnEnd?) {
     val (text, tint) = when (end) {
         TurnEnd.ANSWERED -> "Done" to aura.label
         TurnEnd.CANCELLED -> "Stopped" to aura.secondary
-        TurnEnd.LIMIT -> "Ran out of time" to aura.warning
+        TurnEnd.LIMIT -> "Stopped at a limit" to aura.warning
         TurnEnd.FAILED -> "Failed" to aura.danger
         TurnEnd.HANDED_OFF, null -> "Did not finish" to aura.secondary
     }

@@ -263,14 +263,17 @@ class AgentEngine(
                 val results = executeTools(reply, false).map { it.toMessagePart() }
                 val calls = reply.parts.filterIsInstance<MessagePart.Tool.Call>().associateBy { it.id }
                 results.filter { !it.isError && it.tool in ContextAssembler.SCREEN_CHANGING }.forEach { r ->
-                    turn.ledger.action("${r.tool} ${calls[r.id]?.args.orEmpty().take(60)} -> ${r.output.lineSequence().firstOrNull().orEmpty().take(60)}")
+                    // The call only, never its result: a result can carry screen text, and this line
+                    // reaches the model in an app-voiced message.
+                    turn.ledger.action("${r.tool} ${calls[r.id]?.args.orEmpty().take(80)} -> ok")
                 }
                 if (turn.handedOff) {
                     journal?.note(turn.runId, "Handed the task to the overlay, which continues this run")
-                    // Everything but the reply whose calls asked for the screen: those calls have no
-                    // results, and the overlay's turn makes them itself.
-                    run.messages = llm.readSession { prompt.messages }.dropLastWhile { m ->
-                        m is Message.Assistant && m.parts.any { it is MessagePart.Tool.Call }
+                    // Every call in that reply ran (a screen call answers "handing this task to the
+                    // overlay"); keeping the results on record stops the overlay repeating a send.
+                    run.messages = llm.writeSession {
+                        appendPrompt { results.forEach { toolResult(it) } }
+                        prompt.messages
                     }
                     run.end = TurnEnd.HANDED_OFF
                     return@functionalStrategy ""
@@ -366,7 +369,7 @@ class AgentEngine(
                     continue
                 }
                 // A call written as text ran nothing; the turn would end on it. Ask for the real call once.
-                if (!repaired && ContextAssembler.writtenToolCall(reply.textContent(), hub.names())) {
+                if (!repaired && ContextAssembler.writtenToolCall(visibleText(reply), hub.names())) {
                     repaired = true
                     journal?.note(turn.runId, "The model wrote a tool call as text; asked it to make the call", TEXT_CALL)
                     reply = llm.writeSession {
@@ -404,7 +407,7 @@ class AgentEngine(
                 model = main.model,
                 // Koog's own ceiling. Kept above ours so this loop's limit, which gets a closing
                 // turn and an honest ending, is always the one that fires.
-                maxAgentIterations = if (maxSteps == Int.MAX_VALUE) Int.MAX_VALUE else maxSteps * 4 + 16,
+                maxAgentIterations = if (maxSteps == Int.MAX_VALUE) MAX_ITERATIONS else maxSteps * 4 + 16,
             ),
             strategy = strategy,
             toolRegistry = hub.registry(turn),
@@ -461,11 +464,14 @@ class AgentEngine(
      */
     private suspend fun AIAgentLLMWriteSession.compactIfOver(budget: ContextBudget, turn: TurnState) {
         val before = ContextAssembler.estimateTokens(prompt.messages)
-        if (before <= budget.compactAtTokens) return
+        // After a compaction the floor is what it left; wait for real growth before paying again,
+        // or a tail that alone passes the budget would compact on every step.
+        if (before <= budget.compactAtTokens || before < turn.compactedAt + budget.compactAtTokens / REGROW_SHARE) return
         val beforeCount = prompt.messages.size
         // Clearing old tool output is free and often enough; summarising costs a model call.
         rewritePrompt { it.withMessages { messages -> ContextAssembler.pruneOldToolResults(messages) } }
         val pruned = ContextAssembler.estimateTokens(prompt.messages)
+        turn.compactedAt = pruned
         if (pruned <= budget.compactAtTokens) {
             journal?.note(turn.runId, "Cleared old tool output: about $before → $pruned tokens")
             return
@@ -488,6 +494,7 @@ class AgentEngine(
             journal?.note(turn.runId, "Could not summarise the conversation; kept it as it was", ok = false)
             return
         }
+        turn.compactedAt = ContextAssembler.estimateTokens(prompt.messages)
         journal?.note(
             turn.runId,
             "Compacted the conversation: $beforeCount → ${prompt.messages.size} messages, about $before → " +
@@ -587,6 +594,12 @@ class AgentEngine(
 
         /** The verbatim tail gets this fraction of the compaction threshold. */
         const val TAIL_SHARE = 3
+
+        /** Koog's iteration ceiling for a foreground turn: out of reach, finite so Koog's arithmetic stays safe. */
+        const val MAX_ITERATIONS = 100_000
+
+        /** Compact again only after the prompt grows by this fraction of the budget past the last compaction. */
+        const val REGROW_SHARE = 3
         const val CONTINUE_ON_SCREEN = "[Continue this request on the phone's screen now; you have the screen tools.]"
         const val PAUSED_TOO_LONG =
             "You took the phone back and I waited, so I've stopped here. Say continue when you want me to pick it up."

@@ -144,6 +144,7 @@ internal class PerceptionCache(
         baseline: Boolean = true,
     ) {
         val prev = capture
+        lastWasVision = !baseline
         // Map each cover's bounds back to a som_id on THIS numbering; covers are recorded as
         // bounds because som_ids are reassigned after occlusion runs.
         // associateBy keeps the last duplicate, so interactive elements sort last to win.
@@ -166,6 +167,15 @@ internal class PerceptionCache(
             pkg = if (baseline) pkg else prev.pkg,
         )
     }
+
+    /**
+     * True when the last look was `perceive_screen`. Its result replaced the tree look in the
+     * model's context, so a changes-only read must send the whole screen, not a diff against a
+     * look the model can no longer see.
+     */
+    @Volatile
+    var lastWasVision: Boolean = false
+        private set
 
     /** The last look's elements and app, with NO staleness check: for diffing, never for touching. */
     fun previous(): Pair<List<DetectedElement>, String?> = capture.let { it.elements to it.pkg }

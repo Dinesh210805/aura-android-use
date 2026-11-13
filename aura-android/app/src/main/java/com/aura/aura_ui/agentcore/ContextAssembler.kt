@@ -427,7 +427,11 @@ Latest instruction: the user's most recent instruction or correction, word for w
      * (a stored screenshot is stale, and base64 in a database row is megabytes).
      */
     fun forStorage(messages: List<Message>): List<Message> =
-        evictStaleScreens(messages).filterNot { it is Message.System || it.hasAttachment() }
+        evictStaleScreens(messages).filterNot { it is Message.System || it.hasAttachment() || it.isRunNote() }
+
+    /** The ledger and the stuck note describe one run; the next turn must not read them as its own. */
+    private fun Message.isRunNote(): Boolean =
+        this is Message.User && textContent().let { it.startsWith(LEDGER) || it.startsWith(STUCK) }
 
     /** Rough prompt size. Identical on every provider, which is what a threshold needs. */
     fun estimateTokens(messages: List<Message>): Int =

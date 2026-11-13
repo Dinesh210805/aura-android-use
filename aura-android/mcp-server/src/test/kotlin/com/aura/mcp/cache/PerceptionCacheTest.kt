@@ -582,6 +582,7 @@ class PerceptionCacheTest {
         cache.update(listOf(vision), com.aura.mcp.tools.ScreenSignature.of(tree), baseline = false)
 
         assertEquals(treeEls to "com.whatsapp", cache.previous())
+        assertTrue(cache.lastWasVision)
         gen = 1L
         assertTrue(cache.resolve(PerceptionCache.VISION_ID_BASE + 1) is PerceptionCache.Resolution.Stale)
     }
