@@ -2,6 +2,7 @@ package com.aura.aura_ui.agentcore
 
 import android.content.Context
 import ai.koog.prompt.message.Message
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -12,6 +13,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Update
 import androidx.room.Upsert
 import java.util.UUID
@@ -42,6 +45,8 @@ data class ThreadRow(
     val contextJson: String? = null,
     /** Comma-separated [Origin] names of untrusted content the context holds. */
     val taint: String = "",
+    /** 3 to 5 lines on what the thread was about, written when it goes idle; null until then. */
+    val summary: String? = null,
 )
 
 @Entity(tableName = "items", indices = [Index("threadId", "atMs")])
@@ -64,6 +69,34 @@ data class ItemRow(
 @Entity(tableName = "items_fts")
 data class ItemFts(val text: String)
 
+/** Where a memory came from. */
+enum class MemorySource { SAID, LEARNED, IMPORTED }
+
+/**
+ * What one finished run did, kept for the idle review ([Learning]).
+ * - Why a table: the review runs later, often after the process died, and the context drops the
+ *   ledger on save. [tainted] is recorded here because the review must stage what a tainted run taught.
+ */
+@Entity(tableName = "digests")
+data class DigestRow(
+    @PrimaryKey(autoGenerate = true) val rowid: Long = 0,
+    val threadId: String,
+    val atMs: Long,
+    val request: String,
+    /** The run ledger's text, or blank for a short run. */
+    val ledger: String,
+    /** The final answer, or why the run stopped. */
+    val outcome: String,
+    val tainted: Boolean,
+    /** Phone actions taken (taps, typing, scrolls...). */
+    val actions: Int,
+    /** The skill the run read with `skill_view`, if any. */
+    val skill: String?,
+    /** One line per phone action: tool and target label, for a skill's `steps:`. */
+    val trace: String,
+    @ColumnInfo(defaultValue = "0") val reviewed: Boolean = false,
+)
+
 @Entity(tableName = "memories")
 data class MemoryRow(
     @PrimaryKey(autoGenerate = true) val rowid: Long = 0,
@@ -75,6 +108,12 @@ data class MemoryRow(
     val app: String? = null,
     /** That app's version name when the memory was saved. */
     val appVersion: String? = null,
+    /** A [MemorySource] name: who the fact came from, shown on the memory screen. */
+    @ColumnInfo(defaultValue = "SAID") val source: String = MemorySource.SAID.name,
+    /** Pinned entries are kept when the user clears learned memories. */
+    @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
+    /** Proposed by a review of a run that read untrusted content: waits for the user, never in the prompt. */
+    @ColumnInfo(defaultValue = "0") val staged: Boolean = false,
 )
 
 @Dao
@@ -116,6 +155,21 @@ interface AgentDao {
     @Query("DELETE FROM memories WHERE rowid = :id")
     suspend fun deleteMemory(id: Long): Int
 
+    @Update
+    suspend fun updateMemory(row: MemoryRow)
+
+    @Insert
+    suspend fun insertDigest(row: DigestRow): Long
+
+    @Query("SELECT * FROM digests WHERE reviewed = 0 ORDER BY atMs LIMIT :limit")
+    suspend fun unreviewedDigests(limit: Int): List<DigestRow>
+
+    @Query("UPDATE digests SET reviewed = 1 WHERE rowid = :id")
+    suspend fun markReviewed(id: Long)
+
+    @Query("DELETE FROM digests WHERE atMs < :beforeMs")
+    suspend fun pruneDigests(beforeMs: Long)
+
     @Insert
     suspend fun insertJob(row: JobRow): Long
 
@@ -130,8 +184,8 @@ interface AgentDao {
 }
 
 @Database(
-    entities = [ThreadRow::class, ItemRow::class, ItemFts::class, MemoryRow::class, JobRow::class],
-    version = 1,
+    entities = [ThreadRow::class, ItemRow::class, ItemFts::class, MemoryRow::class, JobRow::class, DigestRow::class],
+    version = 2,
     exportSchema = false,
 )
 abstract class AgentCoreDatabase : RoomDatabase() {
@@ -143,8 +197,25 @@ abstract class AgentCoreDatabase : RoomDatabase() {
 
         fun get(context: Context): AgentCoreDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AgentCoreDatabase::class.java, "agentcore.db")
+                .addMigrations(MIGRATION_1_2)
                 .build().also { instance = it }
         }
+
+        /** Memory source, pin and staging; thread summaries; run digests for the idle review. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `memories` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'SAID'")
+                db.execSQL("ALTER TABLE `memories` ADD COLUMN `pinned` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `memories` ADD COLUMN `staged` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `threads` ADD COLUMN `summary` TEXT")
+                db.execSQL(DIGESTS_SQL)
+            }
+        }
+
+        internal const val DIGESTS_SQL = "CREATE TABLE IF NOT EXISTS `digests` (`rowid` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "`threadId` TEXT NOT NULL, `atMs` INTEGER NOT NULL, `request` TEXT NOT NULL, `ledger` TEXT NOT NULL, " +
+            "`outcome` TEXT NOT NULL, `tainted` INTEGER NOT NULL, `actions` INTEGER NOT NULL, `skill` TEXT, " +
+            "`trace` TEXT NOT NULL, `reviewed` INTEGER NOT NULL DEFAULT 0)"
     }
 }
 
