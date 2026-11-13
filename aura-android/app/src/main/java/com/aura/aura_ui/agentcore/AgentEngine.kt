@@ -260,10 +260,16 @@ class AgentEngine(
                     side.launch { research(text)?.let(turn::note) }
                 }
                 // Look for the model after an action, so its next request already has the new screen.
-                val observe = onScreen && !atLimit && ContextAssembler.shouldObserve(results.map { it.tool to !it.isError })
+                // Skipped when the server proved the last action changed nothing: the last look stands.
+                val lastAction = results.lastOrNull { !it.isError && it.tool in ContextAssembler.SCREEN_CHANGING }
+                val observe = onScreen && !atLimit && ContextAssembler.shouldObserve(results.map { it.tool to !it.isError }) &&
+                    lastAction?.let { ContextAssembler.provedUnchanged(it.output) } != true
                 val screenNow = if (observe) hub.observeScreen(turn) else null
+                val shown = if (screenNow == null) results else results.map {
+                    MessagePart.Tool.Result(it.id, it.tool, ContextAssembler.withoutSummary(it.output), it.isError)
+                }
                 reply = llm.writeSession {
-                    appendPrompt { results.forEach { toolResult(it) } }
+                    appendPrompt { shown.forEach { toolResult(it) } }
                     screenNow?.let { screen -> appendPrompt { user { text(ContextAssembler.afterAction(screen)) } } }
                     turn.drainNotes().forEach { note ->
                         journal?.note(turn.runId, "Web research note arrived", note)

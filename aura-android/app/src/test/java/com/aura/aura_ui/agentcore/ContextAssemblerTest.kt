@@ -127,4 +127,22 @@ class ContextAssemblerTest {
         assertTrue(built.contains("<toolsets>\nscreen: tap, read_screen\n</toolsets>"))
         assertFalse(SystemPrompt.build(null, "").contains("<user_profile>"))
     }
+
+    private val tapped = "Tapped Send\n{\"post_action_observation\":{\"settled\":true,\"settle_ms\":420,\"screen_changed\":true,\"top_labels\":[\"Chats\"],\"hint\":\"Verify from this\"}}"
+
+    @Test
+    fun `the settle summary is cut to settled and changed when the harness reads the screen`() {
+        val out = ContextAssembler.withoutSummary(tapped)
+        assertEquals("Tapped Send\n{\"post_action_observation\":{\"settled\":true,\"screen_changed\":true}}", out)
+        val sensitive = "ok\n{\"post_action_observation\":{\"sensitive_foreground\":true,\"hint\":\"leave\"}}"
+        assertEquals(sensitive, ContextAssembler.withoutSummary(sensitive))
+    }
+
+    @Test
+    fun `a confident no-change skips the read, a low-confidence one does not`() {
+        assertFalse(ContextAssembler.provedUnchanged(tapped))
+        assertTrue(ContextAssembler.provedUnchanged("{\"post_action_observation\":{\"screen_changed\":false}}"))
+        assertFalse(ContextAssembler.provedUnchanged("{\"post_action_observation\":{\"screen_changed\":false,\"screen_changed_confidence\":\"low\"}}"))
+        assertFalse(ContextAssembler.provedUnchanged("Tapped"))
+    }
 }
