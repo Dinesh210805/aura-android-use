@@ -204,17 +204,17 @@ class PhoneToolSource(context: Context) : ToolSource {
 
     companion object {
         /** Gestures that press the element they name. A swipe or scroll across one does not. */
-        private val PRESS_TOOLS = setOf("tap", "long_press", "double_tap", "press_enter")
+        internal val PRESS_TOOLS = setOf("tap", "press_enter")
 
         /** Not offered to the model: a chat turn ends by replying, and `run_steps` is off. */
-        private val HIDDEN = setOf("end_session", "run_steps")
+        internal val HIDDEN = setOf("end_session", "run_steps")
 
         /**
          * The direct routes, loaded from the first request: one call that does the job without
          * driving the screen. Deep links, contacts and files are here because a task that could
          * be one `open_deeplink` otherwise becomes ten taps.
          */
-        private val CORE_TOOLS = setOf(
+        internal val CORE_TOOLS = setOf(
             "system_intent", "web_search", "launch_app", "lookup_app", "media_control", "read_notifications",
             "get_device_status", "resolve_contact", "find_files", "open_file",
             "list_app_deeplinks", "open_deeplink",
@@ -224,22 +224,22 @@ class PhoneToolSource(context: Context) : ToolSource {
         private const val SHOT_QUALITY = 72
         private const val SHOT_TIMEOUT_MS = 1_500L
 
-        private val SCREEN_TOOLS = setOf(
+        internal val SCREEN_TOOLS = setOf(
             "read_screen", "perceive_screen", "get_screenshot", "request_screen_capture_permission",
             "tap", "type_text", "set_value", "scroll", "swipe", "press_key", "press_enter",
             "wait_for", "verify_action", "watch_device_events",
         )
 
         /** Take a URL, an intent or outgoing text, so their arguments can leave the phone. */
-        private val EGRESS_TOOLS = setOf(
+        internal val EGRESS_TOOLS = setOf(
             "web_search", "open_deeplink", "resolve_deeplink", "system_intent", "open_file", "notification_action",
         )
 
         /** Acts on the world the moment it is called, with no screen the user confirms on. */
-        private val COMMIT_TOOLS = setOf("notification_action")
+        internal val COMMIT_TOOLS = setOf("notification_action")
 
         /** Results the harness or the OS wrote; everything else from the phone is private content. */
-        private val TRUSTED_RESULTS = setOf("get_device_status", "volume", "request_screen_capture_permission")
+        internal val TRUSTED_RESULTS = setOf("get_device_status", "volume", "request_screen_capture_permission")
 
         internal fun riskOf(tool: String): ToolRisk = when {
             tool in COMMIT_TOOLS -> ToolRisk.COMMIT

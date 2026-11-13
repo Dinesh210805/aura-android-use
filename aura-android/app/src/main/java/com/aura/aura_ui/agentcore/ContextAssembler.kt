@@ -198,7 +198,7 @@ object ContextAssembler {
 
     /** Phone tools that change what is on screen. Keep in step with `PostActionObservation` in `:mcp-server`. */
     val SCREEN_CHANGING = setOf(
-        "tap", "long_press", "double_tap", "swipe", "scroll", "type_text", "press_key", "press_enter", "set_value",
+        "tap", "swipe", "scroll", "type_text", "press_key", "press_enter", "set_value",
         "launch_app", "open_deeplink", "system_intent", "open_file",
     )
 
