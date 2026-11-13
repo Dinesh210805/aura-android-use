@@ -172,6 +172,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     val running = MutableStateFlow(false)
     val status = MutableStateFlow<String?>(null)
     val plan = MutableStateFlow<AgentEvent.PlanUpdated?>(null)
+
+    /** The last turn stopped at its time limit; the chat offers "Keep going". */
+    val outOfTime = MutableStateFlow(false)
     val models = MutableStateFlow(emptyList<ModelChoice>())
     val catalog = MutableStateFlow<Catalog?>(null)
     val profile = MutableStateFlow(Profile())
@@ -288,6 +291,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             val id = threadId.value ?: core.threads.create().id.also { threadId.value = it }
             if (running.value && core.engine.steer(id, text)) return@launch
             core.releaseIdlePause()
+            outOfTime.value = false
             turn = launch {
                 running.value = true
                 try {
@@ -299,7 +303,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                             is AgentEvent.ToolFinished -> status.value = "Thinking"
                             is AgentEvent.PlanUpdated -> plan.value = event
                             // Work on the screen happens on the overlay, where it can be watched and paused.
-                            is AgentEvent.TurnEnded -> if (event.end == TurnEnd.HANDED_OFF) core.handOff(id, text)
+                            is AgentEvent.TurnEnded -> when (event.end) {
+                                TurnEnd.HANDED_OFF -> core.handOff(id, text)
+                                TurnEnd.LIMIT -> outOfTime.value = true
+                                else -> Unit
+                            }
                             is AgentEvent.AssistantText, is AgentEvent.Card, is AgentEvent.UserPromptRequested -> Unit
                         }
                     }
@@ -351,6 +359,7 @@ fun AgentChatScreen(
     val running by vm.running.collectAsState()
     val status by vm.status.collectAsState()
     val plan by vm.plan.collectAsState()
+    val outOfTime by vm.outOfTime.collectAsState()
     val profile by vm.profile.collectAsState()
     var draft by rememberSaveable { mutableStateOf("") }
     var modelsOpen by remember { mutableStateOf(false) }
@@ -422,6 +431,11 @@ fun AgentChatScreen(
                         }
                     }
                     AnimatedVisibility(running) { StatusLine(status.orEmpty()) }
+                    AnimatedVisibility(outOfTime && !running) {
+                        PillButton("Keep going", Modifier.padding(start = 16.dp, bottom = 8.dp), filled = true) {
+                            vm.send(KEEP_GOING, emptyList())
+                        }
+                    }
                     Composer(
                         text = draft,
                         onText = { draft = it },
@@ -994,3 +1008,6 @@ private fun inline(text: String): AnnotatedString = buildAnnotatedString {
         if (index % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(part) } else append(part)
     }
 }
+
+/** Sent by the "Keep going" button; the thread still holds the task and what was done. */
+private const val KEEP_GOING = "Keep going from where you stopped."

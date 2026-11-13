@@ -191,7 +191,7 @@ class AgentEngine(
         hub.refresh()
         beforeTurn()
         val budget = ContextBudget.forWindow(main.contextWindow)
-        val maxSteps = if (turn.mode == RunMode.BACKGROUND) limits.backgroundMaxSteps else limits.maxSteps
+        val maxSteps = if (turn.mode == RunMode.BACKGROUND) limits.backgroundMaxSteps else Int.MAX_VALUE
         var deadline = now() + limits.maxWallClockMs
         val requestCap = maxRequests()
         var driving = false
@@ -293,7 +293,7 @@ class AgentEngine(
                     rewritePrompt { it.withMessages(ContextAssembler::evictStaleScreens) }
                     run.messages = prompt.messages
                     if (atLimit) {
-                        journal?.note(turn.runId, "Reached the step or time limit; asked for a closing answer", CLOSING_TURN)
+                        journal?.note(turn.runId, "Reached the time limit; asked for a closing answer", CLOSING_TURN)
                         appendPrompt { user { text(CLOSING_TURN) } }
                         requestLLMWithoutTools()
                     } else {
@@ -348,7 +348,7 @@ class AgentEngine(
                 model = main.model,
                 // Koog's own ceiling. Kept above ours so this loop's limit, which gets a closing
                 // turn and an honest ending, is always the one that fires.
-                maxAgentIterations = maxSteps * 4 + 16,
+                maxAgentIterations = if (maxSteps == Int.MAX_VALUE) Int.MAX_VALUE else maxSteps * 4 + 16,
             ),
             strategy = strategy,
             toolRegistry = hub.registry(turn),

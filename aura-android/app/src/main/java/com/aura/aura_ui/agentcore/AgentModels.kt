@@ -107,13 +107,14 @@ enum class TurnEnd {
 /**
  * Ceilings for one turn.
  *
- * - Why steps and time, not tokens: a cumulative token sum re-counts the same prompt every step,
- *   so it ends long tasks that are still making progress. Loops are caught by the phone server's
- *   `ActionGuard`, which can tell repetition from progress.
+ * - Why time and no step count in the foreground: a long task (a week of photos, a long form) is
+ *   many steps of real progress, and a step cap ends it mid-way. Loops are caught by the phone
+ *   server's `ActionGuard`, which can tell repetition from progress. When the time runs out the
+ *   model says what is left and the chat offers "Keep going", which continues in the same thread.
+ * - Why not tokens: a cumulative token sum re-counts the same prompt every step.
  */
 data class TurnLimits(
-    val maxSteps: Int = 80,
-    val maxWallClockMs: Long = 20 * 60_000L,
+    val maxWallClockMs: Long = 60 * 60_000L,
     /** Background turns are short by construction: nobody is there to stop them. */
     val backgroundMaxSteps: Int = 8,
 )

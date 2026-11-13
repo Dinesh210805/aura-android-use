@@ -269,6 +269,7 @@ class AgentCore private constructor(private val app: Context) {
         com.aura.aura_ui.services.AgentStatusRegistry.startRun()
         lock.noteLocalRunStarted()
         var answer: String? = null
+        var outOfTime = false
         var actions = 0
         var failedActions = 0
         val startedAtMs = System.currentTimeMillis()
@@ -290,7 +291,10 @@ class AgentCore private constructor(private val app: Context) {
                             AgentStreamEvent.ToolFailed(event.tool, event.resultPreview)
                         },
                     ).also { if (!event.ok && drivesPhone(event.tool)) failedActions++ }
-                    is AgentEvent.TurnEnded -> answer = event.message
+                    is AgentEvent.TurnEnded -> {
+                        answer = event.message
+                        outOfTime = event.end == TurnEnd.LIMIT
+                    }
                     is AgentEvent.AssistantText -> if (!event.final) onEvent(AgentStreamEvent.Narration(event.text))
                     is AgentEvent.PlanUpdated -> onEvent(AgentStreamEvent.Plan(event.steps, event.done))
                     is AgentEvent.Card, is AgentEvent.TurnStarted, is AgentEvent.UserPromptRequested -> Unit
@@ -303,7 +307,8 @@ class AgentCore private constructor(private val app: Context) {
             lock.noteLocalRunFinished()
             if (!remember) withContext(NonCancellable) { runCatching { threads.delete(threadId) } }
         }
-        val reply = answer ?: "I couldn't finish that."
+        // The thread keeps the task for SURFACE_THREAD_IDLE_MS, so "keep going" picks it up.
+        val reply = (answer ?: "I couldn't finish that.") + if (outOfTime) KEEP_GOING_HINT else ""
         if (fromChat != null) {
             com.aura.aura_ui.agent.OnDeviceReport.forTurn(
                 reply, failed = answer == null, cancelled = false, paused = false,
@@ -475,6 +480,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val KEY_APPROVAL_MODE = "approval_mode"
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
+        private const val KEEP_GOING_HINT = " I stopped at the time limit. Say \"keep going\" to continue."
         private const val ASK_TIMEOUT_MS = 120_000L
         private const val CHANNEL = "aura_agentcore"
         private const val WORK = "agentcore-tick"
