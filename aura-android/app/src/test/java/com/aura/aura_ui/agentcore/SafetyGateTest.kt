@@ -87,11 +87,48 @@ class SafetyGateTest {
         assertFalse(TurnTaint(setOf(Origin.MEMORY)).egressNeedsUser)
     }
 
+    private fun inMode(mode: ApprovalMode, call: ToolCallRequest, taint: TurnTaint = TurnTaint()) =
+        SafetyGate.evaluate(call, RunMode.FOREGROUND, taint, SafetySettings(mode))
+
     @Test
-    fun `a connector write asks even when commits are not confirmed`() {
-        val relaxed = SafetySettings(confirmCommits = false)
-        val result = SafetyGate.evaluate(call(ToolRisk.COMMIT, ToolOrigin.CONNECTOR), RunMode.FOREGROUND, TurnTaint(), relaxed)
-        assertTrue(result is Verdict.Ask)
+    fun `the card names what will happen and where`() {
+        assertEquals("Send in WhatsApp?", SafetyGate.commitQuestion(call(ToolRisk.ACT, label = "Send").copy(appLabel = "WhatsApp")))
+        assertEquals("Post on Instagram?", SafetyGate.commitQuestion(call(ToolRisk.ACT, label = "Share post").copy(appLabel = "Instagram").let { it.copy(targetLabel = "Post") }))
+        assertEquals("Place order?", SafetyGate.commitQuestion(call(ToolRisk.ACT, label = "Place order")))
+        assertEquals("Delete in Photos?", SafetyGate.commitQuestion(call(ToolRisk.ACT, label = "Delete").copy(appLabel = "Photos")))
+    }
+
+    @Test
+    fun `hands-free sends without asking but still asks for orders, deletes and after a notification`() {
+        val send = call(ToolRisk.ACT, label = "Send")
+        assertEquals(Verdict.Allow, inMode(ApprovalMode.HANDS_FREE, send, TurnTaint().apply { mark(Origin.SCREEN) }))
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, call(ToolRisk.ACT, label = "Place order")) is Verdict.Ask)
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, call(ToolRisk.ACT, label = "Delete")) is Verdict.Ask)
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, send, TurnTaint().apply { mark(Origin.NOTIFICATION) }) is Verdict.Ask)
+    }
+
+    @Test
+    fun `confirm sends asks once at the send and never for opening an app`() {
+        assertTrue(inMode(ApprovalMode.CONFIRM_SENDS, call(ToolRisk.ACT, label = "Send")) is Verdict.Ask)
+        assertEquals(Verdict.Allow, inMode(ApprovalMode.CONFIRM_SENDS, call(ToolRisk.ACT).copy(tool = "open_deeplink")))
+        assertTrue(inMode(ApprovalMode.ASK_OFTEN, call(ToolRisk.ACT).copy(tool = "open_deeplink")) is Verdict.Ask)
+    }
+
+    @Test
+    fun `a connector write asks unless hands-free on an untainted turn`() {
+        val write = call(ToolRisk.ACT, ToolOrigin.CONNECTOR)
+        assertTrue(inMode(ApprovalMode.CONFIRM_SENDS, write) is Verdict.Ask)
+        assertEquals(Verdict.Allow, inMode(ApprovalMode.HANDS_FREE, write))
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, write, TurnTaint().apply { mark(Origin.SCREEN) }) is Verdict.Ask)
+    }
+
+    @Test
+    fun `ordinary words about pins and passwords are not secrets`() {
+        assertFalse(SecretPatterns.containsSecret("the pin is ready for pickup"))
+        assertFalse(SecretPatterns.containsSecret("pin: tomorrow"))
+        assertFalse(SecretPatterns.containsSecret("the password is wrong"))
+        assertTrue(SecretPatterns.containsSecret("my pin is 4321"))
+        assertTrue(SecretPatterns.containsSecret("password: hunter2"))
     }
 
     @Test

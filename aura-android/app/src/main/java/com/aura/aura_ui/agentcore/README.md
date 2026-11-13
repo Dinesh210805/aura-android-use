@@ -109,12 +109,21 @@ There is one agent and no sub-agents: the phone has one screen, so two agents ca
 1. `FORBIDDEN` tools never run.
 2. A background run (scheduled task, digest) may only read.
 3. Arguments that leave the phone must not contain a password, key, card number or code.
-4. A commit (send, pay, delete, post, or a tap on a button labelled that way) asks the user. The
-   label comes from the tool server (`labelLookup` in `InProcessMcpServer.connect`), and the
-   prompt shows what the model wrote about the step.
-5. A connector write asks the user.
+4. A commit (send, post, order, book, delete, or a tap on a button labelled that way) shows one
+   verification card: a title from the gate ("Send in WhatsApp?") and the line the model wrote
+   about the step. The label comes from the tool server (`labelLookup` in
+   `InProcessMcpServer.connect`). In Hands-free mode only orders, deletes, unlabelled commits and
+   commits in a turn that read a notification or web page ask.
+5. A connector write asks the user, except in Hands-free mode on a turn that read nothing private.
 6. After the turn has read private content (screen, notification, file, connector), the first call
-   that sends data off the phone asks once per turn.
+   that sends data off the phone asks once per turn, in every mode. A link or intent that lands in
+   an installed app (`https://wa.me/…` into WhatsApp, `system_intent`) is not a send-out: that
+   app's own Send is the commit.
+7. In Ask often mode, opening an app, link, intent or file also asks.
+
+The mode (`ApprovalMode`: Ask often, Confirm sends, Hands-free) is picked on the agent page and
+stored in `AgentCore.approvalMode`; Confirm sends is the default. A declined card tells the model
+to ask the user what to change, not to find another route.
 
 No model is consulted for any of this, so nothing on a screen or a web page can argue its way
 past it. The phone server's own `SensitivePolicy` and `ActionGuard` still run after the gate.

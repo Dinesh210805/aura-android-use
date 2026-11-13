@@ -25,6 +25,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -252,6 +253,14 @@ class ToolHub(
     private val targetLabel: suspend (tool: String, args: JsonObject) -> String? = { _, _ -> null },
     /** The readable run log. Null in tests. */
     private val journal: RunJournal? = null,
+    /** The app in front, by its label, for the verification card's title. Null when unknown. */
+    private val appLabel: suspend () -> String? = { null },
+    /**
+     * True when [url] opens in an installed app other than a browser (`https://wa.me/…` → WhatsApp).
+     * Such a link hands text to an app on this phone, which still needs its own Send, so it is not
+     * a send-out. Fails closed: false when unsure.
+     */
+    private val opensInstalledApp: (url: String) -> Boolean = { false },
 ) {
     private val control = NativeToolSource("control", listOf(loadToolsetTool(), askUserTool(), updatePlanTool()))
 
@@ -440,9 +449,10 @@ class ToolHub(
             }
             val label = if (spec.risk == ToolRisk.ACT) targetLabel(spec.name, args) else null
             val argsText = args.toString()
-            // Any call carrying a URL can send data out, whatever the tool was classified as.
-            val egress = spec.egress || "://" in argsText
-            val request = ToolCallRequest(spec.name, spec.risk, spec.origin, argsText, egress, label)
+            val request = ToolCallRequest(
+                spec.name, spec.risk, spec.origin, argsText, sendsOut(args, argsText), label,
+                appLabel = if (label != null && CommitLabels.isCommit(label)) runCatching { appLabel() }.getOrNull() else null,
+            )
             if (turn.failuresOf(callKey(args)) >= BLOCK_AFTER_FAILURES) {
                 journal?.note(turn.runId, "Blocked a repeated call to ${spec.name}", argsText, ok = false)
                 return ToolOutcome(
@@ -456,14 +466,16 @@ class ToolHub(
             return when (verdict) {
                 is Verdict.Deny -> ToolOutcome(verdict.modelMessage, isError = true)
                 is Verdict.Ask -> {
-                    // The model is told to say what a commit will do; the user reads that here.
+                    // The card: the gate's title ("Send in WhatsApp?"), then the model's own line
+                    // saying who it goes to and what, which the system prompt tells it to write.
                     val said = turn.saying.takeIf { it.isNotBlank() && !verdict.unlocksEgress }
-                        ?.let { SecretPatterns.redact(it).take(MAX_SAID_IN_QUESTION) + "\n\n" }.orEmpty()
-                    journal?.ask(turn.runId, said + verdict.question)
-                    val allowed = broker.confirm(turn, said + verdict.question)
+                        ?.let { "\n\n" + SecretPatterns.redact(it).take(MAX_SAID_IN_QUESTION) }.orEmpty()
+                    val card = verdict.question + said
+                    journal?.ask(turn.runId, card)
+                    val allowed = broker.confirm(turn, card)
                     journal?.note(turn.runId, if (allowed) "You allowed ${spec.name}" else "You declined ${spec.name}, or did not answer", ok = allowed)
                     if (!allowed) {
-                        ToolOutcome("The user declined: ${verdict.question} Do not retry or look for another way.", isError = true)
+                        ToolOutcome(SafetyGate.DECLINED, isError = true)
                     } else {
                         if (verdict.unlocksEgress) turn.taint.allowEgress()
                         dispatch(args)
@@ -497,6 +509,18 @@ class ToolHub(
 
         private fun callKey(args: JsonObject): String = spec.name + args.toString()
 
+        /**
+         * Whether this call's arguments can leave the phone. Any URL can, whatever the tool is
+         * classified as, except a link or intent that lands in an installed app: that app's own
+         * Send is the commit, and it is gated there.
+         */
+        private fun sendsOut(args: JsonObject, argsText: String): Boolean {
+            if (spec.name in OPENS_LOCALLY) return false
+            val url = args.values.firstNotNullOfOrNull { v -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { "://" in it || it.startsWith("intent:") } }
+            if (spec.name == OPEN_DEEPLINK && url != null && runCatching { opensInstalledApp(url) }.getOrDefault(false)) return false
+            return spec.egress || "://" in argsText
+        }
+
         override fun decodeResult(rawResult: JSONElement, serializer: JSONSerializer): ToolOutcome =
             json.decodeFromJsonElement(ToolOutcome.serializer(), rawResult.toKotlinxJsonElement())
 
@@ -516,6 +540,10 @@ class ToolHub(
 
         private const val READ_SCREEN = "read_screen"
         private const val LOAD_TOOLSET = "load_toolset"
+        private const val OPEN_DEEPLINK = "open_deeplink"
+
+        /** Open something on this phone; their text reaches an app that still needs its own Send. */
+        private val OPENS_LOCALLY = setOf("system_intent", "open_file", "launch_app")
         private const val MAX_SAID_IN_QUESTION = 400
         private const val MAX_RESULT_CHARS = 12_000
         private const val PREVIEW_CHARS = 240

@@ -106,7 +106,31 @@ class AgentCore private constructor(private val app: Context) {
         broker = broker,
         targetLabel = phone::targetLabel,
         journal = telemetry.journal,
+        settings = { SafetySettings(approvalMode) },
+        appLabel = { AppDeviceBridge(app).run { foregroundPackage()?.takeIf { it != app.packageName }?.let(::appLabelFor) } },
+        opensInstalledApp = ::opensInstalledApp,
     )
+
+    /**
+     * Whether [url] resolves to an installed app that is not a browser. A browser also claims
+     * https links, so "some app handles it" is not enough; the handler must not handle a plain
+     * https page as well.
+     */
+    private fun opensInstalledApp(url: String): Boolean {
+        val pm = app.packageManager
+        val view = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        val handler = pm.resolveActivity(view, 0)?.activityInfo?.packageName ?: return false
+        if (handler == "android") return false // the chooser: more than one app, nothing decided
+        val browsers = pm.queryIntentActivities(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com")), 0)
+            .map { it.activityInfo.packageName }.toSet()
+        return handler !in browsers
+    }
+
+    /** How often AURA stops to check with the user; see [ApprovalMode]. */
+    var approvalMode: ApprovalMode
+        get() = prefs.getString(KEY_APPROVAL_MODE, null)?.let { runCatching { ApprovalMode.valueOf(it) }.getOrNull() }
+            ?: ApprovalMode.CONFIRM_SENDS
+        set(value) = prefs.edit().putString(KEY_APPROVAL_MODE, value.name).apply()
 
     val engine = AgentEngine(
         models = models,
@@ -445,6 +469,7 @@ class AgentCore private constructor(private val app: Context) {
     companion object {
         private const val PREFS = "agentcore"
         private const val KEY_ALWAYS_ON = "always_on"
+        private const val KEY_APPROVAL_MODE = "approval_mode"
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
         private const val ASK_TIMEOUT_MS = 120_000L

@@ -23,6 +23,8 @@ data class ToolCallRequest(
     val egress: Boolean = false,
     /** Visible label of the element a gesture targets, when the caller knows it. */
     val targetLabel: String? = null,
+    /** The app in front ("WhatsApp"), for the verification card's title. Null when unknown. */
+    val appLabel: String? = null,
 )
 
 sealed interface Verdict {
@@ -38,12 +40,24 @@ sealed interface Verdict {
     data class Deny(val modelMessage: String) : Verdict
 }
 
-/** User-controlled strictness. Defaults are the strict ones. */
-data class SafetySettings(
-    val confirmCommits: Boolean = true,
-    val confirmConnectorWrites: Boolean = true,
-    val confirmEgressAfterPrivateRead: Boolean = true,
-)
+/**
+ * How often AURA stops to check with the user. Chosen on the agent page; [CONFIRM_SENDS] is the default.
+ *
+ * - [ASK_OFTEN]: every commit, every connector write, every action that opens an app, link or
+ *   intent, and the first send-out after private content.
+ * - [CONFIRM_SENDS]: one verification card per commit (send, post, order, book, delete), connector
+ *   writes, and the first send-out to the web after private content. Opening apps never asks.
+ * - [HANDS_FREE]: only orders and deletes, plus any commit in a turn that read a notification or a
+ *   web page, plus the first send-out to the web after private content.
+ * - Why every mode keeps the web send-out question: that is the one path by which text a stranger
+ *   wrote (a page, a notification) can carry the user's private data off the phone.
+ * - Why HANDS_FREE still asks after a notification or web page: those are the places a stranger can
+ *   write "send this to everyone". A screen alone does not count, or it would ask on every task.
+ */
+enum class ApprovalMode { ASK_OFTEN, CONFIRM_SENDS, HANDS_FREE }
+
+/** User-controlled strictness. */
+data class SafetySettings(val mode: ApprovalMode = ApprovalMode.CONFIRM_SENDS)
 
 /**
  * Remembers what has entered the context this turn, and what the user has already allowed.
@@ -116,38 +130,78 @@ object SafetyGate {
         }
 
         val risk = effectiveRisk(call)
-        if (risk == ToolRisk.COMMIT && settings.confirmCommits) {
+        if (risk == ToolRisk.COMMIT && commitAsks(call, settings.mode, taint)) {
             return Verdict.Ask(commitQuestion(call))
         }
         val connectorWrite = call.origin == ToolOrigin.CONNECTOR && risk != ToolRisk.READ
-        if (connectorWrite && (settings.confirmConnectorWrites || taint.tainted)) {
+        if (connectorWrite && (settings.mode != ApprovalMode.HANDS_FREE || taint.tainted)) {
             return Verdict.Ask("Allow ${call.tool}? It changes something outside this phone.")
         }
         if (call.egress && taint.egressNeedsUser) {
             if (mode == RunMode.BACKGROUND) {
                 return Verdict.Deny("policy_blocked: private content was read this turn, so nothing may be sent out.")
             }
-            if (settings.confirmEgressAfterPrivateRead) {
-                return Verdict.Ask(
-                    "AURA read private content this turn and now wants to use ${call.tool}, " +
-                        "which sends text off this phone. Allow for this task?",
-                    unlocksEgress = true,
-                )
-            }
+            return Verdict.Ask(
+                "AURA read private content this turn and now wants to use ${call.tool}, " +
+                    "which sends text off this phone. Allow for this task?",
+                unlocksEgress = true,
+            )
+        }
+        if (settings.mode == ApprovalMode.ASK_OFTEN && risk == ToolRisk.ACT && call.tool in OPENS_SOMETHING) {
+            return Verdict.Ask("Allow ${call.tool}? ${SecretPatterns.redact(call.argsText).take(MAX_ARGS_IN_QUESTION)}")
         }
         return Verdict.Allow
+    }
+
+    private fun commitAsks(call: ToolCallRequest, mode: ApprovalMode, taint: TurnTaint): Boolean = when (mode) {
+        ApprovalMode.ASK_OFTEN, ApprovalMode.CONFIRM_SENDS -> true
+        ApprovalMode.HANDS_FREE ->
+            CommitLabels.kind(call.targetLabel) in ALWAYS_ASK ||
+                call.targetLabel == null ||
+                taint.origins.any { it == Origin.NOTIFICATION || it == Origin.WEB }
     }
 
     /** A gesture on a button that commits the user is a commit, whatever the tool is called. */
     internal fun effectiveRisk(call: ToolCallRequest): ToolRisk =
         if (call.risk == ToolRisk.ACT && CommitLabels.isCommit(call.targetLabel)) ToolRisk.COMMIT else call.risk
 
-    private fun commitQuestion(call: ToolCallRequest): String =
-        call.targetLabel?.let { "Allow AURA to press \"$it\"? This can't be undone." }
-            ?: "Allow ${call.tool}? ${SecretPatterns.redact(call.argsText).take(MAX_ARGS_IN_QUESTION)}"
+    /**
+     * The card's title: what will happen, where. "Send in WhatsApp?", "Place order in Zomato?".
+     * The recipient, text or amount is the model's own line, shown under it by the hub.
+     */
+    internal fun commitQuestion(call: ToolCallRequest): String {
+        val label = call.targetLabel ?: return when (call.tool) {
+            "notification_action" -> "Send this reply?"
+            else -> "Allow ${call.tool}? ${SecretPatterns.redact(call.argsText).take(MAX_ARGS_IN_QUESTION)}"
+        }
+        val app = call.appLabel?.takeIf { it.isNotBlank() && !it.equals("AURA", ignoreCase = true) }
+        val (verb, preposition) = when (CommitLabels.kind(label)) {
+            CommitKind.SEND -> "Send" to "in"
+            CommitKind.POST -> "Post" to "on"
+            CommitKind.ORDER -> "Place order" to "in"
+            CommitKind.BOOK -> "Book" to "in"
+            CommitKind.DELETE -> "Delete" to "in"
+            CommitKind.OTHER -> "Press \"$label\"" to "in"
+        }
+        return if (app == null) "$verb?" else "$verb $preposition $app?"
+    }
+
+    /** What the model is told when the user says no to a card. */
+    const val DECLINED =
+        "The user declined this step. Nothing was sent or changed. Do not retry it or reach the same " +
+            "result another way; ask the user what they want changed."
 
     private const val MAX_ARGS_IN_QUESTION = 200
+
+    /** Commits HANDS_FREE still asks about: money and deletion cannot be taken back. */
+    private val ALWAYS_ASK = setOf(CommitKind.ORDER, CommitKind.DELETE)
+
+    /** Phone actions that open something; ASK_OFTEN asks before each. */
+    private val OPENS_SOMETHING = setOf("launch_app", "open_deeplink", "system_intent", "open_file", "notification_action")
 }
+
+/** What a commit button does, for the card title and for which commits HANDS_FREE still asks about. */
+enum class CommitKind { SEND, POST, ORDER, BOOK, DELETE, OTHER }
 
 /**
  * Button labels that commit the user (send, pay, delete, post).
@@ -163,9 +217,20 @@ object CommitLabels {
         "merge", "reply", "share",
     )
 
-    fun isCommit(label: String?): Boolean {
-        val text = label?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && it.length <= 40 } ?: return false
-        return text.split(Regex("[^a-z]+")).any { it in words }
+    fun isCommit(label: String?): Boolean = tokens(label).any { it in words }
+
+    /** The kind of the first commit word in [label]; [CommitKind.OTHER] when none or unknown. */
+    fun kind(label: String?): CommitKind = tokens(label).firstNotNullOfOrNull { KINDS[it] } ?: CommitKind.OTHER
+
+    private fun tokens(label: String?): List<String> =
+        label?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && it.length <= 40 }?.split(Regex("[^a-z]+")).orEmpty()
+
+    private val KINDS: Map<String, CommitKind> = buildMap {
+        listOf("send", "reply", "share").forEach { put(it, CommitKind.SEND) }
+        listOf("post", "publish").forEach { put(it, CommitKind.POST) }
+        listOf("pay", "buy", "order", "purchase", "checkout", "transfer", "donate", "subscribe").forEach { put(it, CommitKind.ORDER) }
+        put("book", CommitKind.BOOK)
+        listOf("delete", "remove", "erase", "uninstall", "unsubscribe").forEach { put(it, CommitKind.DELETE) }
     }
 }
 
@@ -179,8 +244,10 @@ object SecretPatterns {
         Regex("""\bAIza[0-9A-Za-z_\-]{30,}"""),
         Regex("""(?i)\bbearer\s+[A-Za-z0-9._\-]{20,}"""),
         Regex("""-----BEGIN [A-Z ]*PRIVATE KEY-----"""),
-        // "password is hunter2", "pin: 4321". The separator is required so "pin the chat" passes.
-        Regex("""(?i)\b(?:password|passcode|pin|cvv)\b\s*(?:is|:|=)\s*\S{3,}"""),
+        // "pin: 4321", "cvv is 123". Digits are required, so "the pin is ready" passes.
+        Regex("""(?i)\b(?:pin|cvv|passcode)\b\s*(?:is|:|=)\s*\d{3,8}\b"""),
+        // "password is hunter2". A token holding a digit or symbol, so "password is wrong" passes.
+        Regex("""(?i)\bpassword\b\s*(?:is|:|=)\s*(?=\S*[\d!@#$%^&*])\S{4,}"""),
         // "otp 123456", "verification code is 4821".
         Regex("""(?i)\b(?:otp|verification code|security code|one[- ]time code)\b\D{0,12}\d{4,8}\b"""),
     )

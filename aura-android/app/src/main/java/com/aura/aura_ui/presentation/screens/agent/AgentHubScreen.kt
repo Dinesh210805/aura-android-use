@@ -1,7 +1,15 @@
 package com.aura.aura_ui.presentation.screens.agent
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.PanTool
+import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Icon
+import com.aura.aura_ui.agentcore.ApprovalMode
+import com.aura.aura_ui.ui.theme.LocalAura
 import androidx.compose.material.icons.outlined.Cable
 import androidx.compose.material.icons.outlined.Construction
 import androidx.compose.material.icons.outlined.Key
@@ -31,6 +39,19 @@ import com.aura.aura_ui.presentation.navigation.AuraRoutes
 
 private val ICON_INSET = 52.dp
 
+/** The approval modes as the user reads them. Change together: `ApprovalMode` in `SafetyGate.kt`. */
+private val APPROVAL_CHOICES = listOf(
+    Triple(ApprovalMode.ASK_OFTEN, "Ask often", "Checks before opening apps or links, and before anything is sent"),
+    Triple(ApprovalMode.CONFIRM_SENDS, "Confirm sends", "One check before something is sent, posted, ordered, booked or deleted"),
+    Triple(ApprovalMode.HANDS_FREE, "Hands-free", "Only checks before orders and deletes, or when a message or web page is involved"),
+)
+
+private val APPROVAL_ICONS = mapOf(
+    ApprovalMode.ASK_OFTEN to Icons.Outlined.PanTool,
+    ApprovalMode.CONFIRM_SENDS to Icons.Outlined.TaskAlt,
+    ApprovalMode.HANDS_FREE to Icons.Outlined.Bolt,
+)
+
 /**
  * The on-device agent: its model, what it knows, what it can do, and what it does in the background.
  *
@@ -47,6 +68,7 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
     val needsKey = remember { LlmEndpointCatalog.BUILTINS.firstOrNull { it.id == endpoint }?.requiresKey != false && !keys.isConfigured(endpoint) }
     val model = remember { keys.getSelectedModel(endpoint)?.substringAfterLast('/') }
     var digests by remember { mutableStateOf(core.alwaysOn) }
+    var approvals by remember { mutableStateOf(core.approvalMode) }
 
     AuraPage("On-device agent", modifier) {
         AuraSection {
@@ -62,6 +84,28 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
             AuraRow("Skills", icon = Icons.Outlined.AutoAwesome, onClick = { onOpen(AuraRoutes.AGENT_SKILLS) })
             AuraDivider(ICON_INSET)
             AuraRow("Connectors", icon = Icons.Outlined.Cable, onClick = { onOpen(AuraRoutes.AGENT_CONNECTORS) })
+        }
+        AuraSection(
+            title = "When AURA checks with you",
+            footer = "AURA never pays, enters passwords or opens banking apps, whatever you pick.",
+        ) {
+            APPROVAL_CHOICES.forEachIndexed { i, (mode, title, subtitle) ->
+                if (i > 0) AuraDivider(ICON_INSET)
+                AuraRow(
+                    title,
+                    icon = APPROVAL_ICONS.getValue(mode),
+                    subtitle = subtitle,
+                    onClick = {
+                        core.approvalMode = mode
+                        approvals = mode
+                    },
+                    trailing = {
+                        if (mode == approvals) {
+                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = LocalAura.current.label, modifier = Modifier.size(20.dp))
+                        }
+                    },
+                )
+            }
         }
         AuraSection(title = "Capabilities") {
             AuraRow("Tools", icon = Icons.Outlined.Construction, onClick = { onOpen(AuraRoutes.AGENT_TOOLS) })
