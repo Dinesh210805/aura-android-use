@@ -522,6 +522,41 @@ class PerceptionCacheTest {
         assertTrue(r is PerceptionCache.Resolution.Stale, "expected Stale, got $r")
     }
 
+    /** A chat list: rows at [top] onwards, in the given order, 120px each. */
+    private fun chatsJson(vararg names: String, pkg: String = "com.whatsapp", top: Int = 300) =
+        """{"package_name":"$pkg","elements":[""" + names.mapIndexed { i, n ->
+            """{"className":"android.widget.Button","text":"$n","isClickable":true,
+              "bounds":{"left":0,"top":${top + i * 120},"right":1080,"bottom":${top + i * 120 + 110}}}"""
+        }.joinToString(",") + "]}"
+
+    @Test
+    fun `a row that slid to a new place is tapped where it is now`() = runBlocking {
+        var events = 0L
+        val before = chatsJson("Mom", "Boss", "Team")
+        val after = chatsJson("Boss", "Team", "Mom") // Mom's chat moved down
+        val captured = com.aura.mcp.tools.UiTreeToElements.extract(before, minElements = 1)
+        val cache = PerceptionCache(generation = { 0L }, activity = { events }, screenProbe = { after })
+        cache.update(captured, com.aura.mcp.tools.ScreenSignature.of(before))
+        events = 1L
+
+        val r = cache.resolve(somOf(captured, "Mom"))
+        assertTrue(r is PerceptionCache.Resolution.Fresh, "expected Fresh, got $r")
+        assertEquals(300 + 2 * 120 + 55, (r as PerceptionCache.Resolution.Fresh).y)
+    }
+
+    @Test
+    fun `a same-named button on a different screen is not followed`() = runBlocking {
+        var gen = 0L
+        val before = chatsJson("OK", "Boss", "Team")
+        val after = chatsJson("Delete all", "Cancel", "OK", top = 900)
+        val captured = com.aura.mcp.tools.UiTreeToElements.extract(before, minElements = 1)
+        val cache = PerceptionCache(generation = { gen }, activity = { 0L }, screenProbe = { after })
+        cache.update(captured, com.aura.mcp.tools.ScreenSignature.of(before))
+        gen = 1L
+
+        assertTrue(cache.resolve(somOf(captured, "OK")) is PerceptionCache.Resolution.Stale)
+    }
+
     @Test
     fun `with no probe wired the cache keeps its old conservative behaviour`() = runBlocking {
         var gen = 0L

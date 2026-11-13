@@ -48,15 +48,7 @@ internal class SomIds {
     }
 
     private fun keysOf(body: List<DetectedElement>): List<String> {
-        val base = body.map { e ->
-            val can = buildString {
-                if (e.interactive) append('t')
-                if (e.editable) append('e')
-                if (e.scrollable) append('s')
-                if (e.longClickable) append('l')
-            }
-            "${e.elementType}|${e.label.trim().replace(DIGITS, "#")}|$can"
-        }
+        val base = body.map { it.identity() }
         // Occurrence index in reading order, so duplicates are told apart by position in the
         // list rather than by coordinates.
         val keys = arrayOfNulls<String>(body.size)
@@ -68,7 +60,21 @@ internal class SomIds {
         return keys.map { it ?: "" }
     }
 
-    private companion object {
-        val DIGITS = Regex("\\d+")
+    internal companion object {
+        private val DIGITS = Regex("\\d+")
+
+        /**
+         * What an element is, with no position: type, label with digits folded, and what it can do.
+         * Change together: `PerceptionCache.resolve`, which follows a moved element by this key.
+         */
+        fun DetectedElement.identity(): String {
+            val can = buildString {
+                if (interactive) append('t')
+                if (editable) append('e')
+                if (scrollable) append('s')
+                if (longClickable) append('l')
+            }
+            return "$elementType|${label.trim().replace(DIGITS, "#")}|$can"
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.aura.mcp.cache
 
 import com.aura.mcp.bridge.BBox
 import com.aura.mcp.bridge.DetectedElement
+import com.aura.mcp.cache.SomIds.Companion.identity
 import com.aura.mcp.tools.ScreenSignature
 import com.aura.mcp.tools.UiTreeToElements
 
@@ -223,19 +224,20 @@ internal class PerceptionCache(
         val mine = snap.fingerprints[somId]
         if (payload != null && mine != null) {
             val liveElements = UiTreeToElements.extract(payload, minElements = 1)
-            val live = liveElements.firstOrNull { it.fingerprint() == mine }
-            if (live != null) {
+            val same = liveElements.firstOrNull { it.fingerprint() == mine }
+            if (same != null) {
                 // The element itself is untouched, but something may now sit on it — a sheet
                 // or dialog that opened after the look. Its own fingerprint cannot see that.
-                if (live.coveredBy != null) {
+                if (same.coveredBy != null) {
                     return Resolution.Stale(
                         "something now covers that element (a sheet, dialog or popup opened " +
                             "after the last look), so a tap there would land on it instead",
                     )
                 }
-                val at = live.tapPoint ?: (live.bbox.centerX to live.bbox.centerY)
+                val at = same.tapPoint ?: (same.bbox.centerX to same.bbox.centerY)
                 return Resolution.Fresh(at.first, at.second)
             }
+            moved(snap, somId, liveElements, live, captured)?.let { return it }
         }
 
         // Either the screen genuinely differs, or we could not tell (no probe, or a
@@ -253,6 +255,38 @@ internal class PerceptionCache(
                     "update), so cached som_id coordinates are no longer valid"
             },
         )
+    }
+
+    /**
+     * Third rescue: the element slid (a list scrolled, a card was inserted above it, a chat
+     * re-sorted), so its bounds differ but it is still on this screen. Follow it by
+     * [SomIds.identity] and tap where it is now.
+     *
+     * - Contract: Fresh only when the app is the same, at least half the captured identities
+     *   are still on screen (the same screen, not a new one with a same-named "OK"), the label
+     *   is not blank, and exactly one element carries that identity on each side. Null otherwise,
+     *   and the caller fails closed.
+     */
+    private fun moved(
+        snap: Capture,
+        somId: Int,
+        liveElements: List<DetectedElement>,
+        live: ScreenSignature.Signature?,
+        captured: ScreenSignature.Signature?,
+    ): Resolution? {
+        if (live == null || captured == null || live.treeBlind || live.packageName != captured.packageName) return null
+        val mine = snap.elements.firstOrNull { it.somId == somId }?.takeIf { it.label.isNotBlank() } ?: return null
+        val key = mine.identity()
+        if (snap.elements.count { it.identity() == key } != 1) return null
+        val then = snap.elements.mapTo(HashSet()) { it.identity() }
+        val now = liveElements.mapTo(HashSet()) { it.identity() }
+        if (then.count { it in now } * 2 < then.size) return null
+        val match = liveElements.singleOrNull { it.identity() == key } ?: return null
+        if (match.coveredBy != null) {
+            return Resolution.Stale("something now covers that element (a sheet, dialog or popup opened after the last look)")
+        }
+        val at = match.tapPoint ?: (match.bbox.centerX to match.bbox.centerY)
+        return Resolution.Fresh(at.first, at.second)
     }
 
     /**
