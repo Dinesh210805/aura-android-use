@@ -68,7 +68,9 @@ internal class Scenario(
  * state never leaks between scenarios.
  */
 internal class Ctx(val phone: MockPhone) {
-    private val server: Server = buildServer(phone)
+    /** The server's own som_id numbering, so [som] gives the id the model was shown. */
+    private val ids = com.aura.mcp.cache.SomIds()
+    private val server: Server = buildServer(phone, ids)
     val transcript = mutableListOf<Reply>()
     val checks = mutableListOf<Check>()
     val frames = mutableListOf<Frame>()
@@ -107,6 +109,7 @@ internal class Ctx(val phone: MockPhone) {
         val rendered = ScreenPayload.render(
             elements, phone.foregroundPkg(), idle = true, settled = true,
             offscreen = ScreenText.offscreen(payload),
+            ids = ids,
         ) ?: return null
         val same = rendered.elements.filter { it.bbox == box }
         val label = node.text.ifBlank { node.desc }
@@ -255,7 +258,7 @@ internal object Bench {
     }
 }
 
-private fun buildServer(phone: MockPhone): Server = McpServerBuilder.build(
+private fun buildServer(phone: MockPhone, ids: com.aura.mcp.cache.SomIds): Server = McpServerBuilder.build(
     serverName = "toolbench",
     version = "0",
     deviceBridge = phone,
@@ -272,6 +275,7 @@ private fun buildServer(phone: MockPhone): Server = McpServerBuilder.build(
     browserBridge = InertBrowserBridge,
     auditLogger = NoOpAuditLogger,
     runStepsEnabled = true,
+    somIds = ids,
 )
 
 private object NoScreenshot : ScreenshotBridge {

@@ -81,8 +81,19 @@ internal object ScreenGrid {
      * label the model may attach to the wrong element, which is a mis-tap rather than an
      * ugly diagram.
      */
-    fun fit(elements: List<DetectedElement>): Rendered? {
+    fun fit(
+        elements: List<DetectedElement>,
+        /** When given, som_ids stay the same across looks at one screen; see [SomIds]. */
+        ids: com.aura.mcp.cache.SomIds? = null,
+        pkg: String = "",
+    ): Rendered? {
         if (elements.isEmpty()) return null
+        // Assigned once, before the size search below re-runs build: an id map is stateful, and
+        // every attempt must print the same numbers.
+        val stable: Map<Int, Int>? = ids?.let { map ->
+            val order = bodyOrder(elements)
+            if (order.isEmpty()) null else order.zip(map.assign(pkg, order.map { elements[it] }).toList()).toMap()
+        }
         val screenW = elements.maxOf { it.bbox.x2 }.coerceAtLeast(1)
         val screenH = elements.maxOf { it.bbox.y2 }.coerceAtLeast(1)
         // A character cell is about twice as tall as it is wide, so the grid must be
@@ -93,7 +104,7 @@ internal object ScreenGrid {
         var best: Rendered? = null
         while (cols <= MAX_COLS) {
             val gridRows = max(12, (cols / ratio).roundToInt())
-            val out = build(elements, cols, gridRows) ?: return null
+            val out = build(elements, cols, gridRows, stable) ?: return null
             best = out
             if (out.total > 0 && out.inside >= TARGET_FIT * out.total) break
             cols = (cols * 1.35).toInt()
@@ -105,6 +116,8 @@ internal object ScreenGrid {
 
     private class El(
         val src: DetectedElement,
+        /** Position in the caller's list, for looking up a stable id. */
+        val index: Int,
         var somId: Int = 0,
         var name: String = "",
         var flags: String = "",
@@ -129,8 +142,18 @@ internal object ScreenGrid {
     private fun targetable(e: El): Boolean =
         e.label.isNotBlank() || e.src.interactive || e.src.scrollable || e.src.editable
 
-    private fun build(elements: List<DetectedElement>, wantCols: Int, wantRows: Int): Rendered? {
-        val all = elements.map { El(it) }
+    /** Indices of the elements that get numbers, largest first: everything but full-screen frames. */
+    private fun bodyOrder(elements: List<DetectedElement>): List<Int> {
+        val screenW = elements.maxOf { it.bbox.x2 }.coerceAtLeast(1)
+        val screenH = elements.maxOf { it.bbox.y2 }.coerceAtLeast(1)
+        fun area(e: DetectedElement) = (e.bbox.x2 - e.bbox.x1) * (e.bbox.y2 - e.bbox.y1)
+        return elements.indices
+            .filterNot { i -> elements[i].bbox.let { (it.x2 - it.x1) >= screenW * 0.98 && (it.y2 - it.y1) >= screenH * 0.98 } }
+            .sortedWith(compareByDescending<Int> { area(elements[it]) }.thenBy { elements[it].bbox.y1 }.thenBy { elements[it].bbox.x1 })
+    }
+
+    private fun build(elements: List<DetectedElement>, wantCols: Int, wantRows: Int, stable: Map<Int, Int>? = null): Rendered? {
+        val all = elements.mapIndexed { i, e -> El(e, i) }
         val screenW = all.maxOf { it.x2 }.coerceAtLeast(1)
         val screenH = all.maxOf { it.y2 }.coerceAtLeast(1)
 
@@ -140,7 +163,7 @@ internal object ScreenGrid {
         if (body.isEmpty()) return null
 
         body.forEachIndexed { i, e ->
-            e.somId = i + 1
+            e.somId = stable?.get(e.index) ?: (i + 1)
             e.flags = flagsOf(e.src)
             e.name = e.label.ifBlank { "<${e.src.elementType}>" }
         }

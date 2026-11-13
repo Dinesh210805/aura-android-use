@@ -95,6 +95,8 @@ internal object McpServerBuilder {
          *   `how_you_work` line in [Doctrine], [McpToolCatalog.offTools] and the aura-phone skill.
          */
         runStepsEnabled: Boolean = false,
+        /** The som_id numbering; passed in only by tests that must number screens the way the server does. */
+        somIds: com.aura.mcp.cache.SomIds = com.aura.mcp.cache.SomIds(),
         // Spec 2026-07-17 — device skills exposed as MCP prompts (slash-commands).
         promptSkills: List<PromptSkill> = emptyList(),
         /**
@@ -164,6 +166,7 @@ internal object McpServerBuilder {
                 val snap = uiTreeBridge.snapshot()
                 if (snap.ok) snap.payloadJson else null
             },
+            somIds = somIds,
         )
         labelLookup(perceptionCache::labelFor)
         boundsLookup(perceptionCache::boundsFor)

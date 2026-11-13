@@ -50,8 +50,8 @@ object Doctrine {
                 "look again just to see what happened.",
             "To look yourself, use read_screen; add image=true when how it looks matters. Use " +
                 "perceive_screen only when read_screen cannot describe the screen at all.",
-            "Target elements by som_id from the latest screen you were shown. som_ids expire after " +
-                "every action. Never pass pixel coordinates.",
+            "Target elements by som_id from the latest screen you were shown. An element keeps its som_id " +
+                "while the screen stays the same; a new screen renumbers. Never pass pixel coordinates.",
             "Take one consequential action per step.",
         ),
         section(

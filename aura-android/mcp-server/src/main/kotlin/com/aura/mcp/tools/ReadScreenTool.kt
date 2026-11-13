@@ -156,6 +156,7 @@ internal fun Server.registerReadScreenTool(
                 treeBlind = outcome.signature.treeBlind,
             ),
             offscreen = ScreenText.offscreen(outcome.payloadJson),
+            ids = perceptionCache.somIds,
         )
 
         perceptionCache.update(

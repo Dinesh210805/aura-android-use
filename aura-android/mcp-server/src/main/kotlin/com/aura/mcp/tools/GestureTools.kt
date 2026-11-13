@@ -280,6 +280,7 @@ private suspend fun lookAfterScroll(
         settled = settle.settled,
         offscreen = ScreenText.offscreen(settle.payloadJson),
         view = ScreenPayload.View.Revealed(before.map { it.label }.toSet()),
+        ids = perceptionCache.somIds,
     ) ?: return ScrollLook(moved, null)
     perceptionCache.update(payload.elements, settle.signature, activityAtRead, pkg)
     return ScrollLook(moved, payload.text)

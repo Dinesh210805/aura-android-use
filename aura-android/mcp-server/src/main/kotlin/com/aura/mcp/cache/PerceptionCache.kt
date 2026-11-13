@@ -42,7 +42,10 @@ internal class PerceptionCache(
      * them would double the cost of the one thing this path is supposed to make cheap.
      */
     private val screenProbe: (suspend () -> String?)? = null,
+    /** The som_id numbering every look that feeds this cache shares; see [SomIds]. */
+    val somIds: SomIds = SomIds(),
 ) {
+
 
     /** Outcome of resolving a som_id against the last perceived screen. */
     sealed interface Resolution {

@@ -121,8 +121,10 @@ internal object ScreenPayload {
         escalateReason: String? = null,
         offscreen: List<String> = emptyList(),
         view: View = View.Full,
+        /** Keeps som_ids the same across looks at one screen; null numbers by area every look. */
+        ids: com.aura.mcp.cache.SomIds? = null,
     ): Result? {
-        val drawn = ScreenGrid.fit(elements) ?: return null
+        val drawn = ScreenGrid.fit(elements, ids, pkg) ?: return null
         val screenW = elements.maxOf { it.bbox.x2 }
         val screenH = elements.maxOf { it.bbox.y2 }
 
@@ -204,7 +206,10 @@ internal object ScreenPayload {
                     } else if (changed.isEmpty() && gone.isEmpty()) {
                         append("NO CHANGES since your last look.")
                     } else {
-                        append("CHANGES since your last look; som_ids are renumbered every look, use these.")
+                        append(
+                            if (ids != null) "CHANGES since your last look; som_ids of unchanged elements are the same."
+                            else "CHANGES since your last look; som_ids are renumbered every look, use these.",
+                        )
                         if (changed.isNotEmpty()) {
                             append("\nnew or changed:\nsom  in   flg  label")
                             changed.forEach { row(it, withLabel = true) }
