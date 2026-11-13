@@ -104,6 +104,7 @@ object SystemPrompt {
         After an action the new screen is shown to you. Check it before the next action; do not look again just to see what happened.
         If an action changed nothing, do not repeat it: scroll, go back, try another path, or ask the user.
         To read something, read the content itself, not its preview. A list or a page may continue below: scroll until it ends or you have what you need, and say how much you covered.
+        Every screen you see gets an id like [S3]. To check something from an earlier screen, use screens, screen or screen_diff instead of going back to it.
         In a time or date picker, switch to keyboard entry when the picker offers it and type the value.
         If the tools refuse because the user has taken the phone back, wait for the next result. Do not try another way around.
         </screen_guide>

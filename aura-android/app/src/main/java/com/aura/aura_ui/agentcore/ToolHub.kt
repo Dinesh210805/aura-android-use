@@ -120,6 +120,9 @@ class TurnState(
     var handedOff: Boolean = false
 
     val taint = TurnTaint(inheritedTaint)
+
+    /** Every screen this task saw; read by the `screens`, `screen` and `screen_diff` tools. */
+    val screens = ScreenHistory()
     private val toolsets = mutableSetOf(ToolHub.CORE)
     private val images = ArrayDeque<ByteArray>()
     private val steering = ArrayDeque<String>()
@@ -266,7 +269,7 @@ class ToolHub(
      */
     private val opensInstalledApp: (url: String) -> Boolean = { false },
 ) {
-    private val control = NativeToolSource("control", listOf(loadToolsetTool(), askUserTool(), updatePlanTool()))
+    private val control = NativeToolSource("control", listOf(loadToolsetTool(), askUserTool(), updatePlanTool()) + screenHistoryTools())
 
     @Volatile
     private var catalog: Map<String, Pair<ToolSpec, ToolSource>> = emptyMap()
@@ -383,6 +386,46 @@ class ToolHub(
             null -> SourceResult("The user did not answer. Do not take the step you asked about.", isError = true)
             else -> SourceResult("The user answered: $answer")
         }
+    }
+
+    /** `screens`, `screen`, `screen_diff`: the task's screen history, see [ScreenHistory]. */
+    private fun screenHistoryTools(): List<NativeTool> {
+        fun spec(name: String, description: String, params: List<ToolParameterDescriptor>, optional: List<ToolParameterDescriptor> = emptyList()) = ToolSpec(
+            descriptor = ToolDescriptor(name, description, requiredParameters = params, optionalParameters = optional),
+            risk = ToolRisk.READ,
+            origin = ToolOrigin.NATIVE,
+            toolset = SCREEN,
+            resultOrigin = Origin.SCREEN,
+        )
+        fun arg(args: JsonObject, name: String) = args[name]?.jsonPrimitive?.contentOrNull.orEmpty()
+        return listOf(
+            NativeTool(
+                spec(
+                    "screens",
+                    "List the screens seen in this task, one line each (S3 a new screen, S3.1 a change on it). Use it to find something you saw earlier instead of going back.",
+                    emptyList(),
+                    listOf(ToolParameterDescriptor("query", "Only screens whose text contains this.", ToolParameterType.String)),
+                ),
+            ) { args, turn -> SourceResult(turn.screens.log(arg(args, "query"))) },
+            NativeTool(
+                spec("screen", "Show an earlier screen exactly as you saw it.", listOf(ToolParameterDescriptor("id", "Its id from screens, e.g. S3.", ToolParameterType.String))),
+            ) { args, turn ->
+                turn.screens.show(arg(args, "id"))?.let { SourceResult(it) } ?: SourceResult("No screen ${arg(args, "id")}. Call screens to list them.", isError = true)
+            },
+            NativeTool(
+                spec(
+                    "screen_diff",
+                    "What changed between two earlier screens: lines only in the first as -, only in the second as +.",
+                    listOf(
+                        ToolParameterDescriptor("from", "The earlier screen's id.", ToolParameterType.String),
+                        ToolParameterDescriptor("to", "The later screen's id.", ToolParameterType.String),
+                    ),
+                ),
+            ) { args, turn ->
+                turn.screens.diff(arg(args, "from"), arg(args, "to"))?.let { SourceResult(it) }
+                    ?: SourceResult("Unknown screen id. Call screens to list them.", isError = true)
+            },
+        )
     }
 
     private fun updatePlanTool() = NativeTool(
@@ -510,7 +553,9 @@ class ToolHub(
             if (!result.isError && spec.risk != ToolRisk.READ && spec.origin == ToolOrigin.PHONE) turn.noteAction()
             val repeat = if (result.isError) turn.noteFailure(callKey(args)) else 0
             val hint = if (repeat >= WARN_AFTER_FAILURES) "\nThis exact call has now failed $repeat times. Do not repeat it." else ""
-            val text = ContextAssembler.clamp(result.text, MAX_RESULT_CHARS) + hint
+            // Each look gets an id in the task's screen history, so the model can come back to it.
+            val screenId = if (!result.isError && spec.name in ContextAssembler.SCREEN_TOOLS) turn.screens.record(result.text) else null
+            val text = (screenId?.let { "[$it] " }.orEmpty()) + ContextAssembler.clamp(result.text, MAX_RESULT_CHARS) + hint
             val body = spec.resultOrigin?.takeIf { !result.isError }?.let { Fence.wrap(it, text) } ?: text
             return ToolOutcome(body, result.isError)
         }
