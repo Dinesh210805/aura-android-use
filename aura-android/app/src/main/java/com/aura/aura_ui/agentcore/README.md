@@ -65,6 +65,8 @@ also pulls the folder.
 | `Skills.kt` | Saved procedures as `SKILL.md` folders under `files/agentcore/skills/`, with optional `app:` and `steps:` frontmatter, usage in `usage.json`, and the curator (archives unpinned skills unused for 60 days to `skills-archive/`; two failed `do_steps` chains flag a skill for re-learning). |
 | `Steps.kt` | `Step`: one label-anchored phone action. The run's trace, a skill's `steps:` and `do_steps` input share it; `Step.forSkill` strips typed text, links and personal details. |
 | `Learning.kt` | The idle review: each finished run leaves a digest (`digests` table); when the agent is idle and the phone is charging or above 30%, the 15-minute worker has the FAST model read up to three and propose memory changes and a skill draft. A tainted run only stages memory adds; drafts always wait in `skill-drafts/` until the user keeps them. The chat shows "AURA learned N things". |
+| `ToolSearch.kt` | Ranking for `find_tools`. A toolset with more than `ToolHub.BIG_TOOLSET` tools is a count in the menu and is reached with `find_tools` then `load_tools`, which appends just those schemas in load order. |
+| `ConnectorRisk.kt` | Connector tool risk from MCP annotations; per-call risk for Composio's multi-execute from the app tools it runs. |
 | `DoSteps.kt` | `do_steps`: runs a known step list in one call, finding each target by label on a fresh screen and sending every action through the hub's own gate. |
 | `Scheduler.kt` | Scheduled prompts (`schedule_task`), run read-only in the background. |
 | `Ambient.kt` | Notification triage and digests. |

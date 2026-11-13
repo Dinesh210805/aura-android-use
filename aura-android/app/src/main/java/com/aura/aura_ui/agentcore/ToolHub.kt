@@ -177,11 +177,21 @@ class TurnState(
 
     suspend fun emit(event: AgentEvent) = sink(event)
 
+    /** Toolsets and single tools in the order they were loaded, as `set:<name>` / `tool:<name>`. */
+    private val loadOrder = mutableListOf("set:" + ToolHub.CORE)
+
     @Synchronized
-    fun load(toolset: String): Boolean = toolsets.add(toolset)
+    fun load(toolset: String): Boolean = toolsets.add(toolset).also { if (it) loadOrder += "set:$toolset" }
 
     @Synchronized
     fun loaded(): Set<String> = toolsets.toSet()
+
+    /** Make one tool callable without its whole toolset (`load_tools`). */
+    @Synchronized
+    fun loadTool(name: String): Boolean = ("tool:$name" !in loadOrder).also { if (it) loadOrder += "tool:$name" }
+
+    @Synchronized
+    fun loadOrder(): List<String> = loadOrder.toList()
 
     @Synchronized
     fun stashImage(png: ByteArray) {
@@ -300,7 +310,7 @@ class ToolHub(
 ) {
     private val control = NativeToolSource(
         "control",
-        listOf(loadToolsetTool(), askUserTool(), updatePlanTool(), proposeActionTool()) + screenHistoryTools() +
+        listOf(loadToolsetTool(), findToolsTool(), loadToolsTool(), askUserTool(), updatePlanTool(), proposeActionTool()) + screenHistoryTools() +
             doStepsTool(StepRunner({ turn, name, args -> runStep(turn, name, args) }, { findTarget(it) }), { skill, ok -> onChain(skill, ok) }),
     )
 
@@ -372,7 +382,10 @@ class ToolHub(
      */
     fun visible(turn: TurnState): List<ToolDescriptor> {
         val specs = catalog.values.map { it.first }
-        return turn.loaded().flatMap { toolset -> specs.filter { it.toolset == toolset } }.map { it.descriptor }
+        return turn.loadOrder().flatMap { entry ->
+            val name = entry.substringAfter(':')
+            if (entry.startsWith("set:")) specs.filter { it.toolset == name } else listOfNotNull(catalog[name]?.first)
+        }.distinctBy { it.name }.map { it.descriptor }
     }
 
     /**
@@ -388,7 +401,9 @@ class ToolHub(
     fun toolsetMenu(): String = catalog.values.map { it.first }
         .filter { it.toolset != CORE }
         .groupBy { it.toolset }
-        .map { (toolset, specs) -> "$toolset: ${specs.joinToString(", ") { it.name }}" }
+        .map { (toolset, specs) ->
+            if (specs.size > BIG_TOOLSET) "$toolset: ${specs.size} tools; search them with find_tools" else "$toolset: ${specs.joinToString(", ") { it.name }}"
+        }
         .sorted()
         .joinToString("\n")
 
@@ -414,10 +429,60 @@ class ToolHub(
         if (name !in toolsetNames()) {
             return@NativeTool SourceResult("No toolset named '$name'. Available: ${toolsetNames().joinToString()}", isError = true)
         }
+        val members = catalog.values.map { it.first }.filter { it.toolset == name }
+        if (members.size > BIG_TOOLSET) {
+            return@NativeTool SourceResult("$name has ${members.size} tools, too many to load at once. Use find_tools, then load_tools with the ones you need.", isError = true)
+        }
         turn.load(name)
-        val tools = catalog.values.map { it.first }.filter { it.toolset == name }.joinToString(", ") { it.name }
+        val tools = members.joinToString(", ") { it.name }
         val guide = if (name == SCREEN) "\n\n" + SystemPrompt.SCREEN_GUIDE else ""
         SourceResult("Loaded $name: $tools.$guide")
+    }
+
+    private fun findToolsTool() = NativeTool(
+        ToolSpec(
+            descriptor = ToolDescriptor(
+                name = "find_tools",
+                description = FIND_TOOLS_DESCRIPTION,
+                requiredParameters = listOf(ToolParameterDescriptor("query", "What the tool should do, in a few words.", ToolParameterType.String)),
+                optionalParameters = emptyList(),
+            ),
+            risk = ToolRisk.READ,
+            origin = ToolOrigin.NATIVE,
+            toolset = CORE,
+            resultOrigin = null,
+        ),
+    ) { args, turn ->
+        val hits = ToolSearch.rank(args["query"]?.jsonPrimitive?.contentOrNull.orEmpty(), catalog.values.map { it.first }.filter { it.toolset != CORE })
+        if (hits.isEmpty()) {
+            SourceResult("No tool matches. Try other words, or one of the toolsets: ${toolsetNames().joinToString()}.")
+        } else {
+            SourceResult(hits.joinToString("\n") { "${it.name}: ${ToolSearch.hint(it.descriptor.description)}" } + "\nCall load_tools with the names you need.")
+        }
+    }
+
+    private fun loadToolsTool() = NativeTool(
+        ToolSpec(
+            descriptor = ToolDescriptor(
+                name = "load_tools",
+                description = "Make tools that find_tools returned callable from your next step.",
+                requiredParameters = listOf(
+                    ToolParameterDescriptor("names", "Tool names exactly as find_tools listed them.", ToolParameterType.List(itemsType = ToolParameterType.String)),
+                ),
+                optionalParameters = emptyList(),
+            ),
+            risk = ToolRisk.READ,
+            origin = ToolOrigin.NATIVE,
+            toolset = CORE,
+            resultOrigin = null,
+        ),
+    ) { args, turn ->
+        val names = runCatching { args["names"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull().orEmpty()
+        val (known, unknown) = names.distinct().partition { it in catalog }
+        if (known.size > MAX_LOAD_TOOLS) return@NativeTool SourceResult("Load at most $MAX_LOAD_TOOLS tools at a time.", isError = true)
+        known.forEach(turn::loadTool)
+        val note = if (unknown.isEmpty()) "" else " Not found: ${unknown.joinToString()}."
+        SourceResult(if (known.isEmpty()) "Nothing loaded.$note" else "Loaded: ${known.joinToString()}.$note", isError = known.isEmpty())
     }
 
     private fun askUserTool() = NativeTool(
@@ -829,6 +894,13 @@ class ToolHub(
         private const val PHONE_TAIL = 10
         private const val RESOLVE_CONTACT = "resolve_contact"
         private const val SKILL_VIEW = "skill_view"
+
+        /** A toolset bigger than this is searched with `find_tools`, never loaded whole. */
+        const val BIG_TOOLSET = 20
+        private const val MAX_LOAD_TOOLS = 10
+        private const val FIND_TOOLS_DESCRIPTION =
+            "Search every tool not loaded yet, including connected services, by what it does. Returns names " +
+                "and one-line hints; then call load_tools with the ones you need."
         private val TYPING = setOf("type_text", "set_value")
 
         /** A phone number as people write it: digits with spaces or hyphens, optionally +. */
