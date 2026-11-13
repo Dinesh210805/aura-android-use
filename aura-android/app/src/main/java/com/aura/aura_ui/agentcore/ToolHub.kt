@@ -127,6 +127,9 @@ class TurnState(
     /** What the run has done, for the ledger the engine shows the model on long tasks. */
     val ledger = RunLedger()
 
+    /** Last ten digits of every number `resolve_contact` returned this turn: recipients the user can mean. */
+    val contactNumbers: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+
     /** Estimated prompt size right after the last compaction; see `AgentEngine.compactIfOver`. */
     @Volatile
     var compactedAt: Int = 0
@@ -254,7 +257,7 @@ class UserBroker(
     companion object {
         const val ALLOW = "Allow"
         const val DENY = "Deny"
-        private val YES = Regex("(?i)(allow|yes|yeah|yep|ok|okay|sure|confirm|go ahead|do it|send it|looks good)[.! ]*")
+        internal val YES = Regex("(?i)(allow|yes|yeah|yep|ok|okay|sure|confirm|go ahead|do it|send it|looks good)[.! ]*")
     }
 }
 
@@ -276,7 +279,16 @@ class ToolHub(
      */
     private val opensInstalledApp: (url: String) -> Boolean = { false },
 ) {
-    private val control = NativeToolSource("control", listOf(loadToolsetTool(), askUserTool(), updatePlanTool()) + screenHistoryTools())
+    private val control = NativeToolSource("control", listOf(loadToolsetTool(), askUserTool(), updatePlanTool(), proposeActionTool()) + screenHistoryTools())
+
+    /**
+     * What the user approved with `propose_action`, per chat. In memory: it survives a hand-off to
+     * the overlay (same thread) but not an app restart, after which the user is asked again.
+     */
+    private val grants = java.util.concurrent.ConcurrentHashMap<String, MutableList<Grant>>()
+
+    private fun grantsOf(threadId: String): MutableList<Grant> =
+        grants.getOrPut(threadId) { java.util.Collections.synchronizedList(mutableListOf()) }
 
     @Volatile
     private var catalog: Map<String, Pair<ToolSpec, ToolSource>> = emptyMap()
@@ -451,6 +463,73 @@ class ToolHub(
         )
     }
 
+    /**
+     * `propose_action`: one card with the exact message before a send; an approval becomes a
+     * [Grant] that covers the matching link, connector call and Send tap (see [SafetyGate.covered]).
+     * - Contract: hands-free mode with nothing untrusted read approves without a card. "Don't ask
+     *   again in this chat" is offered only while nothing untrusted was read this turn. A typed
+     *   answer that is not a yes is the user's edit, returned for the model to propose again.
+     */
+    private fun proposeActionTool() = NativeTool(
+        ToolSpec(
+            descriptor = ToolDescriptor(
+                name = SafetyGate.PROPOSE_ACTION,
+                description = PROPOSE_DESCRIPTION,
+                requiredParameters = listOf(
+                    ToolParameterDescriptor("app", "The app it goes out through.", ToolParameterType.String),
+                    ToolParameterDescriptor("to", "Who receives it, as the user would say it.", ToolParameterType.String),
+                    ToolParameterDescriptor("message", "The exact final text, word for word.", ToolParameterType.String),
+                ),
+                optionalParameters = listOf(ToolParameterDescriptor("summary", "One line, optional.", ToolParameterType.String)),
+            ),
+            risk = ToolRisk.READ,
+            origin = ToolOrigin.NATIVE,
+            toolset = CORE,
+            resultOrigin = null,
+        ),
+    ) { args, turn ->
+        val app = args["app"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+        val to = args["to"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+        val message = args["message"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        if (app.isEmpty() || to.isEmpty() || message.isBlank()) {
+            return@NativeTool SourceResult("Give app, to and the exact message.", isError = true)
+        }
+        if (turn.mode == RunMode.BACKGROUND) {
+            return@NativeTool SourceResult("Nothing can be sent in the background. Tell the user what you would send.", isError = true)
+        }
+        val s = settings()
+        SafetyGate.blocked(ToolCallRequest(SafetyGate.PROPOSE_ACTION, ToolRisk.READ, ToolOrigin.NATIVE, args.toString()), s)
+            ?.let { return@NativeTool SourceResult(it, isError = true) }
+        if (SecretPatterns.containsSecret(message)) {
+            return@NativeTool SourceResult("policy_blocked: the message contains a password, key, card number or code.", isError = true)
+        }
+        val approved = "Approved. Send exactly this text to $to in $app; the steps that match it will not ask again."
+        val expires = System.currentTimeMillis() + GRANT_MS
+        if (s.mode == ApprovalMode.HANDS_FREE && !turn.taint.tainted) {
+            grantsOf(turn.threadId) += Grant(app, to, message, expires)
+            return@NativeTool SourceResult(approved)
+        }
+        val options = listOfNotNull(SEND, SEND_IN_CHAT.takeIf { !turn.taint.tainted }, CANCEL)
+        val card = "Send in $app to $to?\n\n\u201C$message\u201D"
+        journal?.ask(turn.runId, card)
+        val answer = broker.ask(turn, card, options)?.trim()
+        journal?.note(turn.runId, "You answered the send card: ${answer ?: "no answer"}", ok = answer != null && answer != CANCEL)
+        when {
+            answer == null -> SourceResult("The user did not answer. Do not send.", isError = true)
+            answer == CANCEL || answer.equals(UserBroker.DENY, true) -> SourceResult(SafetyGate.DECLINED, isError = true)
+            answer == SEND_IN_CHAT -> {
+                grantsOf(turn.threadId) += Grant(app, to, message, expires)
+                grantsOf(turn.threadId) += Grant(app, to, null, Long.MAX_VALUE)
+                SourceResult("$approved The user will not be asked again in this chat for messages to $to in $app.")
+            }
+            answer == SEND || UserBroker.YES.matches(answer) -> {
+                grantsOf(turn.threadId) += Grant(app, to, message, expires)
+                SourceResult(approved)
+            }
+            else -> SourceResult("The user changed the message to: \u201C$answer\u201D. Call propose_action again with that text.")
+        }
+    }
+
     private fun updatePlanTool() = NativeTool(
         ToolSpec(
             descriptor = ToolDescriptor(
@@ -526,7 +605,12 @@ class ToolHub(
             val argsText = args.toString()
             val request = ToolCallRequest(
                 spec.name, spec.risk, spec.origin, argsText, sendsOut(argsText), label,
-                appLabel = if (label != null && CommitLabels.isCommit(label)) runCatching { appLabel() }.getOrNull() else null,
+                appLabel = if ((label != null && CommitLabels.isCommit(label)) || (spec.risk != ToolRisk.READ && settings().deniedApps.isNotEmpty())) {
+                    runCatching { appLabel() }.getOrNull()
+                } else {
+                    null
+                },
+                screenTitle = if (label != null && CommitLabels.isCommit(label)) turn.screens.latestCaption() else null,
             )
             if (turn.failuresOf(callKey(args)) >= BLOCK_AFTER_FAILURES) {
                 journal?.note(turn.runId, "Blocked a repeated call to ${spec.name}", argsText, ok = false)
@@ -540,7 +624,12 @@ class ToolHub(
             if (verdict !is Verdict.Allow) journal?.note(turn.runId, gateTitle(verdict), gateDetail(request, verdict, turn.taint.origins), ok = verdict !is Verdict.Deny)
             return when (verdict) {
                 is Verdict.Deny -> ToolOutcome(verdict.modelMessage, isError = true)
-                is Verdict.Ask -> {
+                is Verdict.Ask -> if (SafetyGate.covered(request, verdict, grantsOf(turn.threadId).toList(), turn.screens.latest(), System.currentTimeMillis())) {
+                    journal?.note(turn.runId, "Already approved on the send card: ${spec.name}", ok = true)
+                    SafetyGate.spent(request, grantsOf(turn.threadId).toList(), turn.screens.latest())?.let { grantsOf(turn.threadId).remove(it) }
+                    if (verdict.unlocksEgress) turn.taint.allowEgress()
+                    dispatch(args)
+                } else {
                     // The card: the gate's title ("Send in WhatsApp?"), then the model's own line
                     // saying who it goes to and what, which the system prompt tells it to write.
                     val said = turn.saying.takeIf { it.isNotBlank() && !verdict.unlocksEgress }
@@ -578,6 +667,9 @@ class ToolHub(
             val repeat = if (result.isError) turn.noteFailure(callKey(args)) else 0
             val hint = if (repeat >= WARN_AFTER_FAILURES) "\nThis exact call has now failed $repeat times. Do not repeat it." else ""
             // Each look gets an id in the task's screen history, so the model can come back to it.
+            if (!result.isError && spec.name == RESOLVE_CONTACT) {
+                PHONE_IN_TEXT.findAll(result.text).forEach { turn.contactNumbers += it.value.filter(Char::isDigit).takeLast(PHONE_TAIL) }
+            }
             val screenId = if (!result.isError && spec.name in ContextAssembler.SCREEN_TOOLS) turn.screens.record(result.text) else null
             val text = (screenId?.let { "[$it] " }.orEmpty()) + ContextAssembler.clamp(result.text, MAX_RESULT_CHARS) + hint
             val body = spec.resultOrigin?.takeIf { !result.isError }?.let { Fence.wrap(it, text) } ?: text
@@ -603,7 +695,7 @@ class ToolHub(
             // user's own words: "send hi to Amma" may open wa.me/<number>?text=hi; text read off a
             // screen or notification may not ride along unchecked.
             val local = spec.name == OPEN_DEEPLINK || spec.name in OPENS_LOCALLY
-            return !(local && urls.all { url -> dictatedOnly(url, turn.request) && runCatching { opensInstalledApp(url) }.getOrDefault(false) })
+            return !(local && urls.all { url -> dictatedOnly(url, turn.request, turn.contactNumbers.toSet()) && runCatching { opensInstalledApp(url) }.getOrDefault(false) })
         }
 
         override fun decodeResult(rawResult: JSONElement, serializer: JSONSerializer): ToolOutcome =
@@ -639,17 +731,23 @@ class ToolHub(
          * - Anything holding a secret shape (`SecretPatterns`) fails, whatever else holds.
          * - Fails closed: anything unparsable is not dictated.
          */
-        internal fun dictatedOnly(url: String, request: String): Boolean {
+        internal fun dictatedOnly(url: String, request: String, contacts: Set<String> = emptySet()): Boolean {
             if (SecretPatterns.containsSecret(decode(url))) return false
             val said = tokens(request)
             fun spoken(text: String): Boolean {
                 val t = tokens(text)
-                if (t.isEmpty()) return true
+                // Punctuation alone ("...-..") carries data the user never said.
+                if (t.isEmpty()) return text.isBlank()
                 return (0..said.size - t.size).any { start -> said.subList(start, start + t.size) == t }
             }
             // A phone number is routing only where an app expects a recipient; anywhere else a long
             // number could be an account number read off the screen.
-            fun recipient(text: String) = text.trimStart('+').let { it.all(Char::isDigit) && it.length in PHONE_DIGITS }
+            // ...and only a number the user said or `resolve_contact` returned: an injected wa.me/<number>
+            // would otherwise carry the user's words to a stranger without a card.
+            val sayable = PHONE_IN_TEXT.findAll(request).map { it.value.filter(Char::isDigit).takeLast(PHONE_TAIL) }.toSet() + contacts
+            fun recipient(text: String) = text.trimStart('+').let {
+                it.all(Char::isDigit) && it.length in PHONE_DIGITS && it.takeLast(PHONE_TAIL) in sayable
+            }
             val scheme = url.substringBefore(':').lowercase()
             val afterScheme = url.substringAfter("://", url.substringAfter(':'))
             val authority = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#').lowercase()
@@ -684,6 +782,16 @@ class ToolHub(
             text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
 
         private val PHONE_DIGITS = 10..15
+        private const val PHONE_TAIL = 10
+        private const val RESOLVE_CONTACT = "resolve_contact"
+
+        /** A phone number as people write it: digits with spaces or hyphens, optionally +. */
+        internal val PHONE_IN_TEXT = Regex("\\+?\\d[\\d\\s-]{8,}\\d")
+        private const val GRANT_MS = 10 * 60_000L
+        private const val SEND = "Send"
+        private const val SEND_IN_CHAT = "Send, don't ask again in this chat"
+        private const val CANCEL = "Cancel"
+        private const val PROPOSE_DESCRIPTION = """Ask the user to approve a message or email before it is sent or posted. Call once, when the app, recipient and final text are settled. app: the app it goes out through, e.g. "WhatsApp". to: who receives it, as the user would say it. message: the exact final text, word for word. summary: optional one line. The result says approved, cancelled, or edited with the user's new text."""
         private val RECIPIENT_NAMES = setOf("phone", "to")
 
         /** Schemes whose first path part is a phone number by definition. */

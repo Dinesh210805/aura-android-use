@@ -137,4 +137,46 @@ class SafetyGateTest {
         assertEquals(1, Regex("</untrusted>").findAll(fenced).count())
         assertTrue(fenced.startsWith("<untrusted source=\"web\">"))
     }
+
+    private fun sendTap(app: String? = "WhatsApp", title: String? = null) =
+        ToolCallRequest("tap", ToolRisk.ACT, ToolOrigin.PHONE, "{\"som_id\":7}", targetLabel = "Send", appLabel = app, screenTitle = title)
+
+    private val ask = Verdict.Ask("Send in WhatsApp?")
+    private val later = Long.MAX_VALUE
+
+    @Test
+    fun `an approved message covers the Send tap only when that text is on screen`() {
+        val g = listOf(Grant("WhatsApp", "Amma", "Running late, be there by 8", later))
+        assertTrue(SafetyGate.covered(sendTap(), ask, g, "| 4 Running late, be there by 8 | 5 Send |", 0))
+        assertFalse(SafetyGate.covered(sendTap(), ask, g, "| 4 Transfer 5000 to account 1234 | 5 Send |", 0))
+        assertFalse(SafetyGate.covered(sendTap(app = "Telegram"), ask, g, "Running late, be there by 8", 0))
+        assertFalse(SafetyGate.covered(sendTap(), ask, listOf(g[0].copy(expiresAt = 5)), "Running late, be there by 8", 10))
+    }
+
+    @Test
+    fun `a grant never covers an order and a chat-wide grant never covers private egress`() {
+        val chat = listOf(Grant("Zomato", "Rahul", null, later))
+        val order = ToolCallRequest("tap", ToolRisk.ACT, ToolOrigin.PHONE, "{}", targetLabel = "Place order", appLabel = "Zomato")
+        assertFalse(SafetyGate.covered(order, ask, chat, "Rahul", 0))
+        val wa = listOf(Grant("WhatsApp", "Rahul", null, later))
+        assertTrue(SafetyGate.covered(sendTap(), ask, wa, "Rahul | online", 0))
+        assertFalse(SafetyGate.covered(sendTap(), ask.copy(unlocksEgress = true), wa, "Rahul | online", 0))
+    }
+
+    @Test
+    fun `a link carrying the approved text is covered`() {
+        val g = listOf(Grant("WhatsApp", "Amma", "Running late, be there by 8", later))
+        val link = ToolCallRequest("open_deeplink", ToolRisk.ACT, ToolOrigin.PHONE, "{\"url\":\"https://wa.me/1?text=Running%20late%2C%20be%20there%20by%208\"}", egress = true)
+        assertTrue(SafetyGate.covered(link, ask, g, null, 0))
+    }
+
+    @Test
+    fun `deny lists block the app and the person, by whole word`() {
+        val s = SafetySettings(deniedApps = setOf("Instagram"), deniedContacts = setOf("Ram", "98765 43210"))
+        assertTrue(SafetyGate.evaluate(ToolCallRequest("launch_app", ToolRisk.ACT, ToolOrigin.PHONE, "{\"app\":\"Instagram\"}"), RunMode.FOREGROUND, TurnTaint(), s) is Verdict.Deny)
+        assertTrue(SafetyGate.evaluate(sendTap(title = "WhatsApp | Ram | online"), RunMode.FOREGROUND, TurnTaint(), s) is Verdict.Deny)
+        assertFalse(SafetyGate.evaluate(sendTap(title = "WhatsApp | Ramesh | online"), RunMode.FOREGROUND, TurnTaint(), s) is Verdict.Deny)
+        val toNumber = ToolCallRequest(SafetyGate.PROPOSE_ACTION, ToolRisk.READ, ToolOrigin.NATIVE, "{\"to\":\"+91 98765-43210\"}")
+        assertTrue(SafetyGate.blocked(toNumber, s) != null)
+    }
 }

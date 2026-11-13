@@ -3,6 +3,8 @@ package com.aura.aura_ui.presentation.screens.agent
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.PersonOff
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.TaskAlt
@@ -69,6 +71,9 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
     val model = remember { keys.getSelectedModel(endpoint)?.substringAfterLast('/') }
     var digests by remember { mutableStateOf(core.alwaysOn) }
     var approvals by remember { mutableStateOf(core.approvalMode) }
+    var deniedApps by remember { mutableStateOf(core.deniedApps) }
+    var deniedContacts by remember { mutableStateOf(core.deniedContacts) }
+    var editing by remember { mutableStateOf<String?>(null) }
 
     AuraPage("On-device agent", modifier) {
         AuraSection {
@@ -107,6 +112,41 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
                 )
             }
         }
+        AuraSection(
+            title = "Never",
+            footer = "AURA refuses these whatever the approval setting. Separate names with commas.",
+        ) {
+            AuraRow(
+                "Apps AURA must not use",
+                icon = Icons.Outlined.Block,
+                subtitle = deniedApps.sorted().joinToString(", ").ifEmpty { "None" },
+                onClick = { editing = NEVER_APPS },
+            )
+            AuraDivider(ICON_INSET)
+            AuraRow(
+                "People AURA must not message",
+                icon = Icons.Outlined.PersonOff,
+                subtitle = deniedContacts.sorted().joinToString(", ").ifEmpty { "None" },
+                onClick = { editing = NEVER_PEOPLE },
+            )
+        }
+        editing?.let { which ->
+            NeverListDialog(
+                title = if (which == NEVER_APPS) "Apps AURA must not use" else "People AURA must not message",
+                current = if (which == NEVER_APPS) deniedApps else deniedContacts,
+                onDone = { list ->
+                    if (which == NEVER_APPS) {
+                        core.deniedApps = list
+                        deniedApps = core.deniedApps
+                    } else {
+                        core.deniedContacts = list
+                        deniedContacts = core.deniedContacts
+                    }
+                    editing = null
+                },
+                onDismiss = { editing = null },
+            )
+        }
         AuraSection(title = "Capabilities") {
             AuraRow("Tools", icon = Icons.Outlined.Construction, onClick = { onOpen(AuraRoutes.AGENT_TOOLS) })
             AuraDivider(ICON_INSET)
@@ -129,4 +169,30 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
             AuraRow("Run logs", icon = Icons.Outlined.Timeline, onClick = { onOpen(AuraRoutes.RUN_LOGS) })
         }
     }
+}
+
+private const val NEVER_APPS = "apps"
+private const val NEVER_PEOPLE = "people"
+
+/** Edits one deny list as comma-separated text. */
+@Composable
+private fun NeverListDialog(title: String, current: Set<String>, onDone: (Set<String>) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf(current.sorted().joinToString(", ")) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { androidx.compose.material3.Text(title) },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { androidx.compose.material3.Text("e.g. Instagram, Tinder") },
+            )
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = { onDone(text.split(',').map(String::trim).filter(String::isNotEmpty).toSet()) }) {
+                androidx.compose.material3.Text("Save")
+            }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { androidx.compose.material3.Text("Cancel") } },
+    )
 }

@@ -54,6 +54,10 @@ class ScreenHistory {
     @Synchronized
     fun span(): String? = entries.takeIf { it.isNotEmpty() }?.let { "${it.first().id}..${it.last().id}" }
 
+    /** The newest screen's `SEEN:` caption (app and top labels), or null before any. */
+    @Synchronized
+    fun latestCaption(): String? = entries.lastOrNull()?.caption
+
     /** The newest screen the task saw, or null before any. */
     @Synchronized
     fun latest(): String? = entries.lastOrNull()?.text

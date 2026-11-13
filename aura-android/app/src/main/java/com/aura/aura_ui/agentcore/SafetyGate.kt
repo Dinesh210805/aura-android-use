@@ -25,7 +25,16 @@ data class ToolCallRequest(
     val targetLabel: String? = null,
     /** The app in front ("WhatsApp"), for the verification card's title. Null when unknown. */
     val appLabel: String? = null,
+    /** The newest screen's `SEEN:` caption (app and top labels), for the deny list on a commit tap. */
+    val screenTitle: String? = null,
 )
+
+/**
+ * What the user approved with `propose_action`, kept on the chat (see `ToolHub.grants`).
+ * - [message] is the exact text approved; null means any text to [to] in [app] for the rest of the
+ *   chat ("don't ask again in this chat"), which is never offered once untrusted text was read.
+ */
+data class Grant(val app: String, val to: String, val message: String?, val expiresAt: Long)
 
 sealed interface Verdict {
     data object Allow : Verdict
@@ -57,7 +66,13 @@ sealed interface Verdict {
 enum class ApprovalMode { ASK_OFTEN, CONFIRM_SENDS, HANDS_FREE }
 
 /** User-controlled strictness. */
-data class SafetySettings(val mode: ApprovalMode = ApprovalMode.CONFIRM_SENDS)
+data class SafetySettings(
+    val mode: ApprovalMode = ApprovalMode.CONFIRM_SENDS,
+    /** Apps AURA must never act in or open, by name as the user typed them ("Instagram"). */
+    val deniedApps: Set<String> = emptySet(),
+    /** People AURA must never message, by name or number as the user typed them. */
+    val deniedContacts: Set<String> = emptySet(),
+)
 
 /**
  * Remembers what has entered the context this turn, and what the user has already allowed.
@@ -124,6 +139,7 @@ object SafetyGate {
                     "Tell the user what you would do and let them start it.",
             )
         }
+        blocked(call, settings)?.let { return Verdict.Deny(it) }
         val sendsOut = call.egress || call.risk == ToolRisk.COMMIT || call.origin == ToolOrigin.CONNECTOR
         if (sendsOut && SecretPatterns.containsSecret(call.argsText)) {
             return Verdict.Deny("policy_blocked: the arguments contain a password, key, card number or code.")
@@ -152,6 +168,83 @@ object SafetyGate {
         }
         return Verdict.Allow
     }
+
+    /**
+     * Why the user's own deny lists forbid [call], or null. An app counts when it is in front for an
+     * action or named by an opener; a person counts when named in what is sent or, for a commit tap,
+     * on the screen being committed. Word-bounded, so "Ram" does not match "Ramesh".
+     */
+    internal fun blocked(call: ToolCallRequest, settings: SafetySettings): String? {
+        if (call.risk == ToolRisk.READ && call.tool != PROPOSE_ACTION) return null
+        val opener = call.tool in OPENS_SOMETHING
+        settings.deniedApps.firstOrNull { app ->
+            mentions(call.appLabel, app) || (opener && mentions(call.argsText, app))
+        }?.let { return "policy_blocked: the user does not let AURA use $it. Tell them you cannot do this there." }
+        val sends = call.egress || call.tool == PROPOSE_ACTION || call.origin == ToolOrigin.CONNECTOR ||
+            CommitLabels.isCommit(call.targetLabel)
+        if (!sends) return null
+        settings.deniedContacts.firstOrNull { who ->
+            mentions(call.argsText, who) || (CommitLabels.isCommit(call.targetLabel) && mentions(call.screenTitle, who))
+        }?.let { return "policy_blocked: the user does not let AURA message $it. Tell them you cannot send this." }
+        return null
+    }
+
+    private fun mentions(text: String?, name: String): Boolean {
+        val n = name.trim()
+        if (text == null || n.isEmpty()) return false
+        if (n.any(Char::isDigit)) {
+            val digits = n.filter(Char::isDigit).takeLast(PHONE_TAIL)
+            return digits.length >= MIN_DENY_DIGITS && digits in text.filter(Char::isDigit)
+        }
+        return Regex("(?i)(?<![\\p{L}\\p{N}])" + Regex.escape(n) + "(?![\\p{L}\\p{N}])").containsMatchIn(text)
+    }
+
+    /**
+     * True when a [Grant] already covers this [ask], so the user is not asked twice.
+     * - A Send or Post tap: an unexpired grant for the app in front, and either the approved text is
+     *   on the screen (it was typed), or a chat-wide grant whose recipient is on the screen. A
+     *   chat-wide grant never covers the private-content egress ask.
+     * - A link or connector call carrying the approved text.
+     * - Never orders, bookings or deletes: those always get their own card.
+     */
+    internal fun covered(call: ToolCallRequest, ask: Verdict.Ask, grants: List<Grant>, screen: String?, now: Long): Boolean {
+        val live = grants.filter { it.expiresAt > now }
+        if (live.isEmpty()) return false
+        if (effectiveRisk(call) == ToolRisk.COMMIT) {
+            if (CommitLabels.kind(call.targetLabel) !in GRANTABLE) return false
+            val app = call.appLabel ?: return false
+            val shown = normal(screen ?: return false)
+            return live.any { g ->
+                sameApp(g.app, app) && when (val m = g.message) {
+                    null -> !ask.unlocksEgress && mentions(screen, g.to)
+                    else -> key(m) in shown
+                }
+            }
+        }
+        if (call.egress || call.origin == ToolOrigin.CONNECTOR) {
+            val sent = normal(runCatching { java.net.URLDecoder.decode(call.argsText, "UTF-8") }.getOrDefault(call.argsText))
+            return live.any { g -> g.message != null && key(g.message) in sent }
+        }
+        return false
+    }
+
+    /** The grant a covered commit tap used up, so the same text cannot be sent twice on one yes. */
+    internal fun spent(call: ToolCallRequest, grants: List<Grant>, screen: String?): Grant? {
+        if (effectiveRisk(call) != ToolRisk.COMMIT || screen == null) return null
+        val shown = normal(screen)
+        return grants.firstOrNull { g -> g.message != null && key(g.message) in shown && call.appLabel?.let { sameApp(g.app, it) } == true }
+    }
+
+    private fun sameApp(a: String, b: String): Boolean {
+        val x = a.trim().lowercase()
+        val y = b.trim().lowercase()
+        return x.isNotEmpty() && y.isNotEmpty() && (x in y || y in x)
+    }
+
+    private fun normal(text: String) = text.lowercase().replace(Regex("\\s+"), " ")
+
+    /** The start of an approved text: enough to know it, short enough to survive a narrow grid cell. */
+    private fun key(message: String) = normal(message).trim().take(KEY_CHARS)
 
     private fun commitAsks(call: ToolCallRequest, mode: ApprovalMode, taint: TurnTaint): Boolean = when (mode) {
         ApprovalMode.ASK_OFTEN, ApprovalMode.CONFIRM_SENDS -> true
@@ -197,6 +290,12 @@ object SafetyGate {
     private val ALWAYS_ASK = setOf(CommitKind.ORDER, CommitKind.DELETE)
 
     /** Phone actions that open something; ASK_OFTEN asks before each. */
+    const val PROPOSE_ACTION = "propose_action"
+    private val GRANTABLE = setOf(CommitKind.SEND, CommitKind.POST)
+    private const val KEY_CHARS = 24
+    private const val PHONE_TAIL = 10
+    private const val MIN_DENY_DIGITS = 6
+
     private val OPENS_SOMETHING = setOf("launch_app", "open_deeplink", "system_intent", "open_file", "notification_action")
 }
 

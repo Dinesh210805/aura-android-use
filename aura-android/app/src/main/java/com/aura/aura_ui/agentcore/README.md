@@ -119,6 +119,9 @@ There is one agent and no sub-agents: the phone has one screen, so two agents ca
 ## Safety rules (the order in `SafetyGate.evaluate` is the policy)
 
 1. `FORBIDDEN` tools never run.
+1b. The user's deny lists (`AgentCore.deniedApps`, `deniedContacts`, set on the agent page under
+   "Never") refuse any action in or opening a listed app, and any send naming a listed person, by
+   whole word or by number (`SafetyGate.blocked`).
 2. A background run (scheduled task, digest) may only read.
 3. Arguments that leave the phone must not contain a password, key, card number or code.
 4. A commit (send, post, order, book, delete, or a tap on a button labelled that way) shows one
@@ -132,6 +135,13 @@ There is one agent and no sub-agents: the phone has one screen, so two agents ca
    an installed app (`https://wa.me/…` into WhatsApp, `system_intent`) is not a send-out: that
    app's own Send is the commit.
 7. In Ask often mode, opening an app, link, intent or file also asks.
+8. `propose_action(app, to, message)` shows one card with the exact text before a send. A yes is a
+   `Grant` on the chat (in memory, 10 minutes): it covers a link or connector call carrying that
+   text and one Send/Post tap in that app while the screen shows it (`SafetyGate.covered`), then is
+   used up. "Don't ask again in this chat" (not offered after untrusted text was read) covers sends
+   to that person in that app for the chat, but never the private-content send-out ask. Orders,
+   bookings and deletes always get their own card. A deep link's phone number counts as routing
+   only when the user said it or `resolve_contact` returned it this turn.
 
 The mode (`ApprovalMode`: Ask often, Confirm sends, Hands-free) is picked on the agent page and
 stored in `AgentCore.approvalMode`; Confirm sends is the default. A declined card tells the model

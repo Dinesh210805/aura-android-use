@@ -106,7 +106,7 @@ class AgentCore private constructor(private val app: Context) {
         broker = broker,
         targetLabel = phone::targetLabel,
         journal = telemetry.journal,
-        settings = { SafetySettings(approvalMode) },
+        settings = { SafetySettings(approvalMode, deniedApps, deniedContacts) },
         appLabel = { AppDeviceBridge(app).run { foregroundPackage()?.takeIf { it != app.packageName }?.let(::appLabelFor) } },
         opensInstalledApp = ::opensInstalledApp,
     )
@@ -128,6 +128,16 @@ class AgentCore private constructor(private val app: Context) {
             .map { it.activityInfo.packageName }.toSet()
         return handler !in browsers
     }
+
+    /** Apps AURA must never open or act in, as the user typed them. Enforced by [SafetyGate.blocked]. */
+    var deniedApps: Set<String>
+        get() = prefs.getStringSet(KEY_DENIED_APPS, null).orEmpty()
+        set(value) = prefs.edit().putStringSet(KEY_DENIED_APPS, value.map(String::trim).filter(String::isNotEmpty).toSet()).apply()
+
+    /** People AURA must never message, by name or number. Enforced by [SafetyGate.blocked]. */
+    var deniedContacts: Set<String>
+        get() = prefs.getStringSet(KEY_DENIED_CONTACTS, null).orEmpty()
+        set(value) = prefs.edit().putStringSet(KEY_DENIED_CONTACTS, value.map(String::trim).filter(String::isNotEmpty).toSet()).apply()
 
     /** How often AURA stops to check with the user; see [ApprovalMode]. */
     var approvalMode: ApprovalMode
@@ -494,6 +504,8 @@ class AgentCore private constructor(private val app: Context) {
         private const val KEY_APPROVAL_MODE = "approval_mode"
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val KEY_RUNNING = "running_run"
+        private const val KEY_DENIED_APPS = "denied_apps"
+        private const val KEY_DENIED_CONTACTS = "denied_contacts"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
         private const val KEEP_GOING_HINT = " I stopped before finishing. Say \"keep going\" to continue."
         private const val ASK_TIMEOUT_MS = 120_000L
