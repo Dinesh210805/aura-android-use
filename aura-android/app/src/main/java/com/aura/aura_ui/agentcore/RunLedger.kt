@@ -38,6 +38,13 @@ class RunLedger {
         }
     }
 
+    /** The plan and the last actions, for the run digest; blank when nothing was recorded. */
+    @Synchronized
+    fun summary(): String = buildString {
+        if (steps.isNotEmpty()) append("Plan: ").append(steps.mapIndexed { i, s -> (if (i < done) "[x] " else "[ ] ") + s }.joinToString("  ")).append('\n')
+        actions.forEach { append("- ").append(it).append('\n') }
+    }.trim()
+
     @Synchronized
     fun render(request: String, step: Int, minutes: Long, screens: String?): String = buildString {
         append(ContextAssembler.LEDGER).append(" Where this task stands (kept by the app, not by you).\n")

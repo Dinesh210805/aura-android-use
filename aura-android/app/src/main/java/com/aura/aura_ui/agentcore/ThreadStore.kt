@@ -176,6 +176,9 @@ interface AgentDao {
     @Query("UPDATE digests SET reviewed = 1 WHERE rowid = :id")
     suspend fun markReviewed(id: Long)
 
+    @Query("DELETE FROM digests WHERE threadId = :threadId")
+    suspend fun deleteDigests(threadId: String)
+
     @Query("DELETE FROM digests WHERE atMs < :beforeMs")
     suspend fun pruneDigests(beforeMs: Long)
 
@@ -267,6 +270,7 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
     }
 
     suspend fun delete(threadId: String) {
+        dao.deleteDigests(threadId)
         dao.deleteItems(threadId)
         dao.deleteThread(threadId)
     }

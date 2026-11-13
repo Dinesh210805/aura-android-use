@@ -76,6 +76,8 @@ class AgentEngine(
     private val refusal: (request: String) -> String? = { null },
     /** Called with true when a turn starts and false when it ends, however it ends. */
     private val onTurn: (started: Boolean, mode: RunMode) -> Unit = { _, _ -> },
+    /** Keeps what a finished run did, for the idle review ([Learning]). Not called for a hand-off. */
+    private val digest: suspend (DigestRow) -> Unit = {},
     /** The phone's name and Android version, for the system prompt. Must not change between turns. */
     private val deviceLine: () -> String = { "" },
     /**
@@ -184,6 +186,17 @@ class AgentEngine(
         // A handed-off turn saves what it did, and the overlay's turn continues from it.
         save(turn, run)
         journal?.end(turn.runId, ended.end, ended.message)
+        if (ended.end != TurnEnd.HANDED_OFF) {
+            runCatching {
+                digest(
+                    DigestRow(
+                        threadId = threadId, atMs = now(), request = text, ledger = turn.ledger.summary(),
+                        outcome = "${ended.end}: ${ended.message.orEmpty()}".take(MAX_DIGEST_OUTCOME), tainted = turn.taint.tainted,
+                        actions = turn.actions, skill = turn.skillUsed, trace = Step.encode(turn.trace.toList()),
+                    ),
+                )
+            }
+        }
         send(ended)
         val untitled = threads.thread(threadId)?.title == ThreadStore.DEFAULT_TITLE
         if (untitled && ended.end == TurnEnd.ANSWERED) title(threadId, text)
@@ -659,6 +672,7 @@ Output exactly that one line and nothing else."""
         const val MAX_FILE_CHARS = 20_000
         const val MAX_IMAGES = 4
         const val MAX_TITLE_INPUT = 500
+        const val MAX_DIGEST_OUTCOME = 1_000
         val THINKING = Regex("(?s)<(think|thought|thinking)>.*?</\\1>")
     }
 }

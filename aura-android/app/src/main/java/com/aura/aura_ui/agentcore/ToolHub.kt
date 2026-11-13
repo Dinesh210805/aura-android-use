@@ -127,6 +127,13 @@ class TurnState(
     /** What the run has done, for the ledger the engine shows the model on long tasks. */
     val ledger = RunLedger()
 
+    /** Every successful phone action this turn, anchored on labels; kept in the run digest. */
+    val trace: MutableList<Step> = java.util.Collections.synchronizedList(mutableListOf())
+
+    /** The skill this turn read with `skill_view`, if any; kept in the run digest. */
+    @Volatile
+    var skillUsed: String? = null
+
     /** The text this turn last typed into a field; see [SafetyGate.covered]. */
     @Volatile
     var lastTyped: String? = null
@@ -629,7 +636,7 @@ class ToolHub(
             }
             val verdict = SafetyGate.evaluate(request, turn.mode, turn.taint, settings())
             if (verdict !is Verdict.Allow) journal?.note(turn.runId, gateTitle(verdict), gateDetail(request, verdict, turn.taint.origins), ok = verdict !is Verdict.Deny)
-            return when (verdict) {
+            val outcome = when (verdict) {
                 is Verdict.Deny -> ToolOutcome(verdict.modelMessage, isError = true)
                 is Verdict.Ask -> SafetyGate.covered(
                     request, verdict, grantsOf(turn.threadId), turn.screens.latest(), System.currentTimeMillis(), turn.contactNumbers.toSet(),
@@ -658,6 +665,11 @@ class ToolHub(
                 }
                 Verdict.Allow -> dispatch(args)
             }
+            if (!outcome.isError) {
+                if (spec.origin == ToolOrigin.PHONE && spec.risk != ToolRisk.READ) turn.trace += Step.of(spec.name, args, label)
+                if (spec.name == SKILL_VIEW) turn.skillUsed = args["name"]?.jsonPrimitive?.contentOrNull
+            }
+            return outcome
         }
 
         private suspend fun dispatch(args: JsonObject): ToolOutcome {
@@ -798,6 +810,7 @@ class ToolHub(
         private val PHONE_DIGITS = 10..15
         private const val PHONE_TAIL = 10
         private const val RESOLVE_CONTACT = "resolve_contact"
+        private const val SKILL_VIEW = "skill_view"
         private val TYPING = setOf("type_text", "set_value")
 
         /** A phone number as people write it: digits with spaces or hyphens, optionally +. */

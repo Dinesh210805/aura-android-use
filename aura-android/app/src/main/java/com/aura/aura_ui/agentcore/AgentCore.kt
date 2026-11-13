@@ -160,6 +160,7 @@ class AgentCore private constructor(private val app: Context) {
         refusal = { request -> DestructiveGoal.REFUSAL.takeIf { DestructiveGoal.isBulkDestruction(request) } },
         onTurn = ::onTurn,
         deviceLine = { deviceLine },
+        digest = { dao.insertDigest(it) },
         preamble = ::preamble,
         isPaused = { lock.isPausedByHuman },
         // "drop it" clears the task it was paused on.
