@@ -52,9 +52,9 @@ import kotlinx.serialization.json.JsonObject
  * screen, and `update()` swaps coordinates, signature, generation and activity as one
  * immutable unit so a resolve can never mix two captures.
  *
- * ### Image mode (on by default, Settings → Tools)
+ * ### Image mode (`image=true`, or always when Settings → Tools says so; off by default)
  *
- * When [annotateImage] says so, the grid is joined by a screenshot with the SAME
+ * When the call passes `image=true` or [annotateImage] says so, the grid is joined by a screenshot with the SAME
  * elements boxed in `perceive_screen`'s role colours — tree only, never OmniParser.
  * The boxes come from [ScreenPayload.Result.marked], the elements the grid itself
  * numbered, so a number on the picture is always the number on the grid. The image is
@@ -97,7 +97,7 @@ internal fun Server.registerReadScreenTool(
 
             The header says IDLE, or BUSY if the screen was still moving when the wait ran out.
 
-            Use perceive_screen instead when the answer depends on how something looks (a colour, an image, an unlabelled icon), when this ends with ESCALATE, when your target is missing here, or when tapping what this offered did nothing.
+            Add image=true when the answer depends on how something looks (a colour, a picture, an unlabelled icon, a layout you are unsure of): you get the same grid plus a screenshot with the same numbers boxed. Use perceive_screen when this ends with ESCALATE, when your target is missing here, or when tapping what this offered did nothing.
 
             Cheaper looks: changes_only=true lists only what changed since your last look, plus every other actionable som_id by name. query="text" lists only elements whose label contains it.
             """.trimIndent(),
@@ -106,12 +106,14 @@ internal fun Server.registerReadScreenTool(
                 mapOf(
                     "changes_only" to booleanSchema("Only what changed since your last look; the whole screen when most of it changed"),
                     "query" to stringSchema("Only elements whose label contains this text"),
+                    "image" to booleanSchema("Also send a screenshot with the same som_ids boxed"),
                 ),
             ),
         ),
     ) { request ->
         val query = request.arguments?.stringArg("query")?.trim()?.takeIf { it.isNotEmpty() }
         val changesOnly = request.arguments?.boolArg("changes_only") == true
+        val wantsImage = request.arguments?.boolArg("image") == true
         // Compare against the last time the server LOOKED, by either route — a perceive
         // or the settle after the previous gesture. Anchoring anywhere else would make
         // `screenChanged` describe a screen from two actions ago.
@@ -168,7 +170,7 @@ internal fun Server.registerReadScreenTool(
 
         // A narrowed look skips the picture: it would cost more than the text it narrows.
         val image = payload?.marked
-            ?.takeIf { it.isNotEmpty() && view == ScreenPayload.View.Full && annotateImage() }
+            ?.takeIf { it.isNotEmpty() && view == ScreenPayload.View.Full && (wantsImage || annotateImage()) }
             ?.let { marked -> annotatedScreenshot(screenshotBridge, perceptionBridge, marked) }
 
         CallToolResult(

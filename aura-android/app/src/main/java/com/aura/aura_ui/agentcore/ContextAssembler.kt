@@ -98,7 +98,8 @@ object SystemPrompt {
     val SCREEN_GUIDE = """
         <screen_guide>
         Look before you act. read_screen draws the screen as text and is enough for almost every screen.
-        Use perceive_screen (an annotated screenshot) only when read_screen shows little you can use: a game, a canvas, a web view, icons with no labels, or a screen that contradicts what just happened. Ask for detail "full" only when the screenshot itself still leaves a control unidentified.
+        When the answer depends on how something looks (a colour, a picture, an icon with no label), call read_screen with image=true: the same text plus a screenshot with the same numbers.
+        Use perceive_screen only when read_screen shows little you can use: a game, a canvas, a web view, or a screen that contradicts what just happened. Ask for detail "full" only when the screenshot itself still leaves a control unidentified.
         Target elements by som_id from the latest screen you were shown. Ids expire after every action. Never pass pixel coordinates.
         After an action the new screen is shown to you. Check it before the next action; do not look again just to see what happened.
         If an action changed nothing, do not repeat it: scroll, go back, try another path, or ask the user.

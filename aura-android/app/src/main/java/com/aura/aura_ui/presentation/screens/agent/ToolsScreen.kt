@@ -403,8 +403,8 @@ private fun ReadScreenImageRow(scheme: MonoScheme) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Annotated screenshot — same numbers as the grid, colour-coded boxes. " +
-                "Uses more tokens per look.",
+            text = "Always send the screenshot. Off: AURA asks for one only when text is not enough. " +
+                "On: every look carries it, which is slower and uses more tokens.",
             style = MaterialTheme.typography.bodySmall,
             color = scheme.textSecondary,
             modifier = Modifier.weight(1f),

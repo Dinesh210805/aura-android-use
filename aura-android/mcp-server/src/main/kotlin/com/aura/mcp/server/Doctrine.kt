@@ -48,8 +48,8 @@ object Doctrine {
             "After any action that changes the screen, the screen is read for you and shown under " +
                 "[SCREEN AFTER YOUR ACTION]. Check it shows what you expected, then act on it. Do not " +
                 "look again just to see what happened.",
-            "To look yourself, use read_screen. Use perceive_screen only when read_screen cannot show " +
-                "you what you need; its description says when.",
+            "To look yourself, use read_screen; add image=true when how it looks matters. Use " +
+                "perceive_screen only when read_screen cannot describe the screen at all.",
             "Target elements by som_id from the latest screen you were shown. som_ids expire after " +
                 "every action. Never pass pixel coordinates.",
             "Take one consequential action per step.",
