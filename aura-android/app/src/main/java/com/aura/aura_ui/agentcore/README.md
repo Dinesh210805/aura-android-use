@@ -177,7 +177,7 @@ stores (in `ModelGateway.kt`); and in `AgentCore.kt`, `TaskResearch` and `WebRes
   only the other agent fills.
 - Runs are not written to `files/mcp_logs`, so the Activity screen, the benchmark's step reports
   and eval traces are empty for this agent; its log is the drawer's Run log and its export.
-- Memories saved by the other agent are not migrated, and the voice companion still uses that store.
+- The other agent's live, non-sensitive facts about the user are copied in once, before the first turn (`MemoryImport`); the voice companion still reads and writes its own store.
 - A real backdrop blur on the glass (`ChatTheme.glass`).
 - Voice input inside the chat screen (its mic button opens the overlay), and the app's own
   visual style for it.

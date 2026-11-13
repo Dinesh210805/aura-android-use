@@ -163,7 +163,10 @@ class AgentCore private constructor(private val app: Context) {
         profile = { profileBlockOrEmpty(app).takeIf { it.isNotBlank() } },
         telemetry = telemetry,
         readAttachment = ::readAttachment,
-        beforeTurn = phone::startTask,
+        beforeTurn = {
+            importOldMemories()
+            phone.startTask()
+        },
         skillIndex = skills::index,
         research = ::research,
         refusal = { request -> DestructiveGoal.REFUSAL.takeIf { DestructiveGoal.isBulkDestruction(request) } },
@@ -465,6 +468,25 @@ class AgentCore private constructor(private val app: Context) {
         if (engine.isIdle() && batteryAllowsReview()) runCatching { learning.review() }
     }
 
+    /**
+     * Copy the old agent's memories in, once ([MemoryImport]). Entries past the cap or refused by
+     * [MemoryPolicy] are skipped. Fails: when the old store cannot be read (a broken Keystore), it
+     * tries again before the next turn.
+     * - Why the voice companion is not repointed: it keeps its own store; this is a copy, not a move.
+     */
+    private suspend fun importOldMemories() {
+        if (prefs.getBoolean(KEY_IMPORTED, false)) return
+        withContext(Dispatchers.IO) {
+            val old = runCatching { com.aura.aura_ui.agent.memory.EncryptedMemoryService(com.aura.aura_ui.agent.memory.memoryStore(app)).allEntries() }
+                .getOrNull() ?: return@withContext
+            MemoryImport.select(old).forEach { (text, pinned) ->
+                val saved = memory.save(MemoryKind.USER, text, source = MemorySource.IMPORTED)
+                if (saved is MemoryStore.SaveResult.Saved && pinned) memory.setPinned(saved.id, true)
+            }
+            prefs.edit().putBoolean(KEY_IMPORTED, true).apply()
+        }
+    }
+
     /** The review spends a model call per run: only on charge, or above [REVIEW_MIN_BATTERY] percent. */
     private fun batteryAllowsReview(): Boolean {
         val battery = app.getSystemService(BatteryManager::class.java) ?: return false
@@ -524,6 +546,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val KEY_RUNNING = "running_run"
         private const val REVIEW_MIN_BATTERY = 30
+        private const val KEY_IMPORTED = "old_memories_imported"
         private const val KEY_DENIED_APPS = "denied_apps"
         private const val KEY_DENIED_CONTACTS = "denied_contacts"
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L

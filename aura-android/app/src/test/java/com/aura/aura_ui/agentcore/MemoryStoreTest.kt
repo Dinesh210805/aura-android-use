@@ -67,6 +67,20 @@ class MemoryStoreTest {
     }
 
     @Test
+    fun `the old agent's live, non-sensitive facts are imported, pinned first`() {
+        fun e(id: String, type: com.aura.aura_ui.agent.memory.MemoryType, sensitive: Boolean = false, pinned: Boolean = false, ended: Long = 0) =
+            com.aura.aura_ui.agent.memory.MemoryEntry(id, type, "fact $id", sensitive, createdAtEpochMs = id.length.toLong(), pinned = pinned, endedAtEpochMs = ended)
+        val old = listOf(
+            e("a", com.aura.aura_ui.agent.memory.MemoryType.USER),
+            e("bb", com.aura.aura_ui.agent.memory.MemoryType.FEEDBACK, pinned = true),
+            e("c", com.aura.aura_ui.agent.memory.MemoryType.USER, sensitive = true),
+            e("d", com.aura.aura_ui.agent.memory.MemoryType.EPISODE),
+            e("e", com.aura.aura_ui.agent.memory.MemoryType.USER, ended = 5),
+        )
+        assertEquals(listOf("fact bb" to true, "fact a" to false), MemoryImport.select(old))
+    }
+
+    @Test
     fun `a tainted background turn cannot remove a memory`() = runBlocking {
         memory.save(MemoryKind.USER, "Lives in Chennai")
         val r = tool.run(ops("""[{"action":"remove","old":"Chennai"}]"""), turn(RunMode.BACKGROUND, tainted = true))

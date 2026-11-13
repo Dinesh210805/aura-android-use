@@ -59,6 +59,21 @@ object MemoryPolicy {
     }
 }
 
+/**
+ * Which of the old agent's memories (`agent/memory`, store `aura_memory`) move into this one.
+ * - Contract: live, non-sensitive facts and preferences about the user (`USER`, `FEEDBACK`),
+ *   pinned first, then newest first, as (text, pinned). Episodes, action logs and style notes stay
+ *   behind: they are history or persona, not facts. Sensitive ones stay behind because this store
+ *   puts every entry in the prompt.
+ */
+object MemoryImport {
+    fun select(old: List<com.aura.aura_ui.agent.memory.MemoryEntry>): List<Pair<String, Boolean>> = old
+        .filter { it.type in setOf(com.aura.aura_ui.agent.memory.MemoryType.USER, com.aura.aura_ui.agent.memory.MemoryType.FEEDBACK) }
+        .filter { !it.sensitive && it.endedAtEpochMs == 0L }
+        .sortedWith(compareByDescending<com.aura.aura_ui.agent.memory.MemoryEntry> { it.pinned }.thenByDescending { it.freshestAtEpochMs })
+        .map { it.text to it.pinned }
+}
+
 class MemoryStore(
     private val dao: AgentDao,
     private val now: () -> Long = System::currentTimeMillis,
