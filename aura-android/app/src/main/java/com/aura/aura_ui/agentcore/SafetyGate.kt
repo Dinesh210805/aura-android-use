@@ -208,9 +208,10 @@ object SafetyGate {
      *   the turn's last typed text ([ToolCallRequest.typed]) equals it, or it arrived through a link
      *   this grant covered. Or a chat-wide grant for that recipient, which never covers the
      *   private-content send-out ask.
-     * - A link or connector call, not after an earlier link: one of its argument values, or one of
-     *   the link's query values, equals the approved text exactly, and it names the recipient or
-     *   carries a number in [knownNumbers] (said by the user or returned by `resolve_contact`).
+     * - A connector call, not after an earlier link: its string arguments are exactly the approved
+     *   text and exactly the recipient, nothing else.
+     * - A link, not after an earlier link: to the granted app's own link host, carrying only the
+     *   approved text and a number in [knownNumbers] (said by the user or returned by `resolve_contact`).
      * - Never orders, bookings or deletes: those always get their own card.
      * - Why exact equality: "contains" let extra text ride along before or after the approved words.
      * - Contract: the caller marks the grant used ([used]); a covered call never unlocks other sends.
@@ -239,12 +240,13 @@ object SafetyGate {
             }
         }
         if (call.origin == ToolOrigin.CONNECTOR) {
-            // Nothing but the message and the recipient: a subject or a second field is not approved.
-            val values = argumentValues(call.argsText)
+            // Every value is exactly the message or exactly the recipient: a subject, a cc, or a
+            // "to" listing a second address is not approved. A name grant vs an address arg asks.
+            val values = argumentValues(call.argsText, withParts = false)
             return live.firstOrNull { g ->
-                g.message != null && !g.linkUsed && values.any { normal(it) == normal(g.message) } &&
-                    values.any { mentions(it, g.to) } &&
-                    values.all { normal(it) == normal(g.message) || mentions(it, g.to) }
+                val m = g.message ?: return@firstOrNull false
+                !g.linkUsed && values.any { normal(it) == normal(m) } && values.any { normal(it) == normal(g.to) } &&
+                    values.all { normal(it) == normal(m) || normal(it) == normal(g.to) }
             }
         }
         if (call.egress) {

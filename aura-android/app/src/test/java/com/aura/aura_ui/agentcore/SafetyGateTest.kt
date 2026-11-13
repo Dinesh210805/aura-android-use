@@ -205,6 +205,10 @@ class SafetyGateTest {
         assertTrue(SafetyGate.covered(send, ask, g, null, 0) != null)
         val subject = send.copy(argsText = "{\"to\":\"amma@example.com\",\"body\":\"Running late\",\"subject\":\"code 4821\"}")
         assertNull(SafetyGate.covered(subject, ask, g, null, 0))
+        val second = send.copy(argsText = "{\"to\":\"evil@x.com, amma@example.com\",\"body\":\"Running late\"}")
+        assertNull(SafetyGate.covered(second, ask, g, null, 0))
+        val cc = send.copy(argsText = "{\"to\":\"amma@example.com\",\"cc\":\"amma@example.com evil@x.com\",\"body\":\"Running late\"}")
+        assertNull(SafetyGate.covered(cc, ask, g, null, 0))
     }
 
     @Test
