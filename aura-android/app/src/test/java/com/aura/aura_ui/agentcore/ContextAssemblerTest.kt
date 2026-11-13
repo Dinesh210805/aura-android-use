@@ -145,4 +145,40 @@ class ContextAssemblerTest {
         assertFalse(ContextAssembler.provedUnchanged("{\"post_action_observation\":{\"screen_changed\":false,\"screen_changed_confidence\":\"low\"}}"))
         assertFalse(ContextAssembler.provedUnchanged("Tapped"))
     }
+
+    private val longTask = prompt("t") {
+        system("rules")
+        user("send Amma the Ola fare to the airport")
+        (1..10).forEach { i ->
+            toolCall("tap", """{"som_id":$i}""", "$i")
+            toolResult("tap", "step $i done " + "x".repeat(400), "$i")
+        }
+        toolCall("read_screen", "{}", "last")
+        toolResult("read_screen", "LAST SCREEN Ola fare 548", "last")
+    }.messages
+
+    @Test
+    fun `compaction keeps the request and a tail that never starts on an orphan result`() {
+        val range = ContextAssembler.compactionRange(longTask, keepTailTokens = 300)!!
+        assertEquals(2, range.first) // after the system message and the request
+        assertTrue(longTask[range.last + 1].parts.none { it is ai.koog.prompt.message.MessagePart.Tool.Result })
+
+        val out = ContextAssembler.withSummary(longTask, range, "Done: tapped 1-8")
+        assertEquals("send Amma the Ola fare to the airport", out[1].textContent())
+        assertTrue(out[2].textContent().startsWith(ContextAssembler.SUMMARY_HEADER))
+        assertTrue(out.last().toString().contains("LAST SCREEN Ola fare 548"))
+    }
+
+    @Test
+    fun `a short conversation has nothing to compact`() {
+        assertEquals(null, ContextAssembler.compactionRange(longTask.take(4), keepTailTokens = 300))
+    }
+
+    @Test
+    fun `the transcript tags who said what`() {
+        val t = ContextAssembler.transcript(longTask.subList(1, 4))
+        assertTrue(t.startsWith("USER: send Amma"))
+        assertTrue("ASSISTANT: tap({\"som_id\":1})" in t)
+        assertTrue("RESULT tap: step 1 done" in t)
+    }
 }

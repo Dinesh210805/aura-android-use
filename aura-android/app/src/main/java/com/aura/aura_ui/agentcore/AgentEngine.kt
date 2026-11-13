@@ -4,7 +4,6 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.functionalStrategy
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
-import ai.koog.agents.core.dsl.extension.FromLastNMessagesHistoryCompressionStrategy
 import ai.koog.agents.features.opentelemetry.feature.OpenTelemetry
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.AttachmentContent
@@ -436,8 +435,24 @@ class AgentEngine(
             journal?.note(turn.runId, "Cleared old tool output: about $before → $pruned tokens")
             return
         }
-        replaceHistoryWithTLDR(FromLastNMessagesHistoryCompressionStrategy(budget.keepRecentMessages))
-        val summary = prompt.messages.filterIsInstance<Message.Assistant>().lastOrNull()?.textContent().orEmpty()
+        val original = prompt.messages
+        val range = ContextAssembler.compactionRange(original, budget.compactAtTokens / TAIL_SHARE) ?: return
+        // The summary is asked of a prompt holding only the transcript: no tools, no screens, and
+        // no tool-call structure the provider would have to validate.
+        rewritePrompt {
+            it.withMessages {
+                listOf(
+                    ContextAssembler.systemText(ContextAssembler.SUMMARY_SYSTEM),
+                    ContextAssembler.userText(ContextAssembler.transcript(original.subList(range.first, range.last + 1))),
+                )
+            }
+        }
+        val summary = runCatching { requestLLMWithoutTools().textContent() }.getOrNull()?.takeIf { it.isNotBlank() }
+        rewritePrompt { it.withMessages { if (summary == null) original else ContextAssembler.withSummary(original, range, summary) } }
+        if (summary == null) {
+            journal?.note(turn.runId, "Could not summarise the conversation; kept it as it was", ok = false)
+            return
+        }
         journal?.note(
             turn.runId,
             "Compacted the conversation: $beforeCount → ${prompt.messages.size} messages, about $before → " +
@@ -525,6 +540,8 @@ class AgentEngine(
         const val STEERING = "The user added this while you were working. Take it into account:\n"
         const val EMPTY_REPLY =
             "Your last reply had no words and no tool call. Either call a tool to carry on, or tell the user the result."
+        /** The verbatim tail gets this fraction of the compaction threshold. */
+        const val TAIL_SHARE = 3
         const val CONTINUE_ON_SCREEN = "[Continue this request on the phone's screen now; you have the screen tools.]"
         const val PAUSED_TOO_LONG =
             "You took the phone back and I waited, so I've stopped here. Say continue when you want me to pick it up."
