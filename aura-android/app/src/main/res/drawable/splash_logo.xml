@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Splash badge: the COLORED AURA mark on an ink circle. The system masks this
+<!-- Splash badge: the launcher foreground (white glass AURA mark) on the black splash field. The system masks this
      to a circle on the splash. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
