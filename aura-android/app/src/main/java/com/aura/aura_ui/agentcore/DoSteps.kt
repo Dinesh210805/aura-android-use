@@ -12,8 +12,10 @@ import kotlinx.serialization.json.contentOrNull
  * `do_steps`: runs a known sequence of phone actions, each found by its label on a fresh screen,
  * in one model call. Its steps usually come from a skill's `steps:` block.
  *
- * - Contract: each targeted step resolves its [Step.target] to exactly one element on the current
- *   screen ([find]); none or several stops the chain. Every action goes through [call], the
+ * - Contract: each targeted step reads the screen (unless nothing acted since the last read) and
+ *   resolves its [Step.target] to exactly one element on it ([find]); none or several stops the
+ *   chain. Why read: a tap's settle does not refresh the server's element cache, so a lookup
+ *   without a read could match the previous screen. Every action goes through [call], the
  *   hub's own gated path, so approvals, deny lists, taint and commit cards apply exactly as to a
  *   call the model makes. The chain stops at the first refused or failed step, or when a step's
  *   [Step.expect] is not on the screen after it, and returns what ran plus the current screen.
@@ -46,11 +48,8 @@ class StepRunner(
             s.args.forEach { (k, v) -> args[k] = JsonPrimitive(v) }
             s.text?.let { args[if (s.action == "set_value") "value" else "text"] = JsonPrimitive(it) }
             s.target?.let { target ->
-                var ids = if (looked) find(target) else emptyList()
-                if (ids.size != 1) {
-                    look() ?: return stop(i, "could not read the screen.")
-                    ids = find(target)
-                }
+                if (!looked) look() ?: return stop(i, "could not read the screen.")
+                val ids = find(target)
                 when {
                     ids.isEmpty() -> return stop(i, "nothing labelled \"$target\" on the screen.")
                     ids.size > 1 -> return stop(i, "\"$target\" matches ${ids.size} elements (${ids.joinToString()}); act on the right one yourself.")
@@ -59,7 +58,7 @@ class StepRunner(
             }
             val out = call(turn, s.action, JsonObject(args)) ?: return stop(i, "${s.action} is not available.")
             screen = out.text
-            looked = true
+            looked = false
             if (out.isError) return stop(i, out.text.take(MAX_REASON))
             s.expect?.let { want ->
                 if (!shows(out.text, want) && (look() == null || !shows(screen, want))) {
@@ -89,13 +88,20 @@ class StepRunner(
         /** Actions on the screen or the app in front. No looks, no links, nothing that leaves the phone. */
         val CHAIN_ACTIONS = setOf("launch_app", "tap", "type_text", "set_value", "press_enter", "press_key", "scroll", "swipe", "wait_for")
 
-        /** A step from the model's JSON: `action`, `target`, `text`, `expect`; any other plain field is an argument. */
+        /**
+         * A step from the model's JSON: `action`, `target`, `text`, `expect`, and the action's own
+         * arguments either nested under `args` (as a skill's `steps:` line holds them, which also
+         * keeps tap's own `action` apart) or as other plain top-level fields. A `som_id` is dropped:
+         * targets are found by label.
+         */
         fun parse(o: JsonObject): Step? {
             fun s(k: String) = (o[k] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
             val action = s("action") ?: return null
-            val args = o.filterKeys { it !in setOf("action", "target", "text", "expect", "som_id") }
-                .mapNotNull { (k, v) -> (v as? JsonPrimitive)?.contentOrNull?.let { k to it } }.toMap()
-            return Step(action, s("target"), s("text"), s("expect"), args)
+            fun plain(obj: JsonObject, skip: Set<String>) =
+                obj.filterKeys { it !in skip }.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.contentOrNull?.let { k to it } }.toMap()
+            val top = plain(o, setOf("action", "target", "text", "expect", "som_id", "args"))
+            val nested = (o["args"] as? JsonObject)?.let { plain(it, setOf("som_id", "text", "value")) }.orEmpty()
+            return Step(action, s("target"), s("text"), s("expect"), top + nested)
         }
     }
 }

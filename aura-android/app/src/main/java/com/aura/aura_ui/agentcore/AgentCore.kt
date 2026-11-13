@@ -82,7 +82,7 @@ class AgentCore private constructor(private val app: Context) {
 
     val threads = ThreadStore(dao)
     val memory = MemoryStore(dao, installed = ::installedApp)
-    val skills = SkillStore(File(root, "skills"), installed = { installedApp(it) != null })
+    val skills = SkillStore(File(root, "skills"), installedApps = { TaskResearch.launcherApps(app).map { it.label.trim().lowercase() }.toSet() })
 
     /** The idle-time review; see [Learning]. Its drafts wait in `skill-drafts/` for the user. */
     val learning = Learning(
@@ -477,8 +477,10 @@ class AgentCore private constructor(private val app: Context) {
     private suspend fun importOldMemories() {
         if (prefs.getBoolean(KEY_IMPORTED, false)) return
         withContext(Dispatchers.IO) {
-            val old = runCatching { com.aura.aura_ui.agent.memory.EncryptedMemoryService(com.aura.aura_ui.agent.memory.memoryStore(app)).allEntries() }
-                .getOrNull() ?: return@withContext
+            val store = runCatching { com.aura.aura_ui.agent.memory.memoryStore(app) }.getOrNull() ?: return@withContext
+            // A broken Keystore falls back to a store that reads as empty: not "nothing to import".
+            if (!store.isEncrypted) return@withContext
+            val old = runCatching { com.aura.aura_ui.agent.memory.EncryptedMemoryService(store).allEntries() }.getOrNull() ?: return@withContext
             MemoryImport.select(old).forEach { (text, pinned) ->
                 val saved = memory.save(MemoryKind.USER, text, source = MemorySource.IMPORTED)
                 if (saved is MemoryStore.SaveResult.Saved && pinned) memory.setPinned(saved.id, true)

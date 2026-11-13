@@ -53,6 +53,12 @@ object SkillPolicy {
     const val MAX_BODY = 8_000
     const val MAX_SKILLS = 40
     const val FAILURES_TO_RELEARN = 2
+
+    /**
+     * Memory's injection shapes, except links: a procedure may name a site to open. The description
+     * goes into the system prompt unfenced, and a review can draft from a run that read a hostile page.
+     */
+    private val OVERRIDES = MemoryPolicy.instructionShapes.filterNot { it.pattern.contains("https?") }
     const val STALE_DAYS = 30L
     const val ARCHIVE_DAYS = 60L
 
@@ -63,14 +69,17 @@ object SkillPolicy {
             "The description must be one line of at most $MAX_DESCRIPTION characters saying when to use the skill."
         body.isBlank() || body.length > MAX_BODY -> "The body must be 1 to $MAX_BODY characters."
         SecretPatterns.containsSecret(body) -> "A skill must not contain passwords, codes, keys or card numbers."
+        listOf(name, description, body).any { MemoryPolicy.invisible.containsMatchIn(it) } -> "The skill contains hidden characters."
+        listOf(description, body).any { t -> OVERRIDES.any { it.containsMatchIn(t) } } ->
+            "A skill is a procedure for a task; it must not address the assistant's instructions."
         else -> null
     }
 }
 
 class SkillStore(
     private val dir: File,
-    /** True when an app by this name is installed. */
-    private val installed: (app: String) -> Boolean = { true },
+    /** Lower-case labels of the installed apps, or null when unknown (every skill is then shown). Called once per [index]. */
+    private val installedApps: () -> Set<String>? = { null },
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val usageFile = File(dir, USAGE)
@@ -88,13 +97,17 @@ class SkillStore(
     }
 
     /** The lines for the system prompt, or blank when there are none: skills whose app is installed, with their state. */
-    fun index(): String = list().filter { s -> s.app == null || installed(s.app) }.joinToString("\n") { s ->
+    fun index(): String {
+        val skills = list()
+        val apps = if (skills.any { it.app != null }) installedApps() else null
+        return skills.filter { s -> s.app == null || apps == null || s.app.trim().lowercase() in apps }.joinToString("\n") { s ->
         val flag = when {
             s.usage.needsRelearning -> " [its steps stopped working; do the task by hand, then save the skill again]"
             s.steps.isNotEmpty() -> " [has steps for do_steps]"
             else -> ""
         }
         "${s.name}: ${s.description}$flag"
+        }
     }
 
     /** The body, then the `steps:` line when there is one, for `skill_view`. */

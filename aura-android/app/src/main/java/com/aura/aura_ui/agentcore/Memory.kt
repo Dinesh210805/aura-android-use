@@ -37,7 +37,7 @@ enum class MemoryKind(val maxChars: Int, val heading: String) {
 object MemoryPolicy {
     const val MAX_ENTRY_CHARS = 300
 
-    private val instructionShapes = listOf(
+    internal val instructionShapes = listOf(
         Regex("(?i)ignore (all |any )?(previous|prior|above)"),
         Regex("(?i)\\b(system prompt|developer message)\\b"),
         Regex("(?i)\\b(always|never) (call|use|run|send|open|reply)\\b.*\\b(tool|url|link|http)"),
@@ -45,7 +45,7 @@ object MemoryPolicy {
     )
 
     /** Zero-width and bidirectional control characters, which hide text from a person reading it. */
-    private val invisible = Regex("[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\uFEFF]")
+    internal val invisible = Regex("[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\uFEFF]")
 
     /** Why [text] may not be saved, or null when it may. The reason is shown to the model. */
     fun rejection(text: String): String? = when {

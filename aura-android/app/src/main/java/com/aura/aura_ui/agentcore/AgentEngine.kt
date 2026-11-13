@@ -570,7 +570,7 @@ class AgentEngine(
     /**
      * A short summary of the chat so far, written on the FAST model from the visible messages and
      * kept in `threads.summary`. Null when there is no FAST model or the call fails: the turn then
-     * starts fresh without one, and `search_history` still reaches every message.
+     * keeps the stored context, and the next turn tries again.
      */
     private suspend fun earlier(threadId: String): String? {
         val transcript = threads.recentTranscript(threadId).takeIf { it.isNotBlank() } ?: return null

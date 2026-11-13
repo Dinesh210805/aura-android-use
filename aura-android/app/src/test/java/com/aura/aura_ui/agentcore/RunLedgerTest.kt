@@ -53,4 +53,14 @@ class RunLedgerTest {
         assertEquals(2, h.distinct)
         assertEquals("S1..S5.1", h.span())
     }
+
+    @Test
+    fun `the digest summary keeps the plan and never the raw action arguments`() {
+        val ledger = RunLedger()
+        ledger.plan(listOf("Open WhatsApp", "Send the message"), done = 1)
+        ledger.action("type_text {\"text\":\"my PIN is 4821\"} -> ok")
+        val summary = ledger.summary()
+        org.junit.Assert.assertTrue(summary, summary.startsWith("Plan: [x] Open WhatsApp"))
+        org.junit.Assert.assertFalse(summary, "4821" in summary)
+    }
 }

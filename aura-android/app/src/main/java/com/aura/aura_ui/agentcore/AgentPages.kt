@@ -519,10 +519,15 @@ fun SkillsPage(vm: AgentPagesViewModel = viewModel()) {
                     ) {
                         Text(draft.name, style = AuraType.body, color = aura.label)
                         Text(draft.description, style = AuraType.footnote, color = aura.secondary)
-                        if (open == "draft:" + draft.name) RichText(body, AuraType.footnote, aura.label)
-                        Row {
-                            TextButton(onClick = { vm.discardDraft(draft.name) }) { Text("Discard") }
-                            TextButton(onClick = { scope.launch { notice = vm.keepDraft(draft.name) } }) { Text("Keep") }
+                        // Keep appears only with the steps on screen: a kept skill is followed as instructions.
+                        if (open == "draft:" + draft.name) {
+                            RichText(body, AuraType.footnote, aura.label)
+                            Row {
+                                TextButton(onClick = { vm.discardDraft(draft.name) }) { Text("Discard") }
+                                TextButton(onClick = { scope.launch { notice = vm.keepDraft(draft.name) } }) { Text("Keep") }
+                            }
+                        } else {
+                            Text("Tap to read the steps", style = AuraType.footnote, color = aura.tertiary)
                         }
                     }
                 }

@@ -38,12 +38,14 @@ class RunLedger {
         }
     }
 
-    /** The plan and the last actions, for the run digest; blank when nothing was recorded. */
+    /**
+     * The plan alone, for the run digest; blank when there is none.
+     * - Why not the action lines: they hold raw arguments (typed messages, addresses); the digest
+     *   carries the sanitized [TurnState.trace] instead.
+     */
     @Synchronized
-    fun summary(): String = buildString {
-        if (steps.isNotEmpty()) append("Plan: ").append(steps.mapIndexed { i, s -> (if (i < done) "[x] " else "[ ] ") + s }.joinToString("  ")).append('\n')
-        actions.forEach { append("- ").append(it).append('\n') }
-    }.trim()
+    fun summary(): String =
+        if (steps.isEmpty()) "" else "Plan: " + steps.mapIndexed { i, s -> (if (i < done) "[x] " else "[ ] ") + s }.joinToString("  ")
 
     @Synchronized
     fun render(request: String, step: Int, minutes: Long, screens: String?): String = buildString {
