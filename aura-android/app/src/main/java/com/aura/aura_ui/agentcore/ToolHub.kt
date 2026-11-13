@@ -576,20 +576,29 @@ class ToolHub(
             fun spoken(text: String): Boolean {
                 val t = tokens(text)
                 if (t.isEmpty()) return true
-                if (t.size == 1 && t[0].all(Char::isDigit) && (t[0].length in PHONE_DIGITS || t[0] in said)) return true
                 return (0..said.size - t.size).any { start -> said.subList(start, start + t.size) == t }
             }
+            // A phone number is routing only where an app expects a recipient; anywhere else a long
+            // number could be an account number read off the screen.
+            fun recipient(text: String) = text.trimStart('+').let { it.all(Char::isDigit) && it.length in PHONE_DIGITS }
             val afterScheme = url.substringAfter("://", url.substringAfter(':'))
-            val path = afterScheme.substringBefore('?').substringBefore('#').split('/').drop(1)
+            val authority = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+            // No `user@`, no port, and a host of short labels without long digit runs: data can
+            // hide in a subdomain as easily as in a path.
+            val hostOk = '@' !in authority && ':' !in authority &&
+                authority.split('.').let { labels -> labels.size <= MAX_HOST_LABELS && labels.all { HOST_LABEL.matches(it) && !LONG_DIGITS.containsMatchIn(it) } }
+            val path = afterScheme.substringBefore('?').substringBefore('#').split('/').drop(1).filter(String::isNotBlank).map(::decode)
             val query = afterScheme.substringAfter('?', "").substringBefore('#')
             val fragment = afterScheme.substringAfter('#', "")
-            val pathOk = path.filter(String::isNotBlank).map(::decode).all { seg ->
-                seg.lowercase() in ROUTING_WORDS || seg.trimStart('+').let { it.all(Char::isDigit) && it.length in PHONE_DIGITS } || spoken(seg)
+            val pathOk = path.withIndex().all { (i, seg) ->
+                seg.lowercase() in ROUTING_WORDS || (i == 0 && recipient(seg)) || spoken(seg)
             }
             val queryOk = query.split('&', ';').filter(String::isNotBlank).all { pair ->
-                decode(pair.substringBefore('=')).lowercase() in ROUTING_NAMES && spoken(decode(pair.substringAfter('=', "")))
+                val name = decode(pair.substringBefore('=')).lowercase()
+                val value = decode(pair.substringAfter('=', ""))
+                name in ROUTING_NAMES && ((name in RECIPIENT_NAMES && recipient(value)) || spoken(value))
             }
-            return pathOk && queryOk && spoken(decode(fragment))
+            return hostOk && pathOk && queryOk && spoken(decode(fragment))
         }
 
         private fun decode(text: String): String = runCatching { java.net.URLDecoder.decode(text, "UTF-8") }.getOrDefault(text)
@@ -598,6 +607,10 @@ class ToolHub(
             text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
 
         private val PHONE_DIGITS = 10..15
+        private val RECIPIENT_NAMES = setOf("phone", "to")
+        private const val MAX_HOST_LABELS = 4
+        private val HOST_LABEL = Regex("[A-Za-z0-9-]{1,24}")
+        private val LONG_DIGITS = Regex("\\d{5,}")
 
         /** Path words apps use to route a link; they carry no user data. */
         private val ROUTING_WORDS = setOf(
