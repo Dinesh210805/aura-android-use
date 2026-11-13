@@ -60,8 +60,8 @@ also pulls the folder.
 | `RunLedger.kt` | The plot of a long run (request, plan, last actions, step and minutes), shown as one message from step 8; only the newest is kept. |
 | `ScreenHistory.kt` | Every screen a task saw (`S3`, diffs `S3.1`), read back by `screens`, `screen`, `screen_diff`; counts distinct screens for stuck detection. |
 | `ModelGateway.kt` | Resolves the model the user picked in Settings into a Koog client. FAST is that model at its lightest thinking (titles, compaction summaries). FALLBACK is the first other provider the user set up; `FallbackClient` switches a turn to it when the main provider is rate limited, erroring or unreachable after its retries, never on a rejected key, and says so in the chat. |
-| `ThreadStore.kt` | Room database `agentcore.db`: threads, visible items, full-text search, memories, jobs. |
-| `Memory.kt` | Bounded always-in-context memory and its `remember`, `forget`, `search_history` tools. |
+| `ThreadStore.kt` | Room database `agentcore.db` (version 2, with `MIGRATION_1_2`): threads, visible items, full-text search, memories, jobs, run digests. |
+| `Memory.kt` | Bounded always-in-context memory and its tools: `memory` (batched add, patch, remove; a tainted turn stages adds for the user) and `search_history` (with `around` to read a hit's neighbours). |
 | `Skills.kt` | Saved procedures as `SKILL.md` folders under `files/agentcore/skills/`. |
 | `Scheduler.kt` | Scheduled prompts (`schedule_task`), run read-only in the background. |
 | `Ambient.kt` | Notification triage and digests. |

@@ -441,8 +441,7 @@ object StepPhrase {
             "load_toolset" -> "Got ${args["name"]?.jsonPrimitive?.contentOrNull ?: "more"} tools ready"
             "update_plan" -> "Updated the plan"
             "ask_user" -> "Asked you a question"
-            "remember" -> "Saved a memory"
-            "forget" -> "Removed a memory"
+            MEMORY_TOOL -> "Changed memory"
             "search_history" -> "Searched past chats"
             "skill_view" -> "Read the skill ${arg("name").orEmpty()}".trim()
             "skill_save" -> "Saved a skill"

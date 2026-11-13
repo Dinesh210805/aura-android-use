@@ -146,6 +146,15 @@ interface AgentDao {
     )
     suspend fun search(query: String, limit: Int): List<ItemRow>
 
+    @Query("SELECT * FROM items WHERE rowid = :id")
+    suspend fun item(id: Long): ItemRow?
+
+    @Query(
+        "SELECT * FROM items WHERE threadId = :threadId AND kind IN ('USER', 'ASSISTANT') AND atMs BETWEEN :fromMs AND :toMs " +
+            "ORDER BY atMs, rowid",
+    )
+    suspend fun itemsBetween(threadId: String, fromMs: Long, toMs: Long): List<ItemRow>
+
     @Insert
     suspend fun insertMemory(row: MemoryRow): Long
 
@@ -316,7 +325,17 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         return dao.search(terms.joinToString(" ") { "\"$it\"" }, limit)
     }
 
+    /** The user and assistant messages within [AROUND_MS] of item [id] in its thread, oldest first, at most [AROUND_MAX]. */
+    suspend fun around(id: Long): List<ItemRow> {
+        val hit = dao.item(id) ?: return emptyList()
+        val rows = dao.itemsBetween(hit.threadId, hit.atMs - AROUND_MS, hit.atMs + AROUND_MS)
+        val at = rows.indexOfFirst { it.rowid == id }.coerceAtLeast(0)
+        return rows.drop((at - AROUND_MAX / 2).coerceAtLeast(0)).take(AROUND_MAX)
+    }
+
     companion object {
+        private const val AROUND_MS = 6 * 60 * 60 * 1000L
+        private const val AROUND_MAX = 8
         const val DEFAULT_TITLE = "New chat"
         private const val MAX_TITLE = 60
     }
