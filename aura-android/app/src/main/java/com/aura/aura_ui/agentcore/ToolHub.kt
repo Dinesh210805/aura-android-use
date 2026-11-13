@@ -465,7 +465,7 @@ class ToolHub(
         ToolSpec(
             descriptor = ToolDescriptor(
                 name = "load_tools",
-                description = "Make tools that find_tools returned callable from your next step.",
+                description = LOAD_TOOLS_DESCRIPTION,
                 requiredParameters = listOf(
                     ToolParameterDescriptor("names", "Tool names exactly as find_tools listed them.", ToolParameterType.List(itemsType = ToolParameterType.String)),
                 ),
@@ -903,8 +903,12 @@ class ToolHub(
         const val BIG_TOOLSET = 20
         private const val MAX_LOAD_TOOLS = 10
         private const val FIND_TOOLS_DESCRIPTION =
-            "Search every tool not loaded yet, including connected services, by what it does. Returns names " +
-                "and one-line hints; then call load_tools with the ones you need."
+            "Search the tools that are not loaded yet, on the phone and in connected services, by what they do. " +
+                "query: the job in a few words, e.g. \"send an email\". Returns tool names with a one-line hint each. " +
+                "None is callable until you pass its name to load_tools."
+        private const val LOAD_TOOLS_DESCRIPTION =
+            "Make specific tools callable. names: exact tool names as find_tools returned them, prefix included, " +
+                "e.g. \"composio__COMPOSIO_MULTI_EXECUTE_TOOL\". Load only what the task needs."
         private val TYPING = setOf("type_text", "set_value")
 
         /** A phone number as people write it: digits with spaces or hyphens, optionally +. */
@@ -913,7 +917,7 @@ class ToolHub(
         private const val SEND = "Send"
         private const val SEND_IN_CHAT = "Send, don't ask again in this chat"
         private const val CANCEL = "Cancel"
-        private const val PROPOSE_DESCRIPTION = """Ask the user to approve a message or email before it is sent or posted. Call once, when the app, recipient and final text are settled. app: the app it goes out through, e.g. "WhatsApp". to: who receives it, as the user would say it. message: the exact final text, word for word. summary: optional one line. The result says approved, cancelled, or edited with the user's new text."""
+        private const val PROPOSE_DESCRIPTION = """Ask the user to approve a message or email before it goes out, by screen or connected service. Call once, when app, recipient and final text are settled. app: e.g. "WhatsApp", "Gmail". to: the exact address or number you will send to; the name only if you have neither. message: the exact final text. subject: an email's exact subject. Result: approved, cancelled, or edited with the user's new text. The send must then carry exactly the approved recipient, subject and text, with no cc or bcc, or the user is asked again."""
         private val RECIPIENT_NAMES = setOf("phone", "to")
 
         /** Schemes whose first path part is a phone number by definition. */
