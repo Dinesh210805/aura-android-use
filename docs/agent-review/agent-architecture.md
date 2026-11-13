@@ -229,8 +229,8 @@ turn 3".
 - The phone server also adds its own text summary of the screen after each write action
   (`PostActionObservation`, wired in `scopedTool`). It does **not** refresh the som_id cache. That
   is two observations of the same change.
-- `perceive_screen` merges accessibility-tree boxes with OmniParser (YOLOv8 plus ML Kit OCR)
-  boxes; the tree wins on overlap (`PerceiveScreenTool.kt` header).
+- `perceive_screen` is vision only: OmniParser (YOLOv8 plus ML Kit OCR) boxes on a fresh
+  screenshot, numbered from 1001 (`PerceiveScreenTool.kt` header).
 
 ### 6.2 Target: text first, pictures on request
 
@@ -248,10 +248,10 @@ turn 3".
   read the same store. The benchmark's MCP numbers must be re-baselined after the change.
 - **`perceive_screen` som_ids are CV boxes, not accessibility nodes.** A tap on one is a
   coordinate gesture at the box centre. Rules:
-  - They carry a separate prefix (`v1`, `v2`, …) in `PerceptionCache`, so a tree id and a CV id
-    can never be confused, however many tree elements a screen has.
-  - Occlusion checks still run on the coordinate. `ActionGuard` treats a CV id as "unverified
-    target", so a commit label check falls back to the OCR text inside the box.
+  - They are numbered from 1001 (`PerceptionCache.VISION_ID_BASE`; the tap schema is numeric),
+    so a tree id and a CV id can never be confused.
+  - A vision look never replaces the tree look that `read_screen changes_only` diffs against, and
+    a vision id is never rescued by the tree (its OCR label could match a different tree node).
   - The next `read_screen` invalidates them.
   - The ONNX execution provider stays picked per device by `OnnxYoloRunner` (AGENTS.md rule).
 - **Stale descriptions to rewrite:** the `read_screen` description ("Use perceive_screen instead

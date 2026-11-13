@@ -19,9 +19,9 @@ import org.junit.Test
  * regexes were also broad enough to catch unrelated packages.
  *
  * Whether a tree is usable is a property of the TREE, and there are already runtime
- * heuristics that measure it directly (element count, labeled fraction, sibling
- * overlap, empty-band coverage in `TreeSufficiency`), plus the model's own
- * `detail="full"` lever. Those measure; a package list guesses.
+ * heuristics that measure it directly (`read_screen`'s ESCALATE: element count, a blind
+ * tree, empty-band coverage in `TreeSufficiency`), plus the vision-only
+ * `perceive_screen`. Those measure; a package list guesses.
  */
 class UITreeValidatorTest {
 

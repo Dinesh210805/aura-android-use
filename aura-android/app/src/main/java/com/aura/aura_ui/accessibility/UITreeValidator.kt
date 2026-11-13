@@ -31,9 +31,9 @@ data class UITreeValidationResult(
  * segment).
  *
  * The question "can the agent drive this screen from the tree?" is already
- * measured directly, per screen, by `TreeSufficiency` (element count, labeled
- * fraction, overlap, empty-band coverage), and the model can force the visual pass
- * itself with `detail="full"`. Those measure; a package list guessed — and a real
+ * measured directly, per screen, by `read_screen`'s ESCALATE (element count, a blind
+ * tree, empty-band coverage in `TreeSufficiency`), and the model can always call the
+ * vision-only `perceive_screen`. Those measure; a package list guessed — and a real
  * canvas game fails the measurement anyway, because it exposes one node and nothing
  * else.
  */

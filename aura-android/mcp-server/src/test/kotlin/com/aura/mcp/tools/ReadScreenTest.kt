@@ -30,6 +30,11 @@ class ReadScreenTest {
     }
 
     @Test
+    fun `escalates when a full-looking tree hides its controls`() {
+        assertNotNullContains(ReadScreen.escalateReason(elementCount = 32, treeBlind = false, hidesControls = true), "hides")
+    }
+
+    @Test
     fun `does not escalate on a normal screen`() {
         assertNull(ReadScreen.escalateReason(elementCount = 3, treeBlind = false))
         assertNull(ReadScreen.escalateReason(elementCount = 180, treeBlind = false))

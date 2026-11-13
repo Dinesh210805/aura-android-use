@@ -140,7 +140,10 @@ internal class PerceptionCache(
         signature: ScreenSignature.Signature? = null,
         activityAtCapture: Long? = null,
         pkg: String? = null,
+        /** False for a vision look: `read_screen changes_only` keeps diffing against the last tree look. */
+        baseline: Boolean = true,
     ) {
+        val prev = capture
         // Map each cover's bounds back to a som_id on THIS numbering; covers are recorded as
         // bounds because som_ids are reassigned after occlusion runs.
         // associateBy keeps the last duplicate, so interactive elements sort last to win.
@@ -159,8 +162,8 @@ internal class PerceptionCache(
             activity = activityAtCapture ?: activity(),
             signature = signature,
             fingerprints = elements.associate { it.somId to it.fingerprint() },
-            elements = elements,
-            pkg = pkg,
+            elements = if (baseline) elements else prev.elements,
+            pkg = if (baseline) pkg else prev.pkg,
         )
     }
 
@@ -206,6 +209,10 @@ internal class PerceptionCache(
             return Resolution.Fresh(coords.first, coords.second)
         }
 
+        // A vision box has no tree node, and its label is OCR text that could match a tree
+        // element with the same words: never rescue it by the tree.
+        if (somId > VISION_ID_BASE) return stale(generationMoved)
+
         // Second rescue: the whole screen differs, but does THIS element? A gesture asks
         // one question — "will my finger land on the thing the model picked" — and the
         // screen-wide hash answers a much bigger one. Anything that redraws continuously
@@ -243,7 +250,11 @@ internal class PerceptionCache(
         // Either the screen genuinely differs, or we could not tell (no probe, or a
         // tree-blind surface where the hash means nothing). Fail closed — a wrong tap
         // is far worse than a redundant perceive.
-        return Resolution.Stale(
+        return stale(generationMoved)
+    }
+
+    private fun stale(generationMoved: Boolean): Resolution =
+        Resolution.Stale(
             if (generationMoved) {
                 "the screen has changed since the last look (an action or " +
                     "navigation ran after it), so cached som_id coordinates are no longer valid"
@@ -255,7 +266,6 @@ internal class PerceptionCache(
                     "update), so cached som_id coordinates are no longer valid"
             },
         )
-    }
 
     /**
      * Third rescue: the element slid (a list scrolled, a card was inserted above it, a chat
@@ -364,6 +374,9 @@ internal class PerceptionCache(
     companion object {
         /** [coveredBy] value for a cover that has no som_id on the current numbering. */
         const val UNNUMBERED_COVER = -1
+
+        /** `perceive_screen` numbers its vision boxes above this, so they never share an id with the tree. */
+        const val VISION_ID_BASE = 1000
 
         /** Digit runs in a label — see [fingerprint]. */
         private val DIGITS = Regex("\\d+")

@@ -154,6 +154,10 @@ internal fun Server.registerReadScreenTool(
             escalateReason = ReadScreen.escalateReason(
                 elementCount = elements.size,
                 treeBlind = outcome.signature.treeBlind,
+                hidesControls = TreeSufficiency.looksDegraded(
+                    elements,
+                    UiTreeHeuristics.summarize(outcome.payloadJson).screenHeightPx,
+                ),
             ),
             offscreen = ScreenText.offscreen(outcome.payloadJson),
             ids = perceptionCache.somIds,
@@ -224,13 +228,18 @@ internal object ReadScreen {
      * The count is stated in the reason rather than kept internal: "2 elements" lets
      * the agent judge for itself whether that is plausibly the whole screen.
      */
-    fun escalateReason(elementCount: Int, treeBlind: Boolean): String? = when {
+    fun escalateReason(elementCount: Int, treeBlind: Boolean, hidesControls: Boolean = false): String? = when {
         treeBlind ->
             "the accessibility tree cannot describe this screen (custom-rendered — " +
                 "a web page, map, game or canvas); its contents are not what is visible"
         elementCount < MIN_UI_TREE_ELEMENTS ->
             "the tree describes only $elementCount element(s), too few to be this " +
                 "whole screen — it is likely custom-rendered"
+        // An app hiding its controls from accessibility (Swiggy et al.): the list looks full,
+        // so without this the model picks a nearby number instead of noticing the gap.
+        hidesControls ->
+            "over half the screen's height has nothing you can act on in the tree; this app " +
+                "likely hides its controls from accessibility"
         else -> null
     }
 

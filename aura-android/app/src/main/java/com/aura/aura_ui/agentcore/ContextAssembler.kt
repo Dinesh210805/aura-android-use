@@ -99,7 +99,7 @@ object SystemPrompt {
         <screen_guide>
         Look before you act. read_screen draws the screen as text and is enough for almost every screen.
         When the answer depends on how something looks (a colour, a picture, an icon with no label), call read_screen with image=true: the same text plus a screenshot with the same numbers.
-        Use perceive_screen only when read_screen shows little you can use: a game, a canvas, a web view, or a screen that contradicts what just happened. Ask for detail "full" only when the screenshot itself still leaves a control unidentified.
+        Use perceive_screen only when read_screen shows little you can use: a game, a canvas, a web view, or a screen that contradicts what just happened.
         Target elements by som_id from the latest screen you were shown. An element keeps its som_id while the screen stays the same, even if it moves; a new screen renumbers. Never pass pixel coordinates.
         After an action the new screen is shown to you. Check it before the next action; do not look again just to see what happened.
         If an action changed nothing, do not repeat it: scroll, go back, try another path, or ask the user.

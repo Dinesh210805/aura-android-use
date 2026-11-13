@@ -571,6 +571,22 @@ class PerceptionCacheTest {
     }
 
     @Test
+    fun `a vision look keeps the tree look as the changes_only baseline and is never rescued by the tree`() = runBlocking {
+        var gen = 0L
+        val tree = chatsJson("OK", "Boss", "Team")
+        val treeEls = com.aura.mcp.tools.UiTreeToElements.extract(tree, minElements = 1)
+        val cache = PerceptionCache(generation = { gen }, activity = { 0L }, screenProbe = { chatsJson("Boss", "Team", "OK") })
+        cache.update(treeEls, com.aura.mcp.tools.ScreenSignature.of(tree), pkg = "com.whatsapp")
+        // OCR found the same "OK" text at the same spot as the tree button.
+        val vision = treeEls.first { it.label == "OK" }.copy(somId = PerceptionCache.VISION_ID_BASE + 1)
+        cache.update(listOf(vision), com.aura.mcp.tools.ScreenSignature.of(tree), baseline = false)
+
+        assertEquals(treeEls to "com.whatsapp", cache.previous())
+        gen = 1L
+        assertTrue(cache.resolve(PerceptionCache.VISION_ID_BASE + 1) is PerceptionCache.Resolution.Stale)
+    }
+
+    @Test
     fun `with no probe wired the cache keeps its old conservative behaviour`() = runBlocking {
         var gen = 0L
         val cache = PerceptionCache(generation = { gen }, activity = { 0L })

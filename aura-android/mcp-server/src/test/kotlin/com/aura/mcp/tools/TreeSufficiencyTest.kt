@@ -6,13 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * Tiered perception gate: when the accessibility tree alone is rich enough to
- * target the screen, `perceive_screen` skips the CV pass (YOLO + OCR — the
- * 0.4–7 s tail) entirely. The gate must stay conservative: a sparse or mostly
- * unlabeled tree (games, WebView, Canvas, Flutter blobs) escalates to full CV,
- * because a wrongly-marked tree confuses the model worse than the latency costs.
- */
+/** The empty-band check behind `read_screen`'s ESCALATE for apps that hide their controls. */
 class TreeSufficiencyTest {
 
     private fun element(id: Int, label: String) = DetectedElement(
@@ -22,78 +16,6 @@ class TreeSufficiencyTest {
         label = label,
         confidence = 1.0f,
     )
-
-    private fun tree(count: Int, labeledCount: Int): List<DetectedElement> =
-        (1..count).map { element(it, if (it <= labeledCount) "Label $it" else "") }
-
-    @Test
-    fun `a rich well-labeled tree is sufficient`() {
-        // WhatsApp home style: dozens of interactive nodes, mostly labeled.
-        assertTrue(TreeSufficiency.sufficient(tree(count = 24, labeledCount = 20)))
-    }
-
-    @Test
-    fun `an empty tree is never sufficient`() {
-        assertFalse(TreeSufficiency.sufficient(emptyList()))
-    }
-
-    @Test
-    fun `a sparse tree escalates to CV`() {
-        // Camera / game / dialog-only screens: a handful of nodes → the tree may
-        // well be blind to the real controls; run OmniParser.
-        assertFalse(TreeSufficiency.sufficient(tree(count = TreeSufficiency.MIN_ELEMENTS - 1, labeledCount = TreeSufficiency.MIN_ELEMENTS - 1)))
-    }
-
-    @Test
-    fun `a mostly unlabeled tree escalates to CV`() {
-        // Flutter/WebView symptom: many clickable blobs, few real labels — the
-        // model cannot target these; OCR/CV must fill in.
-        assertFalse(TreeSufficiency.sufficient(tree(count = 20, labeledCount = 2)))
-    }
-
-    @Test
-    fun `the boundary values pass`() {
-        val minLabeled = kotlin.math.ceil(TreeSufficiency.MIN_ELEMENTS * TreeSufficiency.MIN_LABELED_FRACTION).toInt()
-        assertTrue(TreeSufficiency.sufficient(tree(count = TreeSufficiency.MIN_ELEMENTS, labeledCount = minLabeled)))
-    }
-
-    @Test
-    fun `stacked overlapping strips escalate to CV — the Apple Music pathology`() {
-        // Observed on the real device: Apple Music's tree reported the playlist
-        // grid as ~8 full-width strips stacked on top of each other (pairwise
-        // IoU ≫ 0.5) while the real tiles/rows had no boxes at all. Count and
-        // label checks passed; the structure is the tell.
-        val strips = (1..8).map { i ->
-            DetectedElement(
-                somId = i,
-                // Full-width bands offset by 40px each, 200px tall → heavy mutual overlap.
-                bbox = BBox(x1 = 0, y1 = 300 + i * 40, x2 = 1080, y2 = 500 + i * 40),
-                elementType = "clickable",
-                label = "Playlist row $i",
-                confidence = 1.0f,
-            )
-        }
-        val sane = tree(count = 6, labeledCount = 6) // disjoint, labeled
-        assertFalse(TreeSufficiency.sufficient(strips + sane))
-    }
-
-    @Test
-    fun `legitimate container-child nesting does not trip the overlap check`() {
-        // A clickable row containing a small clickable button is normal Android:
-        // IoU(child, container) is small because the union is the container.
-        val container = DetectedElement(1, BBox(0, 0, 1080, 200), "clickable", "Row", 1.0f)
-        val child = DetectedElement(2, BBox(900, 50, 1050, 150), "clickable", "Button", 1.0f)
-        val rest = (3..12).map { element(it, "Label $it") }
-        assertTrue(TreeSufficiency.sufficient(listOf(container, child) + rest))
-    }
-
-    // ── looksDegraded — the "app hides its UI from a11y services" detector ──────
-    //
-    // Swiggy pathology (measured live): a passing sufficiency check (32 labeled,
-    // low-overlap elements) whose boxes ALL sit in the bottom favourites strip
-    // (y≈2295-2716 of a 2772px screen) while the search bar, tabs, and banners
-    // filling the top 80% have NO boxes. The count/label/overlap gate can't see
-    // this; a large empty vertical band is the tell.
 
     private fun clusteredTree(topY: Int, bottomY: Int, count: Int): List<DetectedElement> =
         (1..count).map { i ->
