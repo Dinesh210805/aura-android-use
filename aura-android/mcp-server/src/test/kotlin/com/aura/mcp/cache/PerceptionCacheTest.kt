@@ -558,6 +558,19 @@ class PerceptionCacheTest {
     }
 
     @Test
+    fun `a small sheet's button inside a much bigger new screen is not followed`() = runBlocking {
+        var gen = 0L
+        val before = chatsJson("Share", "Copy link")
+        val after = chatsJson("Inbox", "Sent", "Drafts", "Spam", "Share", "Copy link", "Archive", "Trash")
+        val captured = com.aura.mcp.tools.UiTreeToElements.extract(before, minElements = 1)
+        val cache = PerceptionCache(generation = { gen }, activity = { 0L }, screenProbe = { after })
+        cache.update(captured, com.aura.mcp.tools.ScreenSignature.of(before))
+        gen = 1L
+
+        assertTrue(cache.resolve(somOf(captured, "Share")) is PerceptionCache.Resolution.Stale)
+    }
+
+    @Test
     fun `with no probe wired the cache keeps its old conservative behaviour`() = runBlocking {
         var gen = 0L
         val cache = PerceptionCache(generation = { gen }, activity = { 0L })

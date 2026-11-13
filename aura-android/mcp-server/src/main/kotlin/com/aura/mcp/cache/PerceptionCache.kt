@@ -280,7 +280,8 @@ internal class PerceptionCache(
         if (snap.elements.count { it.identity() == key } != 1) return null
         val then = snap.elements.mapTo(HashSet()) { it.identity() }
         val now = liveElements.mapTo(HashSet()) { it.identity() }
-        if (then.count { it in now } * 2 < then.size) return null
+        // Same rule as SomIds.assign: a small sheet's labels inside a big new screen is not the same screen.
+        if (then.count { it in now } * 2 < maxOf(then.size, now.size)) return null
         val match = liveElements.singleOrNull { it.identity() == key } ?: return null
         if (match.coveredBy != null) {
             return Resolution.Stale("something now covers that element (a sheet, dialog or popup opened after the last look)")
