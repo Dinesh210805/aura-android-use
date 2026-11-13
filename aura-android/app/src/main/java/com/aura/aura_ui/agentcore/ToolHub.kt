@@ -515,10 +515,13 @@ class ToolHub(
          * Send is the commit, and it is gated there.
          */
         private fun sendsOut(args: JsonObject, argsText: String): Boolean {
-            if (spec.name in OPENS_LOCALLY) return false
-            val url = args.values.firstNotNullOfOrNull { v -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { "://" in it || it.startsWith("intent:") } }
-            if (spec.name == OPEN_DEEPLINK && url != null && runCatching { opensInstalledApp(url) }.getOrDefault(false)) return false
-            return spec.egress || "://" in argsText
+            val urls = args.values.mapNotNull { v -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { "://" in it || it.startsWith("intent:") } }
+            // No URL: an intent or file opened on this phone hands its text to an app that still
+            // needs its own Send. A URL anywhere must land in an installed, non-browser app, or a
+            // browser could carry private text off the phone in the address.
+            if (urls.isEmpty()) return if (spec.name in OPENS_LOCALLY) false else spec.egress || "://" in argsText
+            val local = spec.name == OPEN_DEEPLINK || spec.name in OPENS_LOCALLY
+            return !(local && urls.all { runCatching { opensInstalledApp(it) }.getOrDefault(false) })
         }
 
         override fun decodeResult(rawResult: JSONElement, serializer: JSONSerializer): ToolOutcome =

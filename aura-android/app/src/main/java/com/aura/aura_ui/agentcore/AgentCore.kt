@@ -118,7 +118,11 @@ class AgentCore private constructor(private val app: Context) {
      */
     private fun opensInstalledApp(url: String): Boolean {
         val pm = app.packageManager
-        val view = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        val view = if (url.startsWith("intent:")) {
+            runCatching { Intent.parseUri(url, Intent.URI_INTENT_SCHEME) }.getOrNull() ?: return false
+        } else {
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        }
         val handler = pm.resolveActivity(view, 0)?.activityInfo?.packageName ?: return false
         if (handler == "android") return false // the chooser: more than one app, nothing decided
         val browsers = pm.queryIntentActivities(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com")), 0)
