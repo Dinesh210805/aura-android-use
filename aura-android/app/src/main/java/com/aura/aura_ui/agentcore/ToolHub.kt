@@ -294,7 +294,11 @@ class ToolHub(
      */
     suspend fun observeScreen(turn: TurnState): String? {
         val (spec, source) = catalog[READ_SCREEN] ?: return null
-        return HubTool(spec, source, turn).gated(JsonObject(emptyMap())).takeIf { !it.isError }?.text
+        // Only what changed when the screen is the same one; the server sends the whole screen
+        // when the app changed or most of it did. `ContextAssembler.evictStaleScreens` keeps the
+        // full screen a diff is relative to.
+        val args = JsonObject(mapOf("changes_only" to JsonPrimitive(true)))
+        return HubTool(spec, source, turn).gated(args).takeIf { !it.isError }?.text
     }
 
     /** Every tool, registered so Koog can run any call the model makes. */

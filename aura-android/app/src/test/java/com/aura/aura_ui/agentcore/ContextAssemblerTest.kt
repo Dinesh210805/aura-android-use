@@ -16,6 +16,25 @@ class ContextAssemblerTest {
     }
 
     @Test
+    fun `diffs keep the full screen they are relative to`() {
+        val tools = listOf("read_screen", null, "read_screen", "read_screen", null, "read_screen")
+        // full, -, full, diff, -, diff: the second full screen and both diffs after it stay.
+        val diff = listOf(false, false, false, true, false, true)
+        assertEquals(setOf(0), ContextAssembler.staleIndices(tools, diff))
+        // A new full screen makes the old full screen and its diffs stale.
+        assertEquals(setOf(0, 2, 3, 5), ContextAssembler.staleIndices(tools + "read_screen", diff + false))
+        // Only diffs in reach: keep the newest.
+        assertEquals(setOf(0), ContextAssembler.staleIndices(listOf("read_screen", "read_screen"), listOf(true, true)))
+    }
+
+    @Test
+    fun `a changes-only payload is recognised as a diff`() {
+        assertTrue(ContextAssembler.isDiffScreen("SCREEN 1080x2400 x\nCHANGES since your last look; som_ids of unchanged elements are the same."))
+        assertTrue(ContextAssembler.isDiffScreen("NO CHANGES since your last look."))
+        assertFalse(ContextAssembler.isDiffScreen("SCREEN 1080x2400 x\n+----+\n| 1 Send |"))
+    }
+
+    @Test
     fun `stale screens are replaced in a real message history`() {
         val messages = prompt("t") {
             user("open settings")

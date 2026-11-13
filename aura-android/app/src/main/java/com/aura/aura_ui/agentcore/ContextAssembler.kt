@@ -223,12 +223,26 @@ object ContextAssembler {
 
     /**
      * Indices of screen observations that a newer one has replaced.
-     * [screenToolAt] holds, per message, the screen tool it carries or null.
+     * [screenToolAt] holds, per message, the screen tool it carries or null. [isDiff] marks, per
+     * message, a screen that lists only what changed since the look before it.
+     * - Contract: the newest full screen and every diff after it are kept, because a diff means
+     *   nothing without the screen it is relative to. Everything older is stale. With no full
+     *   screen in reach, only the newest observation is kept.
      */
-    fun staleIndices(screenToolAt: List<String?>): Set<Int> {
-        val newest = screenToolAt.indexOfLast { it != null }
-        return screenToolAt.indices.filter { screenToolAt[it] != null && it != newest }.toSet()
+    fun staleIndices(screenToolAt: List<String?>, isDiff: List<Boolean> = emptyList()): Set<Int> {
+        val screens = screenToolAt.indices.filter { screenToolAt[it] != null }
+        val newestFull = screens.lastOrNull { isDiff.getOrNull(it) != true }
+        val keepFrom = when {
+            newestFull != null -> newestFull
+            else -> screens.lastOrNull() ?: return emptySet()
+        }
+        return screens.filter { it < keepFrom }.toSet()
     }
+
+    /** True for a `read_screen` payload that lists only changes ("CHANGES since…", "NO CHANGES since…"). */
+    internal fun isDiffScreen(text: String): Boolean = DIFF_MARKERS.any { it in text }
+
+    private val DIFF_MARKERS = listOf("CHANGES since your last look", "NO CHANGES since your last look")
 
     /**
      * Replace every screen observation except the newest with a one-line placeholder, and drop
@@ -237,7 +251,7 @@ object ContextAssembler {
      *   lands. What the model learned from it lives on in its own later messages.
      */
     fun evictStaleScreens(messages: List<Message>): List<Message> {
-        val stale = staleIndices(messages.map { it.screenToolOrNull() })
+        val stale = staleIndices(messages.map { it.screenToolOrNull() }, messages.map { isDiffScreen(it.screenText()) })
         val newestImage = messages.indexOfLast { it.isScreenImage() }
         return messages.mapIndexedNotNull { index, message ->
             when {
@@ -315,6 +329,11 @@ object ContextAssembler {
             ?: "read_screen".takeIf { isAfterAction() }
 
     private fun Message.isAfterAction(): Boolean = this is Message.User && textContent().startsWith(AFTER_ACTION)
+
+    /** The screen text a message carries: a screen tool's result, or the after-action read. */
+    private fun Message.screenText(): String =
+        parts.filterIsInstance<MessagePart.Tool.Result>().firstOrNull { it.tool in SCREEN_TOOLS }?.output
+            ?: textContent().takeIf { isAfterAction() }.orEmpty()
 
     private fun Message.hasAttachment(): Boolean = parts.any { it is MessagePart.Attachment }
 
