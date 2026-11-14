@@ -174,6 +174,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     val status = MutableStateFlow<String?>(null)
     val plan = MutableStateFlow<AgentEvent.PlanUpdated?>(null)
 
+    /** The reply as the model writes it, or null when nothing is being written. */
+    val live = MutableStateFlow<String?>(null)
+
     /** The last turn stopped at its time limit; the chat offers "Keep going". */
     val outOfTime = MutableStateFlow(false)
 
@@ -334,17 +337,21 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     val turn = if (goal != null) {
                         Goals.goalLoop(
                             goal,
-                            turn = { said, quiet -> core.engine.runTurn(id, said, uris.mapNotNull(::attachment).takeIf { !quiet }.orEmpty(), quiet = quiet) },
+                            turn = { said, quiet -> core.engine.runTurn(id, said, uris.mapNotNull(::attachment).takeIf { !quiet }.orEmpty(), quiet = quiet, stream = true) },
                             judge = core::judgeGoal,
                             notice = { core.threads.append(id, ItemKind.NOTICE, it) },
                         )
                     } else {
-                        core.engine.runTurn(id, text, uris.mapNotNull(::attachment), handOffScreen = core.handsOffScreen())
+                        core.engine.runTurn(id, text, uris.mapNotNull(::attachment), handOffScreen = core.handsOffScreen(), stream = true)
                     }
                     turn.collect { event ->
                         when (event) {
                             is AgentEvent.TurnStarted -> status.value = "Thinking"
-                            is AgentEvent.ToolStarted -> status.value = StepPhrase.of(event.tool, event.argsPreview, null)
+                            is AgentEvent.ToolStarted -> {
+                                live.value = null
+                                status.value = StepPhrase.of(event.tool, event.argsPreview, null)
+                            }
+                            is AgentEvent.Streaming -> live.value = event.text.takeIf { it.isNotBlank() }
                             is AgentEvent.ToolFinished -> status.value = "Thinking"
                             is AgentEvent.PlanUpdated -> plan.value = event
                             // Work on the screen happens on the overlay, where it can be watched and paused.
@@ -353,12 +360,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                                 TurnEnd.LIMIT -> outOfTime.value = true
                                 else -> Unit
                             }
-                            is AgentEvent.AssistantText, is AgentEvent.Card, is AgentEvent.UserPromptRequested -> Unit
+                            // The written reply is in the transcript now; the live copy goes.
+                            is AgentEvent.AssistantText -> live.value = null
+                            is AgentEvent.Card, is AgentEvent.UserPromptRequested -> Unit
                         }
                     }
                 } finally {
                     running.value = false
                     status.value = null
+                    live.value = null
                 }
             }
         }
@@ -405,6 +415,7 @@ fun AgentChatScreen(
     val running by vm.running.collectAsState()
     val status by vm.status.collectAsState()
     val plan by vm.plan.collectAsState()
+    val live by vm.live.collectAsState()
     val outOfTime by vm.outOfTime.collectAsState()
     val interrupted by vm.interrupted.collectAsState()
     val learned by vm.learned.collectAsState()
@@ -452,7 +463,7 @@ fun AgentChatScreen(
                     if (items.isEmpty()) {
                         Welcome(profile.firstName, Modifier.fillMaxSize().padding(insets), onPrompt = { draft = it })
                     } else {
-                        Transcript(items, vm::pick, insets, Modifier.fillMaxSize())
+                        Transcript(items, vm::pick, insets, Modifier.fillMaxSize(), live)
                     }
                 }
                 TopBar(
@@ -700,15 +711,25 @@ private fun entries(items: List<ItemRow>): List<Entry> = buildList {
 }
 
 @Composable
-private fun Transcript(items: List<ItemRow>, onPick: (String) -> Unit, padding: PaddingValues, modifier: Modifier) {
+private fun Transcript(items: List<ItemRow>, onPick: (String) -> Unit, padding: PaddingValues, modifier: Modifier, live: String? = null) {
     val list = rememberLazyListState()
     val shown = remember(items) { entries(items) }
-    LaunchedEffect(shown.size) { if (shown.isNotEmpty()) list.animateScrollToItem(shown.lastIndex) }
+    val aura = LocalAura.current
+    LaunchedEffect(shown.size, live != null) {
+        val last = shown.size + (if (live != null) 1 else 0) - 1
+        if (last >= 0) list.animateScrollToItem(last)
+    }
     LazyColumn(modifier.fillMaxWidth(), state = list, contentPadding = padding, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(shown, key = { it.key }) { entry ->
             when (entry) {
                 is Entry.Steps -> StepsFold(entry.rows)
                 is Entry.One -> ItemView(entry.row, onPick)
+            }
+        }
+        // The reply while it is being written; the stored item replaces it when it is done.
+        live?.let { text ->
+            item(key = "live") {
+                RichText(text, AuraType.body, aura.label, Modifier.padding(horizontal = 12.dp).onPage().padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }
     }

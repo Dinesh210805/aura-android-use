@@ -171,6 +171,14 @@ class FallbackClient(
         return fallback.client.execute(prompt.withParams(fallback.params), fallback.model, tools)
     }
 
+    /** Streams from whichever provider the turn is on; a failed stream falls back to [execute] in the engine. */
+    override fun executeStreaming(
+        prompt: ai.koog.prompt.Prompt,
+        model: LLModel,
+        tools: List<ai.koog.agents.core.tools.ToolDescriptor>,
+    ): kotlinx.coroutines.flow.Flow<ai.koog.prompt.streaming.StreamFrame> =
+        if (switched) fallback.client.executeStreaming(prompt.withParams(fallback.params), fallback.model, tools) else main.executeStreaming(prompt, model, tools)
+
     override suspend fun moderate(prompt: ai.koog.prompt.Prompt, model: LLModel): ai.koog.prompt.dsl.ModerationResult =
         main.moderate(prompt, model)
 

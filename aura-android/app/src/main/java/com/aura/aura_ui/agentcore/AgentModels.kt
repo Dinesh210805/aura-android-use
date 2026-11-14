@@ -152,4 +152,10 @@ sealed interface AgentEvent {
     data class PlanUpdated(val steps: List<String>, val done: Int) : AgentEvent
 
     data class TurnEnded(val end: TurnEnd, val message: String?) : AgentEvent
+
+    /**
+     * The reply so far while the model writes it, in a turn run with `stream`. For display only:
+     * replaced by [AssistantText] or cleared ("") when the reply turns out to call a tool.
+     */
+    data class Streaming(val text: String) : AgentEvent
 }

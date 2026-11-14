@@ -24,6 +24,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.toList
+import ai.koog.prompt.streaming.StreamFrame
+import ai.koog.prompt.streaming.toMessageResponse
 import kotlinx.coroutines.withContext
 
 /**
@@ -135,6 +139,8 @@ class AgentEngine(
         continuesHandOff: Boolean = false,
         /** Keep the user's message out of the visible transcript: a goal's "keep going" ([Goals]). */
         quiet: Boolean = false,
+        /** Show the reply as the model writes it ([AgentEvent.Streaming]); the chat sets it. */
+        stream: Boolean = false,
     ): Flow<AgentEvent> = channelFlow {
         refusal(text)?.let { reason ->
             threads.append(threadId, ItemKind.USER, text, attachments = attachments)
@@ -168,7 +174,7 @@ class AgentEngine(
         // A hand-off saved the chat turn's work, which already holds the request: say only "go on".
         val asked = if (continuesHandOff && stored.messages.isNotEmpty()) CONTINUE_ON_SCREEN else text
         val ended = try {
-            val answer = execute(main, turn, run, stored.messages.isEmpty(), text, asked, attachments, carried)
+            val answer = execute(main, turn, run, stored.messages.isEmpty(), text, asked, attachments, carried, stream)
             if (run.end == TurnEnd.HANDED_OFF) {
                 AgentEvent.TurnEnded(TurnEnd.HANDED_OFF, null)
             } else {
@@ -233,6 +239,7 @@ class AgentEngine(
         attachments: List<Attachment>,
         /** A summary of this chat before a fresh start, for the first message; see [earlier]. */
         carried: String? = null,
+        stream: Boolean = false,
     ): String {
         hub.refresh()
         beforeTurn()
@@ -263,7 +270,7 @@ class AgentEngine(
                 // A long chat with no tool calls never reaches the loop below, so it compacts here.
                 compactIfOver(budget, turn)
                 tools = hub.visible(turn)
-                requestLLM()
+                ask(turn, stream)
             }
             noteThinking(turn, reply)
             var steps = 0
@@ -377,7 +384,7 @@ class AgentEngine(
                     } else {
                         compactIfOver(budget, turn)
                         tools = hub.visible(turn)
-                        requestLLM()
+                        ask(turn, stream)
                     }
                 }
                 noteThinking(turn, reply)
@@ -396,7 +403,7 @@ class AgentEngine(
                     reply = llm.writeSession {
                         appendPrompt { user { text(EMPTY_REPLY) } }
                         tools = hub.visible(turn)
-                        requestLLM()
+                        ask(turn, stream)
                     }
                     noteThinking(turn, reply)
                     continue
@@ -408,7 +415,7 @@ class AgentEngine(
                     reply = llm.writeSession {
                         appendPrompt { user { text(TEXT_CALL) } }
                         tools = hub.visible(turn)
-                        requestLLM()
+                        ask(turn, stream)
                     }
                     noteThinking(turn, reply)
                     continue
@@ -425,7 +432,7 @@ class AgentEngine(
                 reply = llm.writeSession {
                     appendPrompt { user { text(told) } }
                     tools = hub.visible(turn)
-                    requestLLM()
+                    ask(turn, stream)
                 }
                 noteThinking(turn, reply)
             }
@@ -545,6 +552,37 @@ class AgentEngine(
         )
     }
 
+    /**
+     * One model request. Streamed, the words show as they arrive and the reply is put together from
+     * the frames; either way the prompt ends exactly as [requestLLM] leaves it, so everything after
+     * (tool calls, the completion check, the stored item) sees the same reply.
+     * - Fails: a stream that breaks is dropped and the request is made again without streaming.
+     */
+    private suspend fun AIAgentLLMWriteSession.ask(turn: TurnState, stream: Boolean): Message.Assistant {
+        if (!stream) return requestLLM()
+        val before = prompt
+        return try {
+            val written = StringBuilder()
+            val frames = requestLLMStreaming().onEach { frame ->
+                if (frame is StreamFrame.TextDelta) {
+                    written.append(frame.text)
+                    turn.emit(AgentEvent.Streaming(ContextAssembler.visibleSoFar(written.toString())))
+                }
+            }.toList()
+            val reply = frames.toMessageResponse()
+            rewritePrompt { it.withMessages { messages -> messages + reply } }
+            if (reply.parts.any { it is MessagePart.Tool.Call }) turn.emit(AgentEvent.Streaming(""))
+            reply
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            journal?.note(turn.runId, "Streaming failed; asked again without it", e.toString(), ok = false)
+            rewritePrompt { before }
+            turn.emit(AgentEvent.Streaming(""))
+            requestLLM()
+        }
+    }
+
     /** [main]'s executor, switching to the fallback provider for the rest of the turn if [main]'s is down. */
     private fun executorFor(main: ResolvedModel, turn: TurnState): PromptExecutor {
         val fallback = models.resolve(ModelRole.FALLBACK)?.takeIf { it.label != main.label } ?: return main.executor()
@@ -649,7 +687,7 @@ class AgentEngine(
                 threads.append(threadId, ItemKind.TOOL, event.resultPreview, tool = event.tool, ok = event.ok)
             is AgentEvent.UserPromptRequested -> threads.append(threadId, ItemKind.PROMPT, event.question)
             is AgentEvent.Card -> threads.append(threadId, ItemKind.CARD, event.card.encode())
-            is AgentEvent.PlanUpdated,
+            is AgentEvent.PlanUpdated, is AgentEvent.Streaming,
             is AgentEvent.ToolStarted, is AgentEvent.TurnStarted, is AgentEvent.TurnEnded -> Unit
         }
     }

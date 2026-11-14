@@ -456,7 +456,9 @@ fun StepsFold(steps: List<ItemRow>) {
         ) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(if (failed > 0) aura.warning else aura.success))
             Spacer(Modifier.width(8.dp))
-            val summary = "${steps.size} ${if (steps.size == 1) "step" else "steps"}" + if (failed > 0) " · $failed did not work" else ""
+            val seconds = (steps.last().atMs - steps.first().atMs) / 1_000
+            val worked = if (seconds > 0) "Worked for ${if (seconds < 60) "$seconds s" else "${seconds / 60} min"} · " else ""
+            val summary = worked + "${steps.size} ${if (steps.size == 1) "step" else "steps"}" + if (failed > 0) " · $failed did not work" else ""
             Text(summary, style = AuraType.caption, color = aura.secondary)
             Icon(
                 Icons.Rounded.KeyboardArrowDown,

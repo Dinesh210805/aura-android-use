@@ -240,4 +240,11 @@ class ContextAssemblerTest {
         assertEquals(stored[3].textContent(), again.textContent())
         assertTrue(again.parts.none { it is MessagePart.Attachment })
     }
+
+    @Test
+    fun `a reply being written shows no reasoning, closed or still open`() {
+        assertEquals("Done.", ContextAssembler.visibleSoFar("<think>plan it</think>Done."))
+        assertEquals("", ContextAssembler.visibleSoFar("<think>still thinking about"))
+        assertEquals("Hi ", ContextAssembler.visibleSoFar("Hi <thinking>hmm"))
+    }
 }

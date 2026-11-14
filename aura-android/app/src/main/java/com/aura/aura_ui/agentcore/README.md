@@ -50,7 +50,7 @@ also pulls the folder.
 | File | What it holds |
 |---|---|
 | `AgentCore.kt` | Composition root. `AgentCore.get(context)` builds everything; `runTask` (the overlay and voice entry); the request preamble (catalog deep links for the named app, open browser tabs); the 15-minute `AgentWorker`, started from `AuraApplication`; notification intake; bundled skills. |
-| `AgentEngine.kt` | The loop. `runTurn()` returns a `Flow<AgentEvent>`; `steer()` adds a message to a running turn. |
+| `AgentEngine.kt` | The loop. `runTurn()` returns a `Flow<AgentEvent>`; `steer()` adds a message to a running turn. With `stream` (the chat sets it) each request streams for display (`AgentEvent.Streaming`) and the reply is assembled from the frames, so the prompt and everything after it are the same as without; a broken stream is asked again without streaming. |
 | `AgentModels.kt` | Shared vocabulary: `ToolRisk`, `Origin`, `RunMode`, `AgentEvent`, `TurnLimits`. Pure Kotlin. |
 | `Cards.kt` | `ChatCard`: files, contacts and results, built by the hub from `find_files` and `resolve_contact` results, stored as `CARD` items. Pure Kotlin. |
 | `SafetyGate.kt` | Allow, ask or deny for every tool call; taint tracking; secret patterns; the fence for untrusted text. |
@@ -177,7 +177,7 @@ stores (in `ModelGateway.kt`); and in `AgentCore.kt`, `TaskResearch` and `WebRes
 
 - A local model. `Ambient.kt` has the `LocalModel` seam; digests are written by rules until one
   is plugged in. It has to be LiteRT-LM: ML Kit's Gemini Nano refuses to run in the background.
-- Streaming replies, and a separate FAST model setting (FAST is MAIN at its lightest thinking).
+- A separate FAST model setting (FAST is MAIN at its lightest thinking).
 - Remote trace export UI (`RemoteTraces` exists, nothing sets it).
 - Resuming a turn after the app is killed. The overlay's resume chip still offers the other
   agent's runs only.

@@ -487,6 +487,13 @@ Latest instruction: the user's most recent instruction or correction, word for w
         return Message.User(parts, metaInfo, id)
     }
 
+    /** A reply still being written, without its reasoning: closed `<think>` blocks and an open one. Pure. */
+    fun visibleSoFar(text: String): String =
+        text.replace(CLOSED_THINKING, "").replace(OPEN_THINKING, "").trimStart()
+
+    private val CLOSED_THINKING = Regex("(?s)<(think|thought|thinking)>.*?</\\1>")
+    private val OPEN_THINKING = Regex("(?s)<(think|thought|thinking)>.*$")
+
     const val IMAGE_MARKER = "[image: "
     const val REPLAY_IMAGES = 3
     private val MARKER = Regex("""\[image: ([^\]\n]+)]""")

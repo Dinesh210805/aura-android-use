@@ -379,6 +379,7 @@ class AgentCore private constructor(private val app: Context) {
                     }
                     is AgentEvent.AssistantText -> if (!event.final) onEvent(AgentStreamEvent.Narration(event.text))
                     is AgentEvent.PlanUpdated -> onEvent(AgentStreamEvent.Plan(event.steps, event.done))
+                    is AgentEvent.Streaming -> Unit
                     is AgentEvent.Card, is AgentEvent.TurnStarted, is AgentEvent.UserPromptRequested -> Unit
                 }
             }
