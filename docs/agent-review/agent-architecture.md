@@ -856,15 +856,14 @@ Code lives in `aura-android/app/src/main/java/com/aura/aura_ui/agentcore/` (see 
 | 4. Approvals | Done (`propose_action`, chat grants, deny lists, two security-review rounds). E3 bench scenarios for sends: check whether they exist; add if not. |
 | 5. Memory and learning | Done: `memory` tool with usage header and staging, `agentcore.db` v2 with `MIGRATION_1_2`, memory screen, run digests, idle review (`Learning.kt`), skill drafts, skills with `app:`/`steps:`, `do_steps`, curator, 6-hour fresh start with thread summary, one-time import of the old agent's facts. Not built: layer 5 recall (only if the eval asks); the voice companion still uses its own store. |
 | 6. Connectors | Built: key in any header (Composio preset), risk from MCP annotations, per-call risk for Composio multi-execute, `find_tools`/`load_tools`, subject on the send card, routing prompt. Left: verify "email Ravi the report" = one connector call and one approval against the live Composio server (needs the user's consumer key and a phone); generic MCP OAuth 2.1 (PKCE, dynamic client registration, Custom Tab, app-link redirect) for GitHub/Notion/Linear; per-toolkit pinning (not needed for Composio Connect's 7 meta-tools). |
-| 7. Assistant features | Not started: goal mode (5.6) with the Fable goal judge, heartbeat, `/btw`, daily briefing, personality (section 15). |
+| 7. Assistant features | Done: goal mode (5.6, `Goals.kt`, eval task 33). Left: heartbeat, `/btw`, daily briefing, personality (section 15). |
 | 8. The chat | Not started: section 21, plus streaming. |
-| Hardening | Not started. Known: `AgentRunLoggerTrailTest` (old agent) is flaky in the full suite and passes alone; section 18 defects to re-check; no device smoke test of phases 4 to 6 yet. |
+| Hardening | Not started. Fixed: `AgentRunLoggerTrailTest` read the first session folder on disk, which another test's writer could still be filling; it now matches its own session. Known: section 18 defects to re-check; no device smoke test of phases 4 to 6 yet. |
 | Benchmark | The user starts it (`benchmark/suite/suite.py`); never start or restart it yourself. |
 
 Fable prompt work (section 20) done: system prompt sections (routes, tools, memory, skills,
 safety's `propose_action`), compaction summary, completion judge, idle review, thread summary,
-`memory`/`do_steps`/`find_tools`/`load_tools`/`propose_action` descriptions. Left: goal judge
-(phase 7), approval card text, denial message and voice read-out (item 6), and a re-check of the
+`memory`/`do_steps`/`find_tools`/`load_tools`/`propose_action` descriptions, goal judge. Left: approval card text, denial message and voice read-out (item 6), and a re-check of the
 `read_screen`/`perceive_screen` descriptions against their budget.
 
 ## References

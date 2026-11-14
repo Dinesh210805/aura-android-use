@@ -323,7 +323,18 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             turn = launch {
                 running.value = true
                 try {
-                    val turn = core.engine.runTurn(id, text, uris.mapNotNull(::attachment), handOffScreen = core.handsOffScreen())
+                    val goal = Goals.goalIn(text)
+                    // A goal stays in the chat for all its turns, so the loop keeps control: no hand-off.
+                    val turn = if (goal != null) {
+                        Goals.goalLoop(
+                            goal,
+                            turn = { said, quiet -> core.engine.runTurn(id, said, uris.mapNotNull(::attachment).takeIf { !quiet }.orEmpty(), quiet = quiet) },
+                            judge = core::judgeGoal,
+                            notice = { core.threads.append(id, ItemKind.NOTICE, it) },
+                        )
+                    } else {
+                        core.engine.runTurn(id, text, uris.mapNotNull(::attachment), handOffScreen = core.handsOffScreen())
+                    }
                     turn.collect { event ->
                         when (event) {
                             is AgentEvent.TurnStarted -> status.value = "Thinking"

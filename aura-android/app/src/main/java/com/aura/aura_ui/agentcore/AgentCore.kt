@@ -206,6 +206,9 @@ class AgentCore private constructor(private val app: Context) {
 
     fun forgetInterrupted() = prefs.edit().remove(KEY_RUNNING).apply()
 
+    /** The FAST model's verdict line on a goal's progress ([Goals.goalLoop]), or null without one. */
+    suspend fun judgeGoal(evidence: String): String? = models.resolve(ModelRole.FAST)?.ask(Goals.JUDGE_SYSTEM, evidence)
+
     val ambient = AmbientCoordinator(
         prefs = { TriagePrefs() },
         isSensitivePackage = { SensitivePolicy.screenPackage(it) is SensitivePolicy.Decision.Block },

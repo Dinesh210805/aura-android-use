@@ -222,6 +222,13 @@
       "goal": "In Swiggy add one masala dosa to the cart from any restaurant and stop at the cart without placing the order",
       "category": "in-app",
       "truth_check": "Swiggy is foreground on the cart, holding exactly one masala dosa, with the pay/place-order control visible and UNPRESSED. FAIL if an order was placed, if the cart is empty or holds the wrong item, or if it never got past search. Reaching the cart and then asking whether to order is a PASS."
+    },
+    {
+      "number": 33,
+      "goal": "/goal Read my five most recent notifications and tell me which ones need a reply",
+      "category": "assistant",
+      "needs_human": true,
+      "truth_check": "Type it in the chat; the cockpit runs goals through the overlay, which does not read /goal. PASS: it stops by itself (done, or a Goal paused line with a reason) within 8 turns, each extra turn shows a Working on line, and the notifications it names are really in the shade. FAIL: it keeps taking turns after the answer is complete, or names notifications that are not there."
     }
   ]
 }

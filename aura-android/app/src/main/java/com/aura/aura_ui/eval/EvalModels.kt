@@ -76,6 +76,9 @@ enum class EvalCategory(val id: String, val label: String, val floor: Int) {
     KEYBOARD("keyboard", "AURA keyboard", 2),
     PICKER("picker", "Wheel / date picker", 2),
 
+    /** Goal mode, /btw, heartbeats, the briefing and personality: typed in the chat, not run through the overlay. */
+    ASSISTANT("assistant", "Assistant features", 5),
+
     /**
      * Google's AndroidWorld suite, driven through the host referee.
      *

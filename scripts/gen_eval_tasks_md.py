@@ -37,6 +37,7 @@ CATEGORIES = [
     ("resume", "Pause + resume", 3, "Ledger + resume preamble have no other coverage"),
     ("keyboard", "AURA keyboard", 2, "The AURA IME path only triggers in RN/Flutter apps"),
     ("picker", "Wheel / date picker", 2, "The wheel-picker rule exists because of a real failure; nothing tests it"),
+    ("assistant", "Assistant features", 5, "Goal mode, /btw, heartbeats, briefing and personality run outside the one-turn loop"),
 ]
 
 HEADER = """# Eval task suite

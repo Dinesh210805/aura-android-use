@@ -124,6 +124,13 @@ each one for the device shell.
 | 30 | `Set a timer for 12 minutes` |  | A timer counting down from 12 minutes. Any other duration is a FAIL. |
 
 
+### Assistant features — 1 task(s)  ⚠ **under the floor of 5**
+
+| # | goal | needs you | truth check |
+|---|------|-----------|-------------|
+| 33 | `/goal Read my five most recent notifications and tell me which ones need a reply` | yes | Type it in the chat; the cockpit runs goals through the overlay, which does not read /goal. PASS: it stops by itself (done, or a Goal paused line with a reason) within 8 turns, each extra turn shows a Working on line, and the notifications it names are really in the shade. FAIL: it keeps taking turns after the answer is complete, or names notifications that are not there. |
+
+
 ### Coverage floors
 
 | Category | Have | Floor | Why it must be represented |
@@ -137,8 +144,9 @@ each one for the device shell.
 | `resume` | 3 | 3 | Ledger + resume preamble have no other coverage |
 | `keyboard` | 2 | 2 | The AURA IME path only triggers in RN/Flutter apps |
 | `picker` | 2 | 2 | The wheel-picker rule exists because of a real failure; nothing tests it |
+| `assistant` | 1 ⚠ | 5 | Goal mode, /btw, heartbeats, briefing and personality run outside the one-turn loop |
 
-**32 tasks total; 8 need you at the phone** (19, 20, 21, 24, 25, 26, 27, 29). The cockpit can skip those and run the rest unattended, which is what makes a full sitting affordable.
+**33 tasks total; 9 need you at the phone** (19, 20, 21, 24, 25, 26, 27, 29, 33). The cockpit can skip those and run the rest unattended, which is what makes a full sitting affordable.
 
 
 ## Preconditions

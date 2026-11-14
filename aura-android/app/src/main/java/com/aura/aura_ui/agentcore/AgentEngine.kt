@@ -131,6 +131,8 @@ class AgentEngine(
          * the visible transcript, and the `screen` toolset starts loaded.
          */
         continuesHandOff: Boolean = false,
+        /** Keep the user's message out of the visible transcript: a goal's "keep going" ([Goals]). */
+        quiet: Boolean = false,
     ): Flow<AgentEvent> = channelFlow {
         refusal(text)?.let { reason ->
             threads.append(threadId, ItemKind.USER, text, attachments = attachments)
@@ -144,7 +146,7 @@ class AgentEngine(
             return@channelFlow
         }
         send(AgentEvent.TurnStarted(threadId, main.label))
-        if (!continuesHandOff) threads.append(threadId, ItemKind.USER, text, attachments = attachments)
+        if (!continuesHandOff && !quiet) threads.append(threadId, ItemKind.USER, text, attachments = attachments)
         val loaded = threads.loadContext(threadId)
         // After [FRESH_AFTER_MS] idle the model starts over with a summary; the visible chat stays.
         val idle = threads.thread(threadId)?.let { now() - it.updatedAtMs > FRESH_AFTER_MS } == true
