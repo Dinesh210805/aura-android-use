@@ -1,7 +1,7 @@
 # AURA agent architecture: the loop, the screen, tools, memory and learning
 
-> **Status:** design for review. No code is written against it until it is approved.
-> **Date:** 2026-11-13.
+> **Status:** approved and being built on branch `feat/agentcore`. Section 22 tracks what is done and what is left.
+> **Date:** 2026-11-14.
 > **Builds on:** [`hermes-port-plan.md`](hermes-port-plan.md), which has the full Hermes and Koog feature tables
 > (port or not, and why). This document is the system design: how the parts fit together and
 > what changes in each.
@@ -841,6 +841,31 @@ as phase 8. What Hermes' chat surfaces (Desktop, web dashboard, TUI) have, and w
 | Voice | Dictation, read-aloud, wake word, conversation | Overlay voice; chat mic opens the overlay | Read-aloud button on replies; dictation inside the composer |
 
 ---
+
+## 22. Progress (as of 2026-11-14)
+
+Code lives in `aura-android/app/src/main/java/com/aura/aura_ui/agentcore/` (see its README) and
+`aura-android/mcp-server/`. Each finished piece is a commit on `feat/agentcore`.
+
+| Phase | State |
+|---|---|
+| 0. Instruments | Check against the code before the benchmark run; not re-verified in the last sessions. |
+| 1. Screen pipeline | Done. |
+| 2. Long-task core | Done. |
+| 3. Tools and models | Done except: result envelope (8.4), thinking by route (11.3), frozen prompt, streaming (moved to phase 8). The `ToolSpec` manifest is partial: `ToolListSyncTest` checks the lists, the eight lists of 8.1 are not yet one manifest. |
+| 4. Approvals | Done (`propose_action`, chat grants, deny lists, two security-review rounds). E3 bench scenarios for sends: check whether they exist; add if not. |
+| 5. Memory and learning | Done: `memory` tool with usage header and staging, `agentcore.db` v2 with `MIGRATION_1_2`, memory screen, run digests, idle review (`Learning.kt`), skill drafts, skills with `app:`/`steps:`, `do_steps`, curator, 6-hour fresh start with thread summary, one-time import of the old agent's facts. Not built: layer 5 recall (only if the eval asks); the voice companion still uses its own store. |
+| 6. Connectors | Built: key in any header (Composio preset), risk from MCP annotations, per-call risk for Composio multi-execute, `find_tools`/`load_tools`, subject on the send card, routing prompt. Left: verify "email Ravi the report" = one connector call and one approval against the live Composio server (needs the user's consumer key and a phone); generic MCP OAuth 2.1 (PKCE, dynamic client registration, Custom Tab, app-link redirect) for GitHub/Notion/Linear; per-toolkit pinning (not needed for Composio Connect's 7 meta-tools). |
+| 7. Assistant features | Not started: goal mode (5.6) with the Fable goal judge, heartbeat, `/btw`, daily briefing, personality (section 15). |
+| 8. The chat | Not started: section 21, plus streaming. |
+| Hardening | Not started. Known: `AgentRunLoggerTrailTest` (old agent) is flaky in the full suite and passes alone; section 18 defects to re-check; no device smoke test of phases 4 to 6 yet. |
+| Benchmark | The user starts it (`benchmark/suite/suite.py`); never start or restart it yourself. |
+
+Fable prompt work (section 20) done: system prompt sections (routes, tools, memory, skills,
+safety's `propose_action`), compaction summary, completion judge, idle review, thread summary,
+`memory`/`do_steps`/`find_tools`/`load_tools`/`propose_action` descriptions. Left: goal judge
+(phase 7), approval card text, denial message and voice read-out (item 6), and a re-check of the
+`read_screen`/`perceive_screen` descriptions against their budget.
 
 ## References
 
