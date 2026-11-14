@@ -125,6 +125,32 @@ data class TurnLimits(
     val backgroundMaxSteps: Int = 8,
 )
 
+/**
+ * A thread's last model request, as the provider counted it: for the context meter in the model
+ * sheet. [cached] is null when the provider does not say; [window] is null when the model's is unknown.
+ */
+data class Usage(val input: Int, val output: Int, val cached: Int?, val window: Int?) {
+    /** How full the context is, 0 to 1, or null without a window. */
+    val fill: Float? get() = window?.takeIf { it > 0 }?.let { (input.toFloat() / it).coerceIn(0f, 1f) }
+
+    companion object {
+        /**
+         * Cached input tokens from a response's metadata, under the names providers use:
+         * `cached_tokens` (OpenAI and compatible), `cache_read_input_tokens` (Anthropic),
+         * `cachedContentTokenCount` (Gemini). Searched at any depth. Pure.
+         */
+        fun cached(metadata: kotlinx.serialization.json.JsonElement?): Int? = when (metadata) {
+            is kotlinx.serialization.json.JsonObject -> metadata.entries.firstNotNullOfOrNull { (key, value) ->
+                if (key in CACHED_KEYS) (value as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() else cached(value)
+            }
+            is kotlinx.serialization.json.JsonArray -> metadata.firstNotNullOfOrNull { cached(it) }
+            else -> null
+        }
+
+        private val CACHED_KEYS = setOf("cached_tokens", "cache_read_input_tokens", "cachedContentTokenCount", "cached_content_token_count")
+    }
+}
+
 /** What the engine tells the UI while a turn runs. One turn emits exactly one [TurnEnded], last. */
 sealed interface AgentEvent {
     data class TurnStarted(val threadId: String, val modelLabel: String) : AgentEvent

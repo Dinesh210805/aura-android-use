@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.toList
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
@@ -109,6 +110,11 @@ class AgentEngine(
     private val markRunning: (threadId: String, request: String?) -> Unit = { _, _ -> },
 ) {
     private val running = ConcurrentHashMap<String, TurnState>()
+
+    private val _usage = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Usage>>(emptyMap())
+
+    /** Each thread's last model request as the provider counted it, for the context meter. In memory only. */
+    val usage: kotlinx.coroutines.flow.StateFlow<Map<String, Usage>> get() = _usage
 
     /** True when no turn is running in any thread. */
     fun isIdle(): Boolean = running.isEmpty()
@@ -275,7 +281,7 @@ class AgentEngine(
                 // A long chat with no tool calls never reaches the loop below, so it compacts here.
                 compactIfOver(budget, turn)
                 tools = hub.visible(turn)
-                ask(turn, stream)
+                ask(turn, stream, main.contextWindow)
             }
             noteThinking(turn, reply)
             var steps = 0
@@ -389,7 +395,7 @@ class AgentEngine(
                     } else {
                         compactIfOver(budget, turn)
                         tools = hub.visible(turn)
-                        ask(turn, stream)
+                        ask(turn, stream, main.contextWindow)
                     }
                 }
                 noteThinking(turn, reply)
@@ -408,7 +414,7 @@ class AgentEngine(
                     reply = llm.writeSession {
                         appendPrompt { user { text(EMPTY_REPLY) } }
                         tools = hub.visible(turn)
-                        ask(turn, stream)
+                        ask(turn, stream, main.contextWindow)
                     }
                     noteThinking(turn, reply)
                     continue
@@ -420,7 +426,7 @@ class AgentEngine(
                     reply = llm.writeSession {
                         appendPrompt { user { text(TEXT_CALL) } }
                         tools = hub.visible(turn)
-                        ask(turn, stream)
+                        ask(turn, stream, main.contextWindow)
                     }
                     noteThinking(turn, reply)
                     continue
@@ -437,7 +443,7 @@ class AgentEngine(
                 reply = llm.writeSession {
                     appendPrompt { user { text(told) } }
                     tools = hub.visible(turn)
-                    ask(turn, stream)
+                    ask(turn, stream, main.contextWindow)
                 }
                 noteThinking(turn, reply)
             }
@@ -563,7 +569,14 @@ class AgentEngine(
      * (tool calls, the completion check, the stored item) sees the same reply.
      * - Fails: a stream that breaks is dropped and the request is made again without streaming.
      */
-    private suspend fun AIAgentLLMWriteSession.ask(turn: TurnState, stream: Boolean): Message.Assistant {
+    private suspend fun AIAgentLLMWriteSession.ask(turn: TurnState, stream: Boolean, window: Int?): Message.Assistant =
+        streamOrNot(turn, stream).also { reply ->
+            reply.metaInfo.inputTokensCount?.let { input ->
+                _usage.update { it + (turn.threadId to Usage(input, reply.metaInfo.outputTokensCount ?: 0, Usage.cached(reply.metaInfo.metadata), window)) }
+            }
+        }
+
+    private suspend fun AIAgentLLMWriteSession.streamOrNot(turn: TurnState, stream: Boolean): Message.Assistant {
         if (!stream) return requestLLM()
         val before = prompt
         return try {

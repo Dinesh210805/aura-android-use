@@ -101,6 +101,8 @@ fun ModelSheet(vm: ChatViewModel, onDismiss: () -> Unit, onMoreSettings: () -> U
                     if (shown.loading) Loading()
                 }
             }
+            val usage by vm.usage.collectAsState()
+            usage?.let { ContextMeter(it) }
             Column(Modifier.fillMaxWidth().auraCard()) {
                 AuraRow("More settings", icon = Icons.Outlined.Tune, onClick = onMoreSettings)
             }
@@ -158,3 +160,30 @@ private fun Loading() {
         Text("Listing models", Modifier.padding(start = 10.dp), style = AuraType.footnote, color = aura.secondary)
     }
 }
+
+/**
+ * How full this chat's context was at its last request, and how much of it the provider served
+ * from its cache. From the provider's own counts, not an estimate.
+ */
+@Composable
+private fun ContextMeter(usage: Usage) {
+    val aura = LocalAura.current
+    Column(Modifier.fillMaxWidth().auraCard().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val window = usage.window?.let { " of ${tokens(it)}" }.orEmpty()
+        val cache = usage.cached?.takeIf { usage.input > 0 }?.let { " · ${it * 100 / usage.input}% from cache" }.orEmpty()
+        Text("Context: ${tokens(usage.input)}$window tokens$cache", style = AuraType.footnote, color = aura.secondary)
+        usage.fill?.let { fill ->
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { fill },
+                modifier = Modifier.fillMaxWidth(),
+                color = if (fill > METER_WARN) aura.danger else aura.label,
+                trackColor = aura.well,
+            )
+        }
+    }
+}
+
+private fun tokens(n: Int): String = if (n >= 1_000) "${n / 1_000}k" else "$n"
+
+/** Past this the chat is close to being summarised. */
+private const val METER_WARN = 0.8f

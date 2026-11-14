@@ -168,6 +168,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     val threads: StateFlow<List<ThreadRow>> = core.threads.threads().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val current: StateFlow<String?> = threadId
+
+    /** The current chat's last model request, for the context meter; null before one in this session. */
+    val usage: StateFlow<Usage?> = kotlinx.coroutines.flow.combine(threadId, core.engine.usage) { id, all -> id?.let { all[it] } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val items: StateFlow<List<ItemRow>> = threadId
         .flatMapLatest { id -> id?.let(core.threads::items) ?: flowOf(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
