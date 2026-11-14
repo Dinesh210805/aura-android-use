@@ -80,6 +80,8 @@ class AgentEngine(
     private val digest: suspend (DigestRow) -> Unit = {},
     /** The phone's name and Android version, for the system prompt. Must not change between turns. */
     private val deviceLine: () -> String = { "" },
+    /** How AURA talks, from the agent page. Part of the system prompt, so a change resets its cache once. */
+    private val style: () -> TalkStyle = { TalkStyle.BALANCED },
     /**
      * Notes the app wrote for this request, placed before it: direct links for the app it names,
      * pages already open in the browser. Trusted text only; it is not fenced.
@@ -428,7 +430,7 @@ class AgentEngine(
             promptExecutor = executorFor(main, turn),
             agentConfig = AIAgentConfig(
                 prompt = prompt("aura-chat", main.params) {
-                    system(SystemPrompt.build(profile(), hub.toolsetMenu(), skillIndex(), deviceLine()))
+                    system(SystemPrompt.build(profile(), hub.toolsetMenu(), skillIndex(), deviceLine(), style()))
                     messages(history)
                 },
                 model = main.model,

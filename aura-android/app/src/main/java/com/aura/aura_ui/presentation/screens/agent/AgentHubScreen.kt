@@ -11,6 +11,8 @@ import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
 import com.aura.aura_ui.agentcore.ApprovalMode
+import com.aura.aura_ui.agentcore.TalkStyle
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import com.aura.aura_ui.ui.theme.LocalAura
 import androidx.compose.material.icons.outlined.Cable
 import androidx.compose.material.icons.outlined.Construction
@@ -63,7 +65,7 @@ private val APPROVAL_ICONS = mapOf(
  *
  * - Contract: settings that change how the agent behaves live here; how the app behaves lives in
  *   Settings. With no key for the selected provider, the first row sends the user to API keys.
- * - Reads/Writes: `AgentCore.alwaysOn`, the briefing job (`AgentCore.setBriefing`), the selected provider and model in `ProviderKeyStore`.
+ * - Reads/Writes: `AgentCore.alwaysOn`, `AgentCore.talkStyle`, the briefing job (`AgentCore.setBriefing`), the selected provider and model in `ProviderKeyStore`.
  */
 @Composable
 fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifier) {
@@ -75,6 +77,7 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
     val model = remember { keys.getSelectedModel(endpoint)?.substringAfterLast('/') }
     var digests by remember { mutableStateOf(core.alwaysOn) }
     var approvals by remember { mutableStateOf(core.approvalMode) }
+    var style by remember { mutableStateOf(core.talkStyle) }
     var deniedApps by remember { mutableStateOf(core.deniedApps) }
     var deniedContacts by remember { mutableStateOf(core.deniedContacts) }
     var editing by remember { mutableStateOf<String?>(null) }
@@ -113,6 +116,25 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
                     },
                     trailing = {
                         if (mode == approvals) {
+                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = LocalAura.current.label, modifier = Modifier.size(20.dp))
+                        }
+                    },
+                )
+            }
+        }
+        AuraSection(title = "How AURA talks") {
+            TalkStyle.entries.forEachIndexed { i, choice ->
+                if (i > 0) AuraDivider(ICON_INSET)
+                AuraRow(
+                    choice.label,
+                    icon = Icons.Outlined.ChatBubbleOutline,
+                    subtitle = choice.subtitle,
+                    onClick = {
+                        core.talkStyle = choice
+                        style = choice
+                    },
+                    trailing = {
+                        if (choice == style) {
                             Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = LocalAura.current.label, modifier = Modifier.size(20.dp))
                         }
                     },

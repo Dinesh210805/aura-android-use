@@ -160,6 +160,11 @@ class AgentCore private constructor(private val app: Context) {
             ?: ApprovalMode.CONFIRM_SENDS
         set(value) = prefs.edit().putString(KEY_APPROVAL_MODE, value.name).apply()
 
+    /** How AURA talks; see [TalkStyle]. */
+    var talkStyle: TalkStyle
+        get() = prefs.getString(KEY_TALK_STYLE, null)?.let { runCatching { TalkStyle.valueOf(it) }.getOrNull() } ?: TalkStyle.BALANCED
+        set(value) = prefs.edit().putString(KEY_TALK_STYLE, value.name).apply()
+
     val engine = AgentEngine(
         models = models,
         hub = hub,
@@ -178,6 +183,7 @@ class AgentCore private constructor(private val app: Context) {
         refusal = { request -> DestructiveGoal.REFUSAL.takeIf { DestructiveGoal.isBulkDestruction(request) } },
         onTurn = ::onTurn,
         deviceLine = { deviceLine },
+        style = { talkStyle },
         digest = { dao.insertDigest(it) },
         preamble = ::preamble,
         isPaused = { lock.isPausedByHuman },
@@ -580,6 +586,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val PREFS = "agentcore"
         private const val KEY_ALWAYS_ON = "always_on"
         private const val KEY_APPROVAL_MODE = "approval_mode"
+        private const val KEY_TALK_STYLE = "talk_style"
         private const val KEY_SURFACE_THREAD = "surface_thread"
         private const val KEY_RUNNING = "running_run"
         private const val REVIEW_MIN_BATTERY = 30

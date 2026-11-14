@@ -250,6 +250,13 @@
       "category": "assistant",
       "needs_human": true,
       "truth_check": "Turn on Morning briefing on the agent page; it appears under Scheduled tasks as daily at 08:00. Next morning (or set the phone clock past 08:00 and wait for the next 15-minute tick), PASS: one notification and one chat card listing today's calendar events and notifications that matter, true to the calendar and the shade, with no invented weather. FAIL: no briefing, made-up items, or any app opened. Turning the switch off removes the job; cancelling the job turns the switch off."
+    },
+    {
+      "number": 37,
+      "goal": "What should I keep in mind before a job interview tomorrow",
+      "category": "assistant",
+      "needs_human": true,
+      "truth_check": "Ask it in the chat three times, with How AURA talks set to Balanced, then Brief, then Warm on the agent page (start a new chat each time). PASS: Brief is clearly the shortest and leads with the answer; Warm is friendlier in wording but not longer than Balanced by more than a sentence or two and never flatters the question; all three are useful and in your language. Asked by voice, each reply stays short with no markdown. FAIL: the styles read the same, Warm gushes or pads, or Brief drops what you need."
     }
   ]
 }

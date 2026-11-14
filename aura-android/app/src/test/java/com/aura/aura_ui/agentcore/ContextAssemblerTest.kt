@@ -192,4 +192,13 @@ class ContextAssemblerTest {
         assertFalse(ContextAssembler.writtenToolCall("I'll tap (the blue button) next. Done!", tools))
         assertFalse(ContextAssembler.writtenToolCall("Sent it. {\"name\": \"Amma\"}", tools))
     }
+
+    @Test
+    fun `the default talk style leaves the system prompt unchanged and the others add one block`() {
+        val plain = SystemPrompt.build("likes tea", "menu", "skills", "Pixel 9, Android 16")
+        assertEquals(plain, SystemPrompt.build("likes tea", "menu", "skills", "Pixel 9, Android 16", TalkStyle.BALANCED))
+        val brief = SystemPrompt.build("likes tea", "menu", "skills", "Pixel 9, Android 16", TalkStyle.BRIEF)
+        assertEquals(1, Regex("<how_you_talk>").findAll(brief).count())
+        assertEquals(plain.length + 2 + TalkStyle.BRIEF.block.length, brief.length)
+    }
 }

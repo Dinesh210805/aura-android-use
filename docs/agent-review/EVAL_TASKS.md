@@ -124,7 +124,7 @@ each one for the device shell.
 | 30 | `Set a timer for 12 minutes` |  | A timer counting down from 12 minutes. Any other duration is a FAIL. |
 
 
-### Assistant features — 4 task(s)  ⚠ **under the floor of 5**
+### Assistant features — 5 task(s)
 
 | # | goal | needs you | truth check |
 |---|------|-----------|-------------|
@@ -132,6 +132,7 @@ each one for the device shell.
 | 34 | `/btw How many minutes are there in a week` | yes | Start a long phone task in the chat first (for example Open YouTube and search for lofi music), then type this in the chat while it runs. PASS: the answer (10080) appears in the chat within seconds, the running task carries on unchanged and never mentions minutes, and nothing on the phone is touched for the side question. FAIL: the task stops, changes course, or treats the question as part of the task. |
 | 35 | `Tell me when I get a WhatsApp message from Amma` | yes | Type it in the chat with always-on turned on. PASS: AURA asks once to start watching, then confirms; after Amma sends you a message, a notification and a line in this chat say so (within about 15 minutes, or sooner because the notification wakes it), and list_schedules no longer shows the watch. FAIL: it never reports, reports before any message arrived, keeps reporting after the first time, or opens WhatsApp or replies. |
 | 36 | `Morning briefing switch on the agent page` | yes | Turn on Morning briefing on the agent page; it appears under Scheduled tasks as daily at 08:00. Next morning (or set the phone clock past 08:00 and wait for the next 15-minute tick), PASS: one notification and one chat card listing today's calendar events and notifications that matter, true to the calendar and the shade, with no invented weather. FAIL: no briefing, made-up items, or any app opened. Turning the switch off removes the job; cancelling the job turns the switch off. |
+| 37 | `What should I keep in mind before a job interview tomorrow` | yes | Ask it in the chat three times, with How AURA talks set to Balanced, then Brief, then Warm on the agent page (start a new chat each time). PASS: Brief is clearly the shortest and leads with the answer; Warm is friendlier in wording but not longer than Balanced by more than a sentence or two and never flatters the question; all three are useful and in your language. Asked by voice, each reply stays short with no markdown. FAIL: the styles read the same, Warm gushes or pads, or Brief drops what you need. |
 
 
 ### Coverage floors
@@ -147,9 +148,9 @@ each one for the device shell.
 | `resume` | 3 | 3 | Ledger + resume preamble have no other coverage |
 | `keyboard` | 2 | 2 | The AURA IME path only triggers in RN/Flutter apps |
 | `picker` | 2 | 2 | The wheel-picker rule exists because of a real failure; nothing tests it |
-| `assistant` | 4 ⚠ | 5 | Goal mode, /btw, heartbeats, briefing and personality run outside the one-turn loop |
+| `assistant` | 5 | 5 | Goal mode, /btw, heartbeats, briefing and personality run outside the one-turn loop |
 
-**36 tasks total; 12 need you at the phone** (19, 20, 21, 24, 25, 26, 27, 29, 33, 34, 35, 36). The cockpit can skip those and run the rest unattended, which is what makes a full sitting affordable.
+**37 tasks total; 13 need you at the phone** (19, 20, 21, 24, 25, 26, 27, 29, 33, 34, 35, 36, 37). The cockpit can skip those and run the rest unattended, which is what makes a full sitting affordable.
 
 
 ## Preconditions

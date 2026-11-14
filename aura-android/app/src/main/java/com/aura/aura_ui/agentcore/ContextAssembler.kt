@@ -17,6 +17,28 @@ import java.util.Locale
  *   anything that changes per turn ([DeviceContext]) rides at the tail, on the newest user message.
  * - Change together: `ContextAssemblerTest`.
  */
+/**
+ * How AURA talks, picked on the agent page. [block] joins the system prompt after its identity.
+ * - Contract: [BALANCED] adds nothing, so the default prompt (and its cache) is unchanged. No style
+ *   may contradict the voice and overlay rule: short, no markdown.
+ */
+enum class TalkStyle(val label: String, val subtitle: String, val block: String) {
+    BALANCED("Balanced", "Clear and to the point", ""),
+    BRIEF(
+        "Brief",
+        "As few words as carry the answer",
+        "<how_you_talk>\nBe terse. Give the answer or the result first, in as few words as carry it, and stop. Add a reason or a " +
+            "detail only when the user would act wrongly without it. Fragments are fine when they are clear.\n</how_you_talk>",
+    ),
+    WARM(
+        "Warm",
+        "Friendly, with a little personality",
+        "<how_you_talk>\nTalk like a friendly person who knows the user, not like a manual: natural words, and a light touch of " +
+            "humour or warmth where it fits the moment. Still lead with the answer and keep it short; warmth is in the wording, " +
+            "not in extra sentences. Never gush, flatter, or praise the question, and never pad a reply to sound nice.\n</how_you_talk>",
+    ),
+}
+
 object SystemPrompt {
 
     /**
@@ -25,8 +47,9 @@ object SystemPrompt {
      * `SkillStore.index`: one line per saved skill, each confirmed by the user when it was saved.
      * [device] names the phone ("OnePlus Nord 4, Android 16"), so answers and web lookups fit it.
      */
-    fun build(profile: String?, toolsetMenu: String, skills: String = "", device: String = ""): String = buildString {
+    fun build(profile: String?, toolsetMenu: String, skills: String = "", device: String = "", style: TalkStyle = TalkStyle.BALANCED): String = buildString {
         append(IDENTITY)
+        if (style.block.isNotEmpty()) append("\n\n").append(style.block)
         if (device.isNotBlank()) append("\n\n<device>\n").append(device.trim()).append("\n</device>")
         if (!profile.isNullOrBlank()) append("\n\n<user_profile>\n").append(profile.trim()).append("\n</user_profile>")
         if (toolsetMenu.isNotBlank()) append("\n\n<toolsets>\n").append(toolsetMenu.trim()).append("\n</toolsets>")
