@@ -33,6 +33,14 @@ sealed class ChatCard {
     @SerialName("contacts")
     data class Contacts(val people: List<Person>, val choose: Boolean = false) : ChatCard()
 
+    /** The web pages an answer was read from, as tappable chips under it. */
+    @Serializable
+    @SerialName("sources")
+    data class Sources(val links: List<Link>) : ChatCard()
+
+    @Serializable
+    data class Link(val title: String, val url: String)
+
     /** What a scheduled task or a notification digest found. */
     @Serializable
     @SerialName("result")

@@ -132,6 +132,13 @@ class TurnState(
     /** Every successful phone action this turn, anchored on labels; kept in the run digest. */
     val trace: MutableList<Step> = java.util.Collections.synchronizedList(mutableListOf())
 
+    /** Pages this turn read with `web_extract`, url to title, in order: the source chips under its answer. */
+    val sources: MutableMap<String, String> = java.util.Collections.synchronizedMap(LinkedHashMap())
+
+    fun cite(url: String, title: String) {
+        sources.putIfAbsent(url, title)
+    }
+
     /** The skill this turn read with `skill_view`, if any; kept in the run digest. */
     @Volatile
     var skillUsed: String? = null

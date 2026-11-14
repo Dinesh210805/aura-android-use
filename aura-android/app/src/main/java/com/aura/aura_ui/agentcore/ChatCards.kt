@@ -22,6 +22,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,6 +89,39 @@ fun CardView(card: ChatCard, onPick: (String) -> Unit) {
         is ChatCard.Files -> FilesCard(card)
         is ChatCard.Contacts -> ContactsCard(card, onPick)
         is ChatCard.Result -> ResultCard(card)
+        is ChatCard.Sources -> SourcesRow(card)
+    }
+}
+
+/** Source chips under an answer: the site's name, tap to open the page. */
+@Composable
+private fun SourcesRow(card: ChatCard.Sources) {
+    val aura = LocalAura.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Row(
+        Modifier.fillMaxWidth().then(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())).padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        card.links.forEachIndexed { i, link ->
+            val host = runCatching { android.net.Uri.parse(link.url).host?.removePrefix("www.") }.getOrNull() ?: link.url
+            Text(
+                "${i + 1} · $host",
+                Modifier.clip(AuraShape.Pill).background(aura.well)
+                    .clickable(onClickLabel = "Open ${link.title}") {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(link.url))
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                style = AuraType.caption,
+                color = aura.label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

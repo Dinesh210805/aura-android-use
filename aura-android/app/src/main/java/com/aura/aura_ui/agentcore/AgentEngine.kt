@@ -174,6 +174,12 @@ class AgentEngine(
             } else {
                 threads.append(threadId, ItemKind.ASSISTANT, answer)
                 send(AgentEvent.AssistantText(answer, final = true))
+                // The pages the answer was read from, as chips under it.
+                turn.sources.toMap().takeIf { it.isNotEmpty() }?.let { read ->
+                    val card = ChatCard.Sources(read.map { (url, title) -> ChatCard.Link(title, url) })
+                    threads.append(threadId, ItemKind.CARD, card.encode())
+                    send(AgentEvent.Card(card))
+                }
                 AgentEvent.TurnEnded(run.end, answer)
             }
         } catch (e: CancellationException) {

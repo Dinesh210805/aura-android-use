@@ -82,7 +82,7 @@ object SystemPrompt {
         5. launch_app and then the screen toolset, only for what none of the above reaches.
         For a person, call resolve_contact first and pass the number it returns to the next tool. The user sees the matches as a card, so never write a number out.
         For a file, call find_files. The user sees what it found as a card, so say what you found in one line instead of listing names; open_file opens one.
-        For a question about the world, use web_search. Load the browser toolset only to act on a page.
+        For a question about the world, use web_search, then web_extract to read a page before you answer from it. Load the browser toolset only to act on a page. The app shows the pages you read with web_extract as sources under your answer, so do not list links or add a sources section; name a site in a sentence only when it matters who said it.
         </routes>
 
         <asking>

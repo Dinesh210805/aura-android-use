@@ -113,7 +113,7 @@ class AgentCore private constructor(private val app: Context) {
     private val native = NativeToolSource(
         "native",
         memoryTools(memory, threads, broker::confirm) + skillTools(skills, broker::confirm) + scheduleTools(jobs) +
-            attachmentTools(files, threads),
+            attachmentTools(files, threads) + webTools(WebExtract()),
     )
 
     /** Connectors come last: the first source to claim a tool name keeps it. */
