@@ -223,6 +223,15 @@ class AgentCore private constructor(private val app: Context) {
         threads.append(threadId, ItemKind.ASSISTANT, answer?.trim()?.takeIf { it.isNotEmpty() } ?: Btw.NO_ANSWER)
     }
 
+    suspend fun briefingOn(): Boolean = Briefing.isOn(jobs.list())
+
+    /** Add or remove the daily [Briefing] job. Fails: with [Schedule.MAX_JOBS] jobs already, it stays off. */
+    suspend fun setBriefing(on: Boolean) {
+        val existing = jobs.list().filter { it.prompt == Briefing.PROMPT }
+        if (on && existing.isEmpty()) jobs.add(Briefing.PROMPT, null, Briefing.AT_MINUTE)
+        if (!on) existing.forEach { jobs.cancel(it.rowid) }
+    }
+
     /** The FAST model's verdict line on a goal's progress ([Goals.goalLoop]), or null without one. */
     suspend fun judgeGoal(evidence: String): String? = models.resolve(ModelRole.FAST)?.ask(Goals.JUDGE_SYSTEM, evidence)
 

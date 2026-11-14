@@ -243,6 +243,13 @@
       "category": "assistant",
       "needs_human": true,
       "truth_check": "Type it in the chat with always-on turned on. PASS: AURA asks once to start watching, then confirms; after Amma sends you a message, a notification and a line in this chat say so (within about 15 minutes, or sooner because the notification wakes it), and list_schedules no longer shows the watch. FAIL: it never reports, reports before any message arrived, keeps reporting after the first time, or opens WhatsApp or replies."
+    },
+    {
+      "number": 36,
+      "goal": "Morning briefing switch on the agent page",
+      "category": "assistant",
+      "needs_human": true,
+      "truth_check": "Turn on Morning briefing on the agent page; it appears under Scheduled tasks as daily at 08:00. Next morning (or set the phone clock past 08:00 and wait for the next 15-minute tick), PASS: one notification and one chat card listing today's calendar events and notifications that matter, true to the calendar and the shade, with no invented weather. FAIL: no briefing, made-up items, or any app opened. Turning the switch off removes the job; cancelling the job turns the switch off."
     }
   ]
 }

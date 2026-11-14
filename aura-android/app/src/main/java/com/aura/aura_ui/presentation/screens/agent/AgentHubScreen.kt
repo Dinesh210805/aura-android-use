@@ -21,7 +21,11 @@ import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Timeline
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +63,7 @@ private val APPROVAL_ICONS = mapOf(
  *
  * - Contract: settings that change how the agent behaves live here; how the app behaves lives in
  *   Settings. With no key for the selected provider, the first row sends the user to API keys.
- * - Reads/Writes: `AgentCore.alwaysOn`, the selected provider and model in `ProviderKeyStore`.
+ * - Reads/Writes: `AgentCore.alwaysOn`, the briefing job (`AgentCore.setBriefing`), the selected provider and model in `ProviderKeyStore`.
  */
 @Composable
 fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifier) {
@@ -74,6 +78,9 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
     var deniedApps by remember { mutableStateOf(core.deniedApps) }
     var deniedContacts by remember { mutableStateOf(core.deniedContacts) }
     var editing by remember { mutableStateOf<String?>(null) }
+    var briefing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { briefing = core.briefingOn() }
 
     AuraPage("On-device agent", modifier) {
         AuraSection {
@@ -162,6 +169,19 @@ fun AgentHubScreen(onOpen: (route: String) -> Unit, modifier: Modifier = Modifie
                 },
                 icon = Icons.Outlined.NotificationsActive,
                 subtitle = "A summary of what came in while you were away",
+            )
+            AuraDivider(ICON_INSET)
+            AuraToggleRow(
+                "Morning briefing",
+                briefing,
+                { on ->
+                    scope.launch {
+                        core.setBriefing(on)
+                        briefing = core.briefingOn()
+                    }
+                },
+                icon = Icons.Outlined.WbSunny,
+                subtitle = "At 8:00, today's calendar and what needs you",
             )
             AuraDivider(ICON_INSET)
             AuraRow("Scheduled tasks", icon = Icons.Outlined.Schedule, onClick = { onOpen(AuraRoutes.SCHEDULES) })
