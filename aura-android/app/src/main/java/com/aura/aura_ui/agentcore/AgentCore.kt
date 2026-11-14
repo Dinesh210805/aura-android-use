@@ -45,9 +45,12 @@ import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -79,6 +82,9 @@ class AgentCore private constructor(private val app: Context) {
 
     /** Threads whose running turn was started by the overlay or by voice; their questions go there. */
     private val surfaceThreads = ConcurrentHashMap.newKeySet<String>()
+
+    /** Work a notification starts (a heartbeat check); it outlives the listener callback. */
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val threads = ThreadStore(dao)
     val memory = MemoryStore(dao, installed = ::installedApp)
@@ -244,6 +250,12 @@ class AgentCore private constructor(private val app: Context) {
     fun onNotificationPosted(sbn: StatusBarNotification) {
         if (!alwaysOn || sbn.packageName == app.packageName) return
         val extras = sbn.notification.extras
+        val heard = listOfNotNull(
+            runCatching { AppDeviceBridge(app).appLabelFor(sbn.packageName) }.getOrNull(),
+            extras?.getCharSequence(Notification.EXTRA_TITLE),
+            extras?.getCharSequence(Notification.EXTRA_TEXT),
+        ).joinToString(" ")
+        background.launch { runCatching { jobRunner.poke(heard) } }
         ambient.onPosted(
             NotificationSignal(
                 key = sbn.key,

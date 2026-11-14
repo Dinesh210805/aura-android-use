@@ -124,12 +124,13 @@ each one for the device shell.
 | 30 | `Set a timer for 12 minutes` |  | A timer counting down from 12 minutes. Any other duration is a FAIL. |
 
 
-### Assistant features — 2 task(s)  ⚠ **under the floor of 5**
+### Assistant features — 3 task(s)  ⚠ **under the floor of 5**
 
 | # | goal | needs you | truth check |
 |---|------|-----------|-------------|
 | 33 | `/goal Read my five most recent notifications and tell me which ones need a reply` | yes | Type it in the chat; the cockpit runs goals through the overlay, which does not read /goal. PASS: it stops by itself (done, or a Goal paused line with a reason) within 8 turns, each extra turn shows a Working on line, and the notifications it names are really in the shade. FAIL: it keeps taking turns after the answer is complete, or names notifications that are not there. |
 | 34 | `/btw How many minutes are there in a week` | yes | Start a long phone task in the chat first (for example Open YouTube and search for lofi music), then type this in the chat while it runs. PASS: the answer (10080) appears in the chat within seconds, the running task carries on unchanged and never mentions minutes, and nothing on the phone is touched for the side question. FAIL: the task stops, changes course, or treats the question as part of the task. |
+| 35 | `Tell me when I get a WhatsApp message from Amma` | yes | Type it in the chat with always-on turned on. PASS: AURA asks once to start watching, then confirms; after Amma sends you a message, a notification and a line in this chat say so (within about 15 minutes, or sooner because the notification wakes it), and list_schedules no longer shows the watch. FAIL: it never reports, reports before any message arrived, keeps reporting after the first time, or opens WhatsApp or replies. |
 
 
 ### Coverage floors
@@ -145,9 +146,9 @@ each one for the device shell.
 | `resume` | 3 | 3 | Ledger + resume preamble have no other coverage |
 | `keyboard` | 2 | 2 | The AURA IME path only triggers in RN/Flutter apps |
 | `picker` | 2 | 2 | The wheel-picker rule exists because of a real failure; nothing tests it |
-| `assistant` | 2 ⚠ | 5 | Goal mode, /btw, heartbeats, briefing and personality run outside the one-turn loop |
+| `assistant` | 3 ⚠ | 5 | Goal mode, /btw, heartbeats, briefing and personality run outside the one-turn loop |
 
-**34 tasks total; 10 need you at the phone** (19, 20, 21, 24, 25, 26, 27, 29, 33, 34). The cockpit can skip those and run the rest unattended, which is what makes a full sitting affordable.
+**35 tasks total; 11 need you at the phone** (19, 20, 21, 24, 25, 26, 27, 29, 33, 34, 35). The cockpit can skip those and run the rest unattended, which is what makes a full sitting affordable.
 
 
 ## Preconditions

@@ -236,6 +236,13 @@
       "category": "assistant",
       "needs_human": true,
       "truth_check": "Start a long phone task in the chat first (for example Open YouTube and search for lofi music), then type this in the chat while it runs. PASS: the answer (10080) appears in the chat within seconds, the running task carries on unchanged and never mentions minutes, and nothing on the phone is touched for the side question. FAIL: the task stops, changes course, or treats the question as part of the task."
+    },
+    {
+      "number": 35,
+      "goal": "Tell me when I get a WhatsApp message from Amma",
+      "category": "assistant",
+      "needs_human": true,
+      "truth_check": "Type it in the chat with always-on turned on. PASS: AURA asks once to start watching, then confirms; after Amma sends you a message, a notification and a line in this chat say so (within about 15 minutes, or sooner because the notification wakes it), and list_schedules no longer shows the watch. FAIL: it never reports, reports before any message arrived, keeps reporting after the first time, or opens WhatsApp or replies."
     }
   ]
 }

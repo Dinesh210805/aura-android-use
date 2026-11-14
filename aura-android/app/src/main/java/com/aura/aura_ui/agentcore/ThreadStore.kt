@@ -203,7 +203,7 @@ interface AgentDao {
 
 @Database(
     entities = [ThreadRow::class, ItemRow::class, ItemFts::class, MemoryRow::class, JobRow::class, DigestRow::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AgentCoreDatabase : RoomDatabase() {
@@ -215,7 +215,7 @@ abstract class AgentCoreDatabase : RoomDatabase() {
 
         fun get(context: Context): AgentCoreDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AgentCoreDatabase::class.java, "agentcore.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { instance = it }
         }
 
@@ -227,6 +227,14 @@ abstract class AgentCoreDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `memories` ADD COLUMN `staged` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `threads` ADD COLUMN `summary` TEXT")
                 db.execSQL(DIGESTS_SQL)
+            }
+        }
+
+        /** Heartbeats: the chat a job reports to and when it gives up ([JobRow]). */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `jobs` ADD COLUMN `threadId` TEXT")
+                db.execSQL("ALTER TABLE `jobs` ADD COLUMN `untilMs` INTEGER")
             }
         }
 

@@ -446,6 +446,7 @@ object StepPhrase {
             "skill_view" -> "Read the skill ${arg("name").orEmpty()}".trim()
             "skill_save" -> "Saved a skill"
             "schedule_task" -> "Scheduled a task"
+            "watch_for" -> "Started watching"
             "browser_open" -> "Opened a page ${arg("url").orEmpty()}".trim()
             "browser_read" -> "Read the page"
             "browser_act" -> "Acted on the page"

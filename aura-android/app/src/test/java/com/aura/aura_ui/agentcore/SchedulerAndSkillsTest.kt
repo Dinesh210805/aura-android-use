@@ -36,6 +36,15 @@ class SchedulerAndSkillsTest {
     }
 
     @Test
+    fun `a heartbeat wakes only for a notification that shares a real word`() {
+        val condition = "My Swiggy order is out for delivery"
+        assertEquals(true, Heartbeat.matches(condition, "Swiggy Your order is on the way"))
+        assertEquals(true, Heartbeat.matches(condition, "Delivery partner assigned"))
+        assertEquals(false, Heartbeat.matches(condition, "WhatsApp Amma: when are you coming"))
+        assertEquals(false, Heartbeat.matches("tell me when that is done", "Tell me what you think"))
+    }
+
+    @Test
     fun `a skill needs a plain name, a one-line description and no secrets`() {
         assertNull(SkillPolicy.rejection("order-coffee", "Use when ordering coffee.", "Open the app, pick the usual."))
         assertNotNull(SkillPolicy.rejection("Order Coffee", "Use when ordering coffee.", "body"))

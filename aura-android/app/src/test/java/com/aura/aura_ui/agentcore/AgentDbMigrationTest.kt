@@ -17,13 +17,14 @@ import org.robolectric.annotation.Config
 class AgentDbMigrationTest {
 
     @Test
-    fun `version 1 data survives the upgrade to 2`() = runBlocking {
+    fun `version 1 data survives the upgrade to the latest version`() = runBlocking {
         val context = RuntimeEnvironment.getApplication()
         val file = context.getDatabasePath("agentcore.db").apply { parentFile?.mkdirs(); delete() }
         SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
             V1.forEach(db::execSQL)
             db.execSQL("INSERT INTO threads VALUES ('t1', 'Cab', 1, 2, NULL, '')")
             db.execSQL("INSERT INTO memories (kind, text, createdAtMs) VALUES ('USER', 'Lives in Chennai', 3)")
+            db.execSQL("INSERT INTO jobs (prompt, everyMinutes, nextRunMs) VALUES ('Check mail', 30, 4)")
             db.version = 1
         }
         val dao = AgentCoreDatabase.get(context).dao()
@@ -33,6 +34,10 @@ class AgentDbMigrationTest {
         assertEquals(MemorySource.SAID.name, memory.source)
         assertFalse(memory.staged)
         assertEquals(emptyList<DigestRow>(), dao.unreviewedDigests(5))
+        val job = dao.jobs().single()
+        assertEquals("Check mail", job.prompt)
+        assertNull(job.threadId)
+        assertNull(job.untilMs)
     }
 
     private companion object {

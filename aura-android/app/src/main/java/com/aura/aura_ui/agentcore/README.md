@@ -60,7 +60,7 @@ also pulls the folder.
 | `RunLedger.kt` | The plot of a long run (request, plan, last actions, step and minutes), shown as one message from step 8; only the newest is kept. |
 | `ScreenHistory.kt` | Every screen a task saw (`S3`, diffs `S3.1`), read back by `screens`, `screen`, `screen_diff`; counts distinct screens for stuck detection. |
 | `ModelGateway.kt` | Resolves the model the user picked in Settings into a Koog client. FAST is that model at its lightest thinking (titles, compaction summaries). FALLBACK is the first other provider the user set up; `FallbackClient` switches a turn to it when the main provider is rate limited, erroring or unreachable after its retries, never on a rejected key, and says so in the chat. |
-| `ThreadStore.kt` | Room database `agentcore.db` (version 2, with `MIGRATION_1_2`): threads, visible items, full-text search, memories, jobs, run digests. |
+| `ThreadStore.kt` | Room database `agentcore.db` (version 3, with `MIGRATION_1_2` and `MIGRATION_2_3`): threads, visible items, full-text search, memories, jobs, run digests. |
 | `Memory.kt` | Bounded always-in-context memory and its tools: `memory` (batched add, patch, remove; a tainted turn stages adds for the user) and `search_history` (with `around` to read a hit's neighbours). |
 | `Skills.kt` | Saved procedures as `SKILL.md` folders under `files/agentcore/skills/`, with optional `app:` and `steps:` frontmatter, usage in `usage.json`, and the curator (archives unpinned skills unused for 60 days to `skills-archive/`; two failed `do_steps` chains flag a skill for re-learning). |
 | `Steps.kt` | `Step`: one label-anchored phone action. The run's trace, a skill's `steps:` and `do_steps` input share it; `Step.forSkill` strips typed text, links and personal details. |
@@ -70,7 +70,7 @@ also pulls the folder.
 | `DoSteps.kt` | `do_steps`: runs a known step list in one call, finding each target by label on a fresh screen and sending every action through the hub's own gate. |
 | `Btw.kt` | `/btw <question>` in the chat: a side question answered on the FAST model with no tools, from the fenced recent chat, while a task runs. Checked before steering, so it never reaches the running turn; the Q and A are visible items only. |
 | `Goals.kt` | Goal mode: `/goal <text>` in the chat runs up to 8 turns in the chat (no hand-off). After each turn the FAST model judges `DONE`, `CONTINUE` or `BLOCKED: reason` from the goal, each turn's tool names and its fenced answer. The next turn gets a fixed "keep going" message, never the judge's words; anything unparseable stops the goal. |
-| `Scheduler.kt` | Scheduled prompts (`schedule_task`), run read-only in the background. |
+| `Scheduler.kt` | Scheduled prompts (`schedule_task`), run read-only in the background; heartbeats (`watch_for`): a job bound to the chat that asked, checked every 15 minutes or at once when a notification shares a word with the condition (always-on only), reporting once into that chat and then ending, or giving up after its hours. |
 | `Ambient.kt` | Notification triage and digests. |
 | `Telemetry.kt` | OpenTelemetry spans (model calls: timing, tokens) in `files/agentcore/traces/`; `recent()` joins them with the journal into `RunLog`s. |
 | `RunJournal.kt` | The readable run log: request, each step in plain words (`StepPhrase`), the screen before each press with the pressed element's box, the answer. Redacted, kept 7 days. |
