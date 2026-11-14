@@ -620,7 +620,7 @@ class ToolHub(
             return@NativeTool SourceResult(approved)
         }
         val options = listOfNotNull(SEND, SEND_IN_CHAT.takeIf { !turn.taint.tainted }, CANCEL)
-        val card = "Send in $app to $to?\n\n" + subject?.let { "Subject: $it\n" }.orEmpty() + "\u201C$message\u201D"
+        val card = "To $to in $app:\n\n" + subject?.let { "Subject: $it\n" }.orEmpty() + "\u201C$message\u201D\n\nSend it?"
         journal?.ask(turn.runId, card)
         val answer = broker.ask(turn, card, options)?.trim()
         journal?.note(turn.runId, "You answered the send card: ${answer ?: "no answer"}", ok = answer != null && answer != CANCEL)
@@ -635,7 +635,10 @@ class ToolHub(
                 grant(turn.threadId, Grant(app, to, message, expires, subject = subject))
                 SourceResult(approved)
             }
-            else -> SourceResult("The user changed the message to: \u201C$answer\u201D. Call propose_action again with that text.")
+            else -> SourceResult(
+                "The user typed this instead of approving: \u201C$answer\u201D. Nothing was sent. If it is new wording for the " +
+                    "message, call propose_action again with that text. If it is a question or a different request, answer it first.",
+            )
         }
     }
 

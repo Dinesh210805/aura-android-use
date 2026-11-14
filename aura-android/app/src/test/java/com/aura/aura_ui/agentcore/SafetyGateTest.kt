@@ -92,6 +92,24 @@ class SafetyGateTest {
         SafetyGate.evaluate(call, RunMode.FOREGROUND, taint, SafetySettings(mode))
 
     @Test
+    fun `cards with no button label say what the tool will do`() {
+        fun q(tool: String, args: String) = SafetyGate.commitQuestion(ToolCallRequest(tool, ToolRisk.COMMIT, ToolOrigin.NATIVE, args))
+        assertEquals("Run this every day at 08:00: Summarise my unread email. Allow?", q("schedule_task", """{"prompt":"Summarise my unread email.","daily_at":"08:00"}"""))
+        assertEquals("Watch for this for the next 6 hours: a message from the school. Allow?", q("watch_for", """{"condition":"a message from the school","hours":6}"""))
+        assertEquals("Cancel scheduled task 3?", q("cancel_schedule", """{"id":3}"""))
+        assertEquals("Send this reply from the notification?", q("notification_action", """{"key":"k","action":"Reply","reply_text":"On my way"}"""))
+        assertEquals("AURA wants to use add note: {\"text\":\"milk\"}. Allow?", q("add_note", """{"text":"milk"}"""))
+    }
+
+    @Test
+    fun `connector writes and opens are asked about in plain words`() {
+        val write = ToolCallRequest("gmail__send_email", ToolRisk.COMMIT, ToolOrigin.CONNECTOR, "{}")
+        assertEquals(Verdict.Ask("AURA wants to change something in gmail using send email. Allow?"), inMode(ApprovalMode.ASK_OFTEN, write.copy(risk = ToolRisk.ACT)))
+        val open = ToolCallRequest("launch_app", ToolRisk.ACT, ToolOrigin.NATIVE, """{"app_name":"Spotify"}""")
+        assertEquals(Verdict.Ask("Open Spotify?"), inMode(ApprovalMode.ASK_OFTEN, open))
+    }
+
+    @Test
     fun `the card names what will happen and where`() {
         assertEquals("Send in WhatsApp?", SafetyGate.commitQuestion(call(ToolRisk.ACT, label = "Send").copy(appLabel = "WhatsApp")))
         assertEquals("Post on Instagram?", SafetyGate.commitQuestion(call(ToolRisk.ACT, label = "Share post").copy(appLabel = "Instagram").let { it.copy(targetLabel = "Post") }))

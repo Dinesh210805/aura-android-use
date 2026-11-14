@@ -161,20 +161,21 @@ object SafetyGate {
         }
         val connectorWrite = call.origin == ToolOrigin.CONNECTOR && risk != ToolRisk.READ
         if (connectorWrite && (settings.mode != ApprovalMode.HANDS_FREE || taint.tainted)) {
-            return Verdict.Ask("Allow ${call.tool}? It changes something outside this phone.")
+            val service = call.tool.substringBefore("__")
+            return Verdict.Ask("AURA wants to change something in $service using ${spoken(call.tool.substringAfter("__"))}. Allow?")
         }
         if (call.egress && taint.egressNeedsUser) {
             if (mode == RunMode.BACKGROUND) {
                 return Verdict.Deny("policy_blocked: private content was read this turn, so nothing may be sent out.")
             }
             return Verdict.Ask(
-                "AURA read private content this turn and now wants to use ${call.tool}, " +
-                    "which sends text off this phone. Allow for this task?",
+                "AURA has read private content in this task. ${spoken(call.tool).replaceFirstChar { it.uppercase() }} sends text off this phone. Allow it for this task?",
                 unlocksEgress = true,
             )
         }
         if (settings.mode == ApprovalMode.ASK_OFTEN && risk == ToolRisk.ACT && call.tool in OPENS_SOMETHING) {
-            return Verdict.Ask("Allow ${call.tool}? ${SecretPatterns.redact(call.argsText).take(MAX_ARGS_IN_QUESTION)}")
+            val what = OPEN_ARGS.firstNotNullOfOrNull { arg(call, it) }
+            return Verdict.Ask(if (what == null || call.tool == "notification_action") fallbackQuestion(call) else "Open ${clip(what)}?")
         }
         return Verdict.Allow
     }
@@ -377,10 +378,7 @@ object SafetyGate {
      * The recipient, text or amount is the model's own line, shown under it by the hub.
      */
     internal fun commitQuestion(call: ToolCallRequest): String {
-        val label = call.targetLabel ?: return when (call.tool) {
-            "notification_action" -> "Send this reply?"
-            else -> "Allow ${call.tool}? ${SecretPatterns.redact(call.argsText).take(MAX_ARGS_IN_QUESTION)}"
-        }
+        val label = call.targetLabel ?: return fallbackQuestion(call)
         val app = call.appLabel?.takeIf { it.isNotBlank() && !it.equals("AURA", ignoreCase = true) }
         val (verb, preposition) = when (CommitLabels.kind(label)) {
             CommitKind.SEND -> "Send" to "in"
@@ -393,12 +391,44 @@ object SafetyGate {
         return if (app == null) "$verb?" else "$verb $preposition $app?"
     }
 
+    /** The card for a commit with no button label: says what the tool will do, in the user's words where it can. */
+    internal fun fallbackQuestion(call: ToolCallRequest): String = when (call.tool) {
+        "schedule_task" -> arg(call, "prompt")?.let { prompt ->
+            arg(call, "daily_at")?.let { "Run this every day at $it: ${clip(prompt)}. Allow?" }
+                ?: arg(call, "every_minutes")?.let { "Run this every $it minutes: ${clip(prompt)}. Allow?" }
+        }
+        "watch_for" -> arg(call, "condition")?.let { condition ->
+            arg(call, "hours")?.let { "Watch for this for the next $it hours: ${clip(condition)}. Allow?" }
+                ?: "Watch for this in the background: ${clip(condition)}. Allow?"
+        }
+        "cancel_schedule" -> arg(call, "id")?.let { "Cancel scheduled task $it?" }
+        "notification_action" -> if (arg(call, "reply_text") != null) "Send this reply from the notification?" else "Press this button on the notification?"
+        else -> null
+    } ?: "AURA wants to use ${spoken(call.tool)}: ${SecretPatterns.redact(call.argsText).take(MAX_ARGS_IN_QUESTION)}. Allow?"
+
+    /** One string argument of [call], trimmed; null when absent, blank or the arguments are not JSON. */
+    private fun arg(call: ToolCallRequest, key: String): String? = runCatching {
+        (kotlinx.serialization.json.Json.parseToJsonElement(call.argsText) as? kotlinx.serialization.json.JsonObject)?.get(key)
+            ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+    }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
+
+    /** User text for a card: secrets redacted, end punctuation dropped (the card adds its own), cut to [MAX_TEXT_IN_QUESTION]. */
+    private fun clip(text: String): String = SecretPatterns.redact(text).trimEnd('.', '!', '?', ' ').let {
+        if (it.length > MAX_TEXT_IN_QUESTION) it.take(MAX_TEXT_IN_QUESTION).trimEnd() + "\u2026" else it
+    }
+
+    private fun spoken(tool: String) = tool.replace('_', ' ')
+
     /** What the model is told when the user says no to a card. */
     const val DECLINED =
         "The user declined this step. Nothing was sent or changed. Do not retry it or reach the same " +
             "result another way; ask the user what they want changed."
 
     private const val MAX_ARGS_IN_QUESTION = 200
+    private const val MAX_TEXT_IN_QUESTION = 120
+
+    /** Where an opening tool names its target, most specific first, for "Open {what}?". */
+    private val OPEN_ARGS = listOf("app_name", "package_name", "url", "uri", "path", "file_name", "name")
 
     /** Commits HANDS_FREE still asks about: money and deletion cannot be taken back. */
     private val ALWAYS_ASK = setOf(CommitKind.ORDER, CommitKind.DELETE)
