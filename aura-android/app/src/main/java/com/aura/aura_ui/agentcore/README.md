@@ -76,6 +76,7 @@ also pulls the folder.
 | `RunJournal.kt` | The readable run log: request, each step in plain words (`StepPhrase`), the screen before each press with the pressed element's box, the answer. Redacted, kept 7 days. |
 | `ChatTheme.kt` | The chat's colours (Apple system colours, light and dark), Inter type, the glass surface. |
 | `ChatUi.kt` | The chat screen and its ViewModel: greeting with the app marquee, transcript, glass composer with the model picker. No agent logic. |
+| `ChatAttachments.kt` | Attachments in the chat: image thumbnails and file chips with type icons, in the composer (× removes one) and in the sent bubble; a tap opens the image full screen or the file in its app. Pictures decode off the main thread at display size into a 16 MB cache keyed by URI. |
 | `ChatCards.kt` | Cards: files (grid and rows, tap opens, hold shares), contacts (call, message, WhatsApp; tap to choose), results, plan, the question and Allow/Edit/Deny cards, folded steps. |
 | `ChatDrawer.kt` | The drawer (account, chats by day, panels, switches, appearance) and the panels: run log, schedules, memory, skills, connections. |
 | `RunLogUi.kt` | Draws `RunLog`: a timeline per run, screenshots with the pressed element outlined, raw values under Details. |

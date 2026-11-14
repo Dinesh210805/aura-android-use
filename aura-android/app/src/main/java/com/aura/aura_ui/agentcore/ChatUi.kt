@@ -364,7 +364,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun attachment(uri: Uri): Attachment? = runCatching {
+    /** What [uri] is (name, type, size), taking a lasting read grant; null when it cannot be read. */
+    fun attachment(uri: Uri): Attachment? = runCatching {
         val resolver = getApplication<Application>().contentResolver
         runCatching { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         resolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -728,10 +729,10 @@ private fun ItemView(item: ItemRow, onPick: (String) -> Unit) {
                     .combinedClickable(onClickLabel = null, onLongClickLabel = "Copy message", onLongClick = { copy(item.text) }, onClick = {})
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(item.text, style = AuraType.body, color = aura.label)
-                attachmentNames(item.attachmentsJson).takeIf { it.isNotEmpty() }?.let {
-                    Text(it.joinToString(" · "), style = AuraType.footnote, color = aura.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                attachments(item.attachmentsJson).takeIf { it.isNotEmpty() }?.let {
+                    AttachmentRail(it, modifier = Modifier.padding(bottom = if (item.text.isBlank()) 0.dp else 8.dp))
                 }
+                if (item.text.isNotBlank()) Text(item.text, style = AuraType.body, color = aura.label)
             }
         }
         ItemKind.ASSISTANT.name -> Column {
@@ -815,8 +816,8 @@ internal fun plainText(markdown: String): String = markdown
     .replace("`", "")
     .trim()
 
-private fun attachmentNames(json: String?): List<String> = json?.let {
-    runCatching { Json.decodeFromString(ListSerializer(Attachment.serializer()), it).map(Attachment::displayName) }.getOrNull()
+private fun attachments(json: String?): List<Attachment> = json?.let {
+    runCatching { Json.decodeFromString(ListSerializer(Attachment.serializer()), it) }.getOrNull()
 }.orEmpty()
 
 @Composable
@@ -866,14 +867,12 @@ private fun Composer(
 
     Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).glass(AuraShape.Composer).padding(12.dp)) {
         if (attached.isNotEmpty()) {
-            Row(
-                Modifier.padding(bottom = 8.dp).clip(AuraShape.Pill).background(aura.well)
-                    .clickable(onClickLabel = "Remove attachments") { attached = emptyList() }.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("${attached.size} attached", style = AuraType.caption, color = aura.label)
-                Icon(Icons.Rounded.Close, contentDescription = null, tint = aura.label, modifier = Modifier.padding(start = 6.dp).size(14.dp))
-            }
+            val shown = remember(attached) { attached.mapNotNull { uri -> vm.attachment(uri)?.let { it to uri } } }
+            AttachmentRail(
+                shown.map { it.first },
+                onRemove = { gone -> attached = attached - shown.first { it.first == gone }.second },
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
         }
         Box(Modifier.fillMaxWidth().heightIn(min = 28.dp, max = 140.dp).padding(horizontal = 6.dp)) {
             if (text.isEmpty()) {
