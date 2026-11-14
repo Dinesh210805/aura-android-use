@@ -163,6 +163,10 @@ class TurnState(
     @Volatile
     var saying: String = ""
 
+    /** True once a call that is not a read got past the gate: such a turn is never run again by "regenerate". */
+    @Volatile
+    var changed: Boolean = false
+
     /** Phone calls this turn that changed something (not reads) and succeeded. */
     @Volatile
     var actions: Int = 0
@@ -729,6 +733,7 @@ class ToolHub(
                 )
             }
             val verdict = SafetyGate.evaluate(request, turn.mode, turn.taint, settings())
+            if (verdict !is Verdict.Deny && SafetyGate.effectiveRisk(request) != ToolRisk.READ) turn.changed = true
             if (verdict !is Verdict.Allow) journal?.note(turn.runId, gateTitle(verdict), gateDetail(request, verdict, turn.taint.origins), ok = verdict !is Verdict.Deny)
             val outcome = when (verdict) {
                 is Verdict.Deny -> ToolOutcome(verdict.modelMessage, isError = true)

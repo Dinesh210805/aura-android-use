@@ -47,7 +47,16 @@ data class ThreadRow(
     val taint: String = "",
     /** 3 to 5 lines on what the thread was about, written when it goes idle; null until then. */
     val summary: String? = null,
+    /**
+     * How to take back the last turn ([Undo], JSON), or null when it cannot be: it changed something
+     * (a send, a tap, a saved memory), so running it again would do that twice.
+     */
+    val undo: String? = null,
 )
+
+/** The thread as it was before its last turn, and the user message that started that turn. */
+@kotlinx.serialization.Serializable
+data class Undo(val contextJson: String?, val taint: String, val fromItem: Long)
 
 @Entity(tableName = "items", indices = [Index("threadId", "atMs")])
 data class ItemRow(
@@ -161,6 +170,15 @@ interface AgentDao {
     )
     suspend fun itemsBetween(threadId: String, fromMs: Long, toMs: Long): List<ItemRow>
 
+    @Query("UPDATE threads SET undo = :undo WHERE id = :id")
+    suspend fun setUndo(id: String, undo: String?)
+
+    @Query("UPDATE threads SET contextJson = :contextJson, taint = :taint, undo = NULL WHERE id = :id")
+    suspend fun restore(id: String, contextJson: String?, taint: String)
+
+    @Query("DELETE FROM items WHERE threadId = :threadId AND rowid >= :fromItem")
+    suspend fun deleteItemsFrom(threadId: String, fromItem: Long)
+
     @Query("SELECT attachmentsJson FROM items WHERE threadId = :threadId AND attachmentsJson IS NOT NULL ORDER BY atMs, rowid")
     suspend fun attachmentRows(threadId: String): List<String>
 
@@ -206,7 +224,7 @@ interface AgentDao {
 
 @Database(
     entities = [ThreadRow::class, ItemRow::class, ItemFts::class, MemoryRow::class, JobRow::class, DigestRow::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AgentCoreDatabase : RoomDatabase() {
@@ -218,7 +236,7 @@ abstract class AgentCoreDatabase : RoomDatabase() {
 
         fun get(context: Context): AgentCoreDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AgentCoreDatabase::class.java, "agentcore.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build().also { instance = it }
         }
 
@@ -238,6 +256,13 @@ abstract class AgentCoreDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `jobs` ADD COLUMN `threadId` TEXT")
                 db.execSQL("ALTER TABLE `jobs` ADD COLUMN `untilMs` INTEGER")
+            }
+        }
+
+        /** Edit and regenerate: how to take back a thread's last turn ([ThreadRow.undo]). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `threads` ADD COLUMN `undo` TEXT")
             }
         }
 
@@ -302,10 +327,10 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         tool: String? = null,
         ok: Boolean? = null,
         attachments: List<Attachment> = emptyList(),
-    ) {
+    ): Long {
         val attachmentsJson = attachments.takeIf { it.isNotEmpty() }
             ?.let { Json.encodeToString(ListSerializer(Attachment.serializer()), it) }
-        dao.insertItem(
+        return dao.insertItem(
             ItemRow(
                 threadId = threadId,
                 atMs = now(),
@@ -353,6 +378,22 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         }
 
     suspend fun setSummary(threadId: String, summary: String) = dao.setSummary(threadId, summary)
+
+    suspend fun setUndo(threadId: String, undo: Undo?) = dao.setUndo(threadId, undo?.let { Json.encodeToString(Undo.serializer(), it) })
+
+    /**
+     * Take back the last turn: its context and taint as they were, and its messages gone from the
+     * chat. Returns what the user had sent (text and files), or null when it cannot be taken back.
+     */
+    suspend fun undo(threadId: String): Pair<String, List<Attachment>>? {
+        val row = dao.thread(threadId) ?: return null
+        val undo = row.undo?.let { runCatching { Json.decodeFromString(Undo.serializer(), it) }.getOrNull() } ?: return null
+        val asked = dao.item(undo.fromItem)?.takeIf { it.threadId == threadId } ?: return null
+        val files = asked.attachmentsJson?.let { runCatching { Json.decodeFromString(ListSerializer(Attachment.serializer()), it) }.getOrNull() }.orEmpty()
+        dao.deleteItemsFrom(threadId, undo.fromItem)
+        dao.restore(threadId, undo.contextJson, undo.taint)
+        return asked.text to files
+    }
 
     /** Every file attached in [threadId], oldest first. A row that does not parse is skipped. */
     suspend fun attachments(threadId: String): List<Attachment> = dao.attachmentRows(threadId).flatMap { json ->

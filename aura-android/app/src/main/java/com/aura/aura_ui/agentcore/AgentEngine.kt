@@ -154,7 +154,9 @@ class AgentEngine(
             return@channelFlow
         }
         send(AgentEvent.TurnStarted(threadId, main.label))
-        if (!continuesHandOff && !quiet) threads.append(threadId, ItemKind.USER, text, attachments = attachments)
+        // What the thread was before this turn, so "regenerate" and "edit" can take the turn back.
+        val before = threads.thread(threadId)
+        val asked = if (!continuesHandOff && !quiet) threads.append(threadId, ItemKind.USER, text, attachments = attachments) else null
         val loaded = threads.loadContext(threadId)
         // After [FRESH_AFTER_MS] idle the model starts over with a summary; the visible chat stays.
         val idle = threads.thread(threadId)?.let { now() - it.updatedAtMs > FRESH_AFTER_MS } == true
@@ -172,9 +174,9 @@ class AgentEngine(
         onTurn(true, mode)
         if (mode == RunMode.FOREGROUND) markRunning(threadId, text)
         // A hand-off saved the chat turn's work, which already holds the request: say only "go on".
-        val asked = if (continuesHandOff && stored.messages.isNotEmpty()) CONTINUE_ON_SCREEN else text
+        val said = if (continuesHandOff && stored.messages.isNotEmpty()) CONTINUE_ON_SCREEN else text
         val ended = try {
-            val answer = execute(main, turn, run, stored.messages.isEmpty(), text, asked, attachments, carried, stream)
+            val answer = execute(main, turn, run, stored.messages.isEmpty(), text, said, attachments, carried, stream)
             if (run.end == TurnEnd.HANDED_OFF) {
                 AgentEvent.TurnEnded(TurnEnd.HANDED_OFF, null)
             } else {
@@ -205,6 +207,9 @@ class AgentEngine(
         running.remove(threadId, turn)
         // A handed-off turn saves what it did, and the overlay's turn continues from it.
         save(turn, run)
+        val redoable = asked != null && before != null && mode == RunMode.FOREGROUND && !turn.changed &&
+            (ended.end == TurnEnd.ANSWERED || ended.end == TurnEnd.FAILED)
+        runCatching { threads.setUndo(threadId, if (redoable) Undo(before?.contextJson, before?.taint.orEmpty(), asked ?: 0) else null) }
         journal?.end(turn.runId, ended.end, ended.message)
         if (ended.end != TurnEnd.HANDED_OFF) {
             runCatching {

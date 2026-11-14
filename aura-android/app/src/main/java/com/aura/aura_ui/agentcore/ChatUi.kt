@@ -37,6 +37,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.foundation.combinedClickable
@@ -313,8 +314,35 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         turn?.cancel()
     }
 
+    /** True while the composer holds an edit of the last message: sending replaces that turn. */
+    val editing = MutableStateFlow(false)
+
+    fun startEdit() {
+        editing.value = true
+    }
+
+    /** Run the last turn again from the same message. Only offered when that turn changed nothing. */
+    fun regenerate() = redo(null)
+
+    /** Take back the last turn and send [text] (or the same message again) in its place. */
+    private fun redo(text: String?) = viewModelScope.launch {
+        val id = threadId.value ?: return@launch
+        if (running.value) return@launch
+        val (asked, files) = core.threads.undo(id) ?: return@launch
+        start(text ?: asked, files)
+    }
+
     fun send(text: String, uris: List<Uri>) {
+        if (editing.value) {
+            editing.value = false
+            if (text.isNotBlank()) redo(text)
+            return
+        }
         if (text.isBlank() && uris.isEmpty()) return
+        start(text, uris.mapNotNull(::attachment))
+    }
+
+    private fun start(text: String, files: List<Attachment>) {
         viewModelScope.launch {
             val id = threadId.value ?: core.threads.create().id.also { threadId.value = it }
             // Before steering: a side question must not reach the running task.
@@ -337,12 +365,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     val turn = if (goal != null) {
                         Goals.goalLoop(
                             goal,
-                            turn = { said, quiet -> core.engine.runTurn(id, said, uris.mapNotNull(::attachment).takeIf { !quiet }.orEmpty(), quiet = quiet, stream = true) },
+                            turn = { said, quiet -> core.engine.runTurn(id, said, files.takeIf { !quiet }.orEmpty(), quiet = quiet, stream = true) },
                             judge = core::judgeGoal,
                             notice = { core.threads.append(id, ItemKind.NOTICE, it) },
                         )
                     } else {
-                        core.engine.runTurn(id, text, uris.mapNotNull(::attachment), handOffScreen = core.handsOffScreen(), stream = true)
+                        core.engine.runTurn(id, text, files, handOffScreen = core.handsOffScreen(), stream = true)
                     }
                     turn.collect { event ->
                         when (event) {
@@ -463,7 +491,16 @@ fun AgentChatScreen(
                     if (items.isEmpty()) {
                         Welcome(profile.firstName, Modifier.fillMaxSize().padding(insets), onPrompt = { draft = it })
                     } else {
-                        Transcript(items, vm::pick, insets, Modifier.fillMaxSize(), live)
+                        val redo = if (!running && threads.firstOrNull { it.id == current }?.undo != null) {
+                            Redo(vm::regenerate) { text ->
+                                draft = text
+                                vm.startEdit()
+                                runCatching { composerFocus.requestFocus() }
+                            }
+                        } else {
+                            null
+                        }
+                        Transcript(items, vm::pick, insets, Modifier.fillMaxSize(), live, redo)
                     }
                 }
                 TopBar(
@@ -711,9 +748,18 @@ private fun entries(items: List<ItemRow>): List<Entry> = buildList {
 }
 
 @Composable
-private fun Transcript(items: List<ItemRow>, onPick: (String) -> Unit, padding: PaddingValues, modifier: Modifier, live: String? = null) {
+private fun Transcript(
+    items: List<ItemRow>,
+    onPick: (String) -> Unit,
+    padding: PaddingValues,
+    modifier: Modifier,
+    live: String? = null,
+    redo: Redo? = null,
+) {
     val list = rememberLazyListState()
     val shown = remember(items) { entries(items) }
+    val lastAsked = items.lastOrNull { it.kind == ItemKind.USER.name }?.rowid
+    val lastAnswer = items.lastOrNull { it.kind == ItemKind.ASSISTANT.name }?.rowid?.takeIf { lastAsked != null && it > lastAsked }
     val aura = LocalAura.current
     LaunchedEffect(shown.size, live != null) {
         val last = shown.size + (if (live != null) 1 else 0) - 1
@@ -723,7 +769,13 @@ private fun Transcript(items: List<ItemRow>, onPick: (String) -> Unit, padding: 
         items(shown, key = { it.key }) { entry ->
             when (entry) {
                 is Entry.Steps -> StepsFold(entry.rows)
-                is Entry.One -> ItemView(entry.row, onPick)
+                is Entry.One -> ItemView(
+                    entry.row,
+                    onPick,
+                    // Edit and run-again sit on the last exchange only, and only when it changed nothing.
+                    redo?.takeIf { entry.row.rowid == lastAsked || entry.row.rowid == lastAnswer },
+                    retry = entry.row.rowid == lastAsked && lastAnswer == null,
+                )
             }
         }
         // The reply while it is being written; the stored item replaces it when it is done.
@@ -735,13 +787,16 @@ private fun Transcript(items: List<ItemRow>, onPick: (String) -> Unit, padding: 
     }
 }
 
+/** Taking back the last turn: run it again, or edit the message (the text goes to the composer). */
+private class Redo(val regenerate: () -> Unit, val edit: (String) -> Unit)
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ItemView(item: ItemRow, onPick: (String) -> Unit) {
+private fun ItemView(item: ItemRow, onPick: (String) -> Unit, redo: Redo? = null, retry: Boolean = false) {
     val aura = LocalAura.current
     val copy = rememberCopy()
     when (item.kind) {
-        ItemKind.USER.name -> Box(Modifier.fillMaxWidth().padding(start = 56.dp, end = 16.dp), contentAlignment = Alignment.CenterEnd) {
+        ItemKind.USER.name -> Column(Modifier.fillMaxWidth().padding(start = 56.dp, end = 16.dp), horizontalAlignment = Alignment.End) {
             // On the sky the bubble is a glass card like AURA's replies: the plain well is
             // nearly transparent there, and ink text on a night sky cannot be read.
             val fill = if (aura.sky != null) Modifier.auraCard(AuraShape.Bubble) else Modifier.clip(AuraShape.Bubble).background(aura.well)
@@ -755,12 +810,19 @@ private fun ItemView(item: ItemRow, onPick: (String) -> Unit) {
                 }
                 if (item.text.isNotBlank()) Text(item.text, style = AuraType.body, color = aura.label)
             }
+            redo?.let { r ->
+                val tint = if (aura.sky != null) aura.onSkyMuted else aura.tertiary
+                Row {
+                    if (retry) ReplyAction(Icons.Outlined.Refresh, "Try again", tint, r.regenerate)
+                    ReplyAction(Icons.Outlined.Edit, "Edit message", tint) { r.edit(item.text) }
+                }
+            }
         }
         ItemKind.ASSISTANT.name -> Column {
             SelectionContainer {
                 RichText(item.text, AuraType.body, aura.label, Modifier.padding(horizontal = 12.dp).onPage().padding(horizontal = 6.dp, vertical = 2.dp))
             }
-            ReplyActions(item.text, copy)
+            ReplyActions(item.text, copy, redo?.regenerate)
         }
         ItemKind.CARD.name -> ChatCard.decode(item.text)?.let { CardView(it, onPick) }
         ItemKind.PROMPT.name -> Text(
@@ -802,7 +864,7 @@ private fun rememberCopy(): (String) -> Unit {
  * Plain text drops the Markdown marks, for pasting into a message.
  */
 @Composable
-private fun ReplyActions(text: String, copy: (String) -> Unit) {
+private fun ReplyActions(text: String, copy: (String) -> Unit, regenerate: (() -> Unit)? = null) {
     val aura = LocalAura.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val tint = if (aura.sky != null) aura.onSkyMuted else aura.tertiary
@@ -813,6 +875,7 @@ private fun ReplyActions(text: String, copy: (String) -> Unit) {
             val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, plainText(text))
             context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
+        regenerate?.let { ReplyAction(Icons.Outlined.Refresh, "Regenerate reply", tint, it) }
     }
 }
 

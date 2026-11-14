@@ -1,6 +1,7 @@
 package com.aura.aura_ui.agentcore
 
 import androidx.room.Room
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -33,5 +34,21 @@ class ThreadStoreTest {
         assertEquals(listOf("Book a cab to the airport", "Booked an Ola Mini.", "Thanks"), threads.around(hit.rowid).map { it.text })
         threads.setSummary(t, "User booked an Ola to the airport.")
         assertEquals("User booked an Ola to the airport.", threads.thread(t)?.summary)
+    }
+
+    @Test
+    fun `undo puts the context back, removes the turn from the chat and returns what was sent`() = runBlocking {
+        // saveContext is not called: Robolectric's SQLite hides the conflict Room's @Upsert relies on.
+        val t = threads.create().id
+        threads.append(t, ItemKind.USER, "first")
+        val photo = Attachment("content://photo/1", "image/jpeg", "receipt.jpg", 10)
+        val asked = threads.append(t, ItemKind.USER, "what is this", attachments = listOf(photo))
+        threads.append(t, ItemKind.ASSISTANT, "A receipt.")
+        threads.setUndo(t, Undo(null, ContextCodec.encodeTaint(setOf(Origin.WEB)), asked))
+
+        assertEquals("what is this" to listOf(photo), threads.undo(t))
+        assertEquals(listOf("first"), db.dao().items(t).first().map { it.text })
+        assertEquals(setOf(Origin.WEB), threads.loadContext(t).taint)
+        assertEquals(null, threads.undo(t))
     }
 }
