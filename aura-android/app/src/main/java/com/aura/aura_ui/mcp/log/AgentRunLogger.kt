@@ -352,9 +352,10 @@ class AgentRunLogger(
             it.endReason = reason
             verdict?.let { v -> it.outcome = v }
             report?.let { r -> it.reports.add(r) }
+            // Inside the writer's queue: a tool's end still queued before this must see its call.
+            pending = null
+            lastToolIndex = -1
         }
-        pending = null
-        lastToolIndex = -1
     }
 
     /**
