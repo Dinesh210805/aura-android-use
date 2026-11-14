@@ -54,7 +54,7 @@ class AgentRunLoggerTrailTest {
         )
         logger.endRun("completed")
 
-        val s = awaitSession(root) { it.endReason != null }
+        val s = awaitSession(root) { it.endReason != null && it.command == "text Amma I'm late" }
         val dir = File(root, s.sessionId)
         assertEquals(bigRequest, File(dir, s.llmCalls[0].rawRequestFile!!).readText())
         assertEquals("research-phrase", s.llmCalls[1].purpose)
@@ -74,7 +74,8 @@ class AgentRunLoggerTrailTest {
     private fun awaitSession(root: File, until: (SessionLog) -> Boolean): SessionLog {
         val json = Json { ignoreUnknownKeys = true }
         repeat(100) {
-            root.listFiles()?.firstOrNull()?.let { File(it, "metadata.json") }?.takeIf { it.exists() }?.let { f ->
+            // Every folder, not the first: another test's writer can still be flushing its own session here.
+            root.listFiles().orEmpty().map { File(it, "metadata.json") }.filter { it.exists() }.forEach { f ->
                 runCatching { json.decodeFromString(SessionLog.serializer(), f.readText()) }.getOrNull()
                     ?.takeIf(until)?.let { return it }
             }
@@ -90,7 +91,7 @@ class AgentRunLoggerTrailTest {
         logger.onToolStart("launch_app", "{}")
         logger.endRun("completed", report = RunReportLog(5L, "open Spotify", "Task complete · AURA · 3s"))
 
-        val s = awaitSession(root) { it.endReason != null }
+        val s = awaitSession(root) { it.endReason != null && it.source != LiveConversationLogger.SOURCE_LIVE }
         assertEquals(listOf("Task complete · AURA · 3s"), s.reports.map { it.text })
     }
 
@@ -112,7 +113,7 @@ class AgentRunLoggerTrailTest {
         LiveSessionScope.setConversation(null)
         conversation.close { it.endReason = "closed" }
 
-        val s = awaitSession(root) { it.endReason != null }
+        val s = awaitSession(root) { it.endReason != null && it.source == LiveConversationLogger.SOURCE_LIVE }
         assertEquals(listOf("open Spotify", "open Maps"), s.reports.map { it.task })
         assertEquals("the first task names the session", "open Spotify", s.command)
     }
