@@ -368,7 +368,9 @@ class EvalRunner(
 
         var thrown: Throwable? = null
         val answer: String? = try {
-            withTimeoutOrNull(taskTimeoutMs) { runGoal(goal) }
+            // Assistant tasks (/goal, /btw, switches) are done by hand in the chat, which the overlay
+            // does not parse: the cockpit only takes the verdict.
+            if (task.category == EvalCategory.ASSISTANT.id) "" else withTimeoutOrNull(taskTimeoutMs) { runGoal(goal) }
         } catch (ce: CancellationException) {
             throw ce
         } catch (t: Throwable) {

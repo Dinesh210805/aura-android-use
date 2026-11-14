@@ -98,7 +98,7 @@ object Goals {
     }
 
     const val UNCLEAR = "I could not check the progress, so I stopped."
-    const val OUT_OF_TURNS = "Goal paused after $MAX_TURNS turns. Say keep going to continue."
+    const val OUT_OF_TURNS = "Goal paused after $MAX_TURNS turns. Send /goal again to continue."
     private const val MAX_REASON = 200
     private const val MAX_ANSWER = 2_000
     private const val MAX_GOAL_IN_NOTICE = 80

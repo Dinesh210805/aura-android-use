@@ -122,6 +122,7 @@ import java.time.LocalTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -316,6 +317,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             // Before steering: a side question must not reach the running task.
             Btw.questionIn(text)?.let { core.btw(id, it); return@launch }
             if (running.value && core.engine.steer(id, text)) return@launch
+            // Running but nothing to steer: a goal between turns (its judge is thinking) or a turn
+            // still starting. The new message replaces it; two turns must never share a thread.
+            if (running.value) turn?.cancelAndJoin()
             core.releaseIdlePause()
             outOfTime.value = false
             if (interrupted.value != null) {

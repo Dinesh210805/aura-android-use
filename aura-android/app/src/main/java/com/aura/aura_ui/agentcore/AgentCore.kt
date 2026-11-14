@@ -247,7 +247,7 @@ class AgentCore private constructor(private val app: Context) {
         notifyDigest = ::showDigest,
     )
 
-    private val jobRunner = JobRunner(engine, threads, jobs) { title, text, threadId -> notify(title, text, threadId.hashCode(), threadId) }
+    private val jobRunner = JobRunner({ id, text -> engine.runTurn(id, text, mode = RunMode.BACKGROUND) }, threads, jobs) { title, text, threadId -> notify(title, text, threadId.hashCode(), threadId) }
 
     /** Whether AURA watches notifications and sends digests. Off until the user turns it on. */
     var alwaysOn: Boolean

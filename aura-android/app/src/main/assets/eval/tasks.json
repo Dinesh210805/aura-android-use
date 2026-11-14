@@ -235,7 +235,7 @@
       "goal": "/btw How many minutes are there in a week",
       "category": "assistant",
       "needs_human": true,
-      "truth_check": "Start a long phone task in the chat first (for example Open YouTube and search for lofi music), then type this in the chat while it runs. PASS: the answer (10080) appears in the chat within seconds, the running task carries on unchanged and never mentions minutes, and nothing on the phone is touched for the side question. FAIL: the task stops, changes course, or treats the question as part of the task."
+      "truth_check": "Start a long task that stays in the chat first (for example Search the web for the best budget phones this year and compare five of them), then type this in the chat while it runs; a task on the screen would pause when you touch the chat. PASS: the answer (10080) appears in the chat within seconds, the running task carries on unchanged and never mentions minutes, and nothing on the phone is touched for the side question. FAIL: the task stops, changes course, or treats the question as part of the task."
     },
     {
       "number": 35,

@@ -7,6 +7,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.time.Instant
 import java.time.ZoneId
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -118,7 +119,8 @@ class JobStore(
  *   the same job twice at once.
  */
 class JobRunner(
-    private val engine: AgentEngine,
+    /** Runs one [RunMode.BACKGROUND] turn: `engine.runTurn(threadId, text, mode = BACKGROUND)`. */
+    private val turn: (threadId: String, text: String) -> Flow<AgentEvent>,
     private val threads: ThreadStore,
     private val jobs: JobStore,
     private val now: () -> Long = System::currentTimeMillis,
@@ -149,7 +151,7 @@ class JobRunner(
         val thread = threads.create(job.prompt.take(TITLE_CHARS))
         val preamble = if (target != null) Heartbeat.PREAMBLE else PREAMBLE
         val answer = runCatching {
-            engine.runTurn(thread.id, preamble + job.prompt, mode = RunMode.BACKGROUND).toList()
+            turn(thread.id, preamble + job.prompt).toList()
                 .filterIsInstance<AgentEvent.TurnEnded>().lastOrNull()?.message
         }.getOrNull()
         val said = answer?.takeIf { it.isNotBlank() && Schedule.SILENT !in it }
@@ -349,8 +351,9 @@ fun scheduleTools(jobs: JobStore): List<NativeTool> {
         val every = (args["every_minutes"]?.jsonPrimitive?.longOrNull?.toInt() ?: Schedule.MIN_EVERY_MINUTES)
             .coerceAtLeast(Schedule.MIN_EVERY_MINUTES)
         val hours = (args["hours"]?.jsonPrimitive?.longOrNull?.toInt() ?: DEFAULT_WATCH_HOURS).coerceIn(1, MAX_WATCH_HOURS)
-        if (condition.isBlank()) {
-            SourceResult("A condition is required.", isError = true)
+        if (condition.isBlank() || condition.length > MAX_CONDITION) {
+            // Short enough that the approval card shows all of it: the user approves the exact words.
+            SourceResult("Give the condition as one sentence of at most $MAX_CONDITION characters.", isError = true)
         } else {
             jobs.watch(condition, every, hours, turn.threadId)?.let { SourceResult("Watching: ${describe(it)}") }
                 ?: SourceResult("There are already ${Schedule.MAX_JOBS} scheduled tasks. Cancel one first.", isError = true)
@@ -362,3 +365,4 @@ fun scheduleTools(jobs: JobStore): List<NativeTool> {
 
 private const val DEFAULT_WATCH_HOURS = 6
 private const val MAX_WATCH_HOURS = 24
+private const val MAX_CONDITION = 160
