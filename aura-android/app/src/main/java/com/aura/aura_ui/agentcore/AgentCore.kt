@@ -96,6 +96,9 @@ class AgentCore private constructor(private val app: Context) {
         ask = { system, input -> models.resolve(ModelRole.FAST)?.ask(system, input) },
     )
     val jobs = JobStore(dao)
+
+    /** What the user attached, read for the model ([AttachmentReader]). */
+    private val files = AttachmentReader(app)
     val telemetry = AgentTelemetry(File(root, "traces"), BuildConfig.VERSION_NAME, keepDays = { LogKeep.days(app) })
     val broker = UserBroker { turn, question, options ->
         if (turn.threadId !in surfaceThreads) {
@@ -109,7 +112,8 @@ class AgentCore private constructor(private val app: Context) {
 
     private val native = NativeToolSource(
         "native",
-        memoryTools(memory, threads, broker::confirm) + skillTools(skills, broker::confirm) + scheduleTools(jobs),
+        memoryTools(memory, threads, broker::confirm) + skillTools(skills, broker::confirm) + scheduleTools(jobs) +
+            attachmentTools(files, threads),
     )
 
     /** Connectors come last: the first source to claim a tool name keeps it. */
@@ -173,7 +177,7 @@ class AgentCore private constructor(private val app: Context) {
         device = ::snapshot,
         profile = { profileBlockOrEmpty(app).takeIf { it.isNotBlank() } },
         telemetry = telemetry,
-        readAttachment = ::readAttachment,
+        files = files,
         beforeTurn = {
             importOldMemories()
             phone.startTask()
@@ -558,11 +562,6 @@ class AgentCore private constructor(private val app: Context) {
         )
     }
 
-    private fun readAttachment(file: Attachment): ByteArray? = runCatching {
-        if (file.sizeBytes > MAX_ATTACHMENT_BYTES) return null
-        app.contentResolver.openInputStream(android.net.Uri.parse(file.uri))?.use { it.readBytes() }
-    }.getOrNull()
-
     /** [threadId] is the chat the notification opens, or null to open the app as it was. */
     private fun notify(title: String, text: String, id: Int, threadId: String? = null) {
         val manager = NotificationManagerCompat.from(app)
@@ -602,7 +601,6 @@ class AgentCore private constructor(private val app: Context) {
         private const val DIGEST_ID = 0x41555241
         private const val MAX_TITLE = 60
         private const val MAX_TEXT = 1_000
-        private const val MAX_ATTACHMENT_BYTES = 8L * 1024 * 1024
         /**
          * Skills in `assets/skills/` worth installing. `act-without-screen` is left out because its
          * routes are in the system prompt, and `aura-skill` because it describes the other agent's tools.

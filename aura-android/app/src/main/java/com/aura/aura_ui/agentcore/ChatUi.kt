@@ -903,7 +903,7 @@ private fun Composer(
             )
         }
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            ComposerButton(Icons.Rounded.Add, "Attach a file") { runCatching { picker.launch(arrayOf("image/*", "text/*", "application/json")) } }
+            ComposerButton(Icons.Rounded.Add, "Attach a file") { runCatching { picker.launch(AttachmentReader.PICKABLE) } }
             // The model name takes what is left and shortens first; the buttons keep their 44dp.
             Box(Modifier.weight(1f)) { ModelChip(vm, onModels) }
             ComposerButton(if (dictation.listening) Icons.Rounded.Stop else Icons.Rounded.Mic, if (dictation.listening) "Stop dictation" else "Dictate", active = dictation.listening, onClick = dictation::toggle)

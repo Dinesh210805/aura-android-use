@@ -56,8 +56,8 @@ class AgentEngine(
     private val profile: () -> String? = { null },
     private val telemetry: AgentTelemetry? = null,
     private val limits: TurnLimits = TurnLimits(),
-    /** Bytes of an attachment, or null when it cannot be read any more. */
-    private val readAttachment: suspend (Attachment) -> ByteArray? = { null },
+    /** Pictures, document text and OCR for what the user attached; null reads nothing. */
+    private val files: AttachmentReader? = null,
     /** Runs before the first model call of a turn, for example `PhoneToolSource.startTask`. */
     private val beforeTurn: suspend () -> Unit = {},
     private val now: () -> Long = System::currentTimeMillis,
@@ -213,7 +213,8 @@ class AgentEngine(
     /** What a turn has produced so far, kept outside the agent so a cancelled turn can still be saved. */
     private class TurnRun(var messages: List<Message>, var end: TurnEnd = TurnEnd.ANSWERED)
 
-    private class TurnInput(val text: String, val images: List<ByteArray>)
+    /** The user's message: its text and the attached pictures as (file name, JPEG). */
+    private class TurnInput(val text: String, val images: List<Pair<String, ByteArray>>)
 
     private suspend fun execute(
         main: ResolvedModel,
@@ -238,7 +239,7 @@ class AgentEngine(
         var progressStep = 0
         val requestCap = maxRequests()
         var driving = false
-        val history = run.messages
+        val history = if (main.vision) replayImages(turn.threadId, run.messages) else run.messages
         // Background work started by this turn. Cancelled when the turn ends, finished or not.
         val side = CoroutineScope(currentCoroutineContext() + SupervisorJob(currentCoroutineContext()[Job]))
         var researching = false
@@ -248,7 +249,7 @@ class AgentEngine(
                 appendPrompt {
                     user {
                         text(input.text)
-                        input.images.forEach { image(pngImage(it, "attachment.png")) }
+                        input.images.forEach { (name, jpeg) -> image(jpegImage(jpeg, name)) }
                     }
                 }
             }
@@ -444,7 +445,7 @@ class AgentEngine(
             telemetry?.let { tracing -> install(OpenTelemetry) { tracing.configure(this) } }
         }
         return try {
-            agent.run(TurnInput(userMessage(turn, firstTurn, asked, attachments, carried), images(main, turn, attachments)))
+            agent.run(TurnInput(userMessage(turn, firstTurn, asked, attachments, carried, main.vision), images(main, turn, attachments)))
         } finally {
             side.cancel()
             if (driving) onDriving(false, text)
@@ -558,7 +559,14 @@ class AgentEngine(
     }
 
     /** The user's words, preceded by what the model needs to know about now and about them. */
-    private suspend fun userMessage(turn: TurnState, firstTurn: Boolean, text: String, attachments: List<Attachment>, carried: String? = null): String =
+    private suspend fun userMessage(
+        turn: TurnState,
+        firstTurn: Boolean,
+        text: String,
+        attachments: List<Attachment>,
+        carried: String? = null,
+        vision: Boolean = true,
+    ): String =
         buildString {
             if (firstTurn) memory.block()?.let { append(it).append("\n\n") }
             if (firstTurn && carried != null) append(Fence.wrap(Origin.HISTORY, "Earlier in this chat (a summary):\n$carried")).append("\n\n")
@@ -568,6 +576,8 @@ class AgentEngine(
             // would otherwise have arrived as the result of loading the toolset.
             if (ToolHub.SCREEN in turn.loaded()) append(SystemPrompt.SCREEN_GUIDE).append("\n\n")
             attachments.filterNot { it.isImage }.forEach { append(fileBlock(turn, it)).append("\n\n") }
+            // A model that cannot see gets the text in each picture instead.
+            if (!vision) attachments.filter { it.isImage }.take(MAX_IMAGES).forEach { append(ocrBlock(turn, it)).append("\n\n") }
             append(text)
         }
 
@@ -584,18 +594,42 @@ class AgentEngine(
         return summary
     }
 
+    /** The first window of a document, fenced; past the window, a note saying how to read on. */
     private suspend fun fileBlock(turn: TurnState, file: Attachment): String {
-        val readable = file.mimeType.startsWith("text/") || file.mimeType == "application/json"
-        val bytes = (if (readable) readAttachment(file) else null)
-            ?: return "[attached file ${file.displayName} (${file.mimeType}) cannot be read as text]"
+        val chunk = files?.text(file, 0) ?: return "[attached file ${file.displayName} (${file.mimeType}) cannot be read as text]"
         turn.taint.mark(Origin.FILE)
-        return Fence.wrap(Origin.FILE, "${file.displayName}:\n" + ContextAssembler.clamp(String(bytes), MAX_FILE_CHARS))
+        val block = Fence.wrap(Origin.FILE, "${file.displayName}:\n${chunk.text}")
+        if (!chunk.more) return block
+        val total = chunk.total?.toString() ?: "more than ${chunk.end}"
+        return block + "\n" + MORE_TEXT.replace("{shown}", "${chunk.end}").replace("{total}", total).replace("{name}", file.displayName)
     }
 
-    private suspend fun images(main: ResolvedModel, turn: TurnState, attachments: List<Attachment>): List<ByteArray> {
+    /** For a model that cannot see: what on-device OCR read in the picture, fenced, under a note that it is only that. */
+    private suspend fun ocrBlock(turn: TurnState, file: Attachment): String {
+        val text = files?.ocr(file).orEmpty()
+        if (text.isBlank()) return NO_TEXT_IN_IMAGE.replace("{name}", file.displayName)
+        turn.taint.mark(Origin.FILE)
+        return OCR_HEADER.replace("{name}", file.displayName) + "\n" + Fence.wrap(Origin.FILE, ContextAssembler.clamp(text, MAX_FILE_CHARS))
+    }
+
+    private suspend fun images(main: ResolvedModel, turn: TurnState, attachments: List<Attachment>): List<Pair<String, ByteArray>> {
         if (!main.vision) return emptyList()
-        return attachments.filter { it.isImage }.take(MAX_IMAGES).mapNotNull { readAttachment(it) }
+        return attachments.filter { it.isImage }.take(MAX_IMAGES).mapNotNull { a -> files?.image(a)?.let { a.displayName to it } }
             .also { if (it.isNotEmpty()) turn.taint.mark(Origin.FILE) }
+    }
+
+    /**
+     * [messages] with the newest pictures the user attached earlier put back beside their markers
+     * ([ContextAssembler.imagesToReplay]). A picture whose file is gone stays a marker.
+     */
+    private suspend fun replayImages(threadId: String, messages: List<Message>): List<Message> {
+        val reader = files ?: return messages
+        val wanted = ContextAssembler.imagesToReplay(messages).takeIf { it.isNotEmpty() } ?: return messages
+        val known = runCatching { threads.attachments(threadId) }.getOrDefault(emptyList()).filter { it.isImage }.associateBy { it.displayName }
+        val parts = wanted.mapNotNull { (index, name) ->
+            known[name]?.let { reader.image(it) }?.let { index to MessagePart.Attachment(jpegImage(it, name)) }
+        }.groupBy({ it.first }, { it.second })
+        return messages.mapIndexed { index, message -> parts[index]?.let { ContextAssembler.withImages(message, it) } ?: message }
     }
 
     private suspend fun save(turn: TurnState, run: TurnRun) {
@@ -623,6 +657,9 @@ class AgentEngine(
 
     private fun pngImage(bytes: ByteArray, name: String) =
         AttachmentSource.Image(AttachmentContent.Binary.Bytes(bytes), "png", "image/png", name)
+
+    private fun jpegImage(bytes: ByteArray, name: String) =
+        AttachmentSource.Image(AttachmentContent.Binary.Bytes(bytes), "jpg", "image/jpeg", name)
 
     /** The reply without the reasoning some models write inline. */
     private fun visibleText(reply: Message.Assistant): String = THINKING.replace(reply.textContent(), "").trim()
@@ -694,6 +731,15 @@ Output exactly that one line and nothing else."""
         val QUOTA_ERROR = Regex("\\b429\\b|(?i)rate limit|quota|resource_exhausted")
         val NETWORK_ERROR = Regex("(?i)UnknownHost|ConnectException|SocketTimeout|timed? ?out|unable to resolve host|SSLException")
         const val MAX_FILE_CHARS = 20_000
+        const val MORE_TEXT = "[You saw characters 1 to {shown} of {total} of \"{name}\". If the question needs a later part, call " +
+            "read_attachment with name \"{name}\" and offset {shown}. Otherwise answer from what is above.]"
+        const val OCR_HEADER = "[Image \"{name}\": you cannot see this image with the current model. Below is only the text found " +
+            "in it by on-device OCR. It may be incomplete or garbled, and it says nothing about what the picture shows apart " +
+            "from its text. If the user asks about anything beyond that text, say you cannot see images with this model and " +
+            "suggest they pick a model with vision.]"
+        const val NO_TEXT_IN_IMAGE = "[Image \"{name}\": you cannot see this image with the current model, and on-device OCR " +
+            "found no text in it. If the user asks about it, say you cannot see images with this model and suggest they pick " +
+            "a model with vision.]"
         const val MAX_IMAGES = 4
         const val MAX_TITLE_INPUT = 500
         const val MAX_DIGEST_OUTCOME = 1_000

@@ -447,10 +447,49 @@ Latest instruction: the user's most recent instruction or correction, word for w
 
     /**
      * What to persist between turns: no system message (rebuilt every turn) and no image bytes
-     * (a stored screenshot is stale, and base64 in a database row is megabytes).
+     * (a stored screenshot is stale, and base64 in a database row is megabytes). A picture the user
+     * attached stays as an [IMAGE_MARKER] line in its message, so the words around it survive and
+     * [imagesToReplay] can bring the picture back.
      */
     fun forStorage(messages: List<Message>): List<Message> =
-        evictStaleScreens(messages).filterNot { it is Message.System || it.hasAttachment() || it.isRunNote() }
+        evictStaleScreens(messages)
+            .filterNot { it is Message.System || it.isScreenImage() || it.isRunNote() }
+            .map { it.withImageMarkers() }
+            .filterNot { it.hasAttachment() }
+
+    /** "[image: name]": a user's picture in a stored message. */
+    fun imageMarker(name: String) = "$IMAGE_MARKER$name]"
+
+    /**
+     * The pictures to send again with a rebuilt history: the newest [keep] markers, as
+     * (message index, file name), oldest first. A model that can see is shown the photo the user
+     * asked about a turn ago, not just its name.
+     */
+    fun imagesToReplay(messages: List<Message>, keep: Int = REPLAY_IMAGES): List<Pair<Int, String>> =
+        messages.flatMapIndexed { index, message ->
+            if (message !is Message.User || message.hasAttachment()) emptyList()
+            else MARKER.findAll(message.textContent()).map { index to it.groupValues[1] }.toList()
+        }.takeLast(keep)
+
+    /** [message] with [images] added after its parts. Only user messages carry pictures. */
+    fun withImages(message: Message, images: List<MessagePart.Attachment>): Message =
+        if (message is Message.User && images.isNotEmpty()) Message.User(message.parts + images, message.metaInfo, message.id) else message
+
+    private fun Message.withImageMarkers(): Message {
+        if (this !is Message.User || !hasAttachment()) return this
+        val text = textContent()
+        val parts = parts.mapNotNull { part ->
+            if (part !is MessagePart.Attachment) return@mapNotNull part
+            val marker = imageMarker(part.source.fileName ?: "image")
+            // A replayed picture already sits beside its marker.
+            if (marker in text) null else MessagePart.Text(marker)
+        }
+        return Message.User(parts, metaInfo, id)
+    }
+
+    const val IMAGE_MARKER = "[image: "
+    const val REPLAY_IMAGES = 3
+    private val MARKER = Regex("""\[image: ([^\]\n]+)]""")
 
     /** The ledger and the stuck note describe one run; the next turn must not read them as its own. */
     private fun Message.isRunNote(): Boolean =

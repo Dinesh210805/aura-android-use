@@ -76,6 +76,8 @@ also pulls the folder.
 | `RunJournal.kt` | The readable run log: request, each step in plain words (`StepPhrase`), the screen before each press with the pressed element's box, the answer. Redacted, kept 7 days. |
 | `ChatTheme.kt` | The chat's colours (Apple system colours, light and dark), Inter type, the glass surface. |
 | `ChatUi.kt` | The chat screen and its ViewModel: greeting with the app marquee, transcript, glass composer with the model picker. No agent logic. |
+| `AttachmentReader.kt` | What the user attached, read for the model: pictures as JPEG at most 1,568 px (same bytes every time, so a replayed picture keeps the prompt cache); document text a 20,000-character window at a time (text, PDF page by page with its text layer or ML Kit OCR of the rendered page, Word, Excel); OCR text of a picture for a model that cannot see. `read_attachment` pages a file attached in the current chat. |
+| `DocText.kt` | Word and Excel files as text (zipped XML, read with a size cap and no DTD); `DocChunk`, one window of a document. Pure. |
 | `ChatAttachments.kt` | Attachments in the chat: image thumbnails and file chips with type icons, in the composer (× removes one) and in the sent bubble; a tap opens the image full screen or the file in its app. Pictures decode off the main thread at display size into a 16 MB cache keyed by URI. |
 | `ChatCards.kt` | Cards: files (grid and rows, tap opens, hold shares), contacts (call, message, WhatsApp; tap to choose), results, plan, the question and Allow/Edit/Deny cards, folded steps. |
 | `ChatDrawer.kt` | The drawer (account, chats by day, panels, switches, appearance) and the panels: run log, schedules, memory, skills, connections. |

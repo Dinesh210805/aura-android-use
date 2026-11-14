@@ -1,7 +1,10 @@
 package com.aura.aura_ui.agentcore
 
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.message.AttachmentContent
+import ai.koog.prompt.message.AttachmentSource
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.MessagePart
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -200,5 +203,41 @@ class ContextAssemblerTest {
         val brief = SystemPrompt.build("likes tea", "menu", "skills", "Pixel 9, Android 16", TalkStyle.BRIEF)
         assertEquals(1, Regex("<how_you_talk>").findAll(brief).count())
         assertEquals(plain.length + 2 + TalkStyle.BRIEF.block.length, brief.length)
+    }
+
+    private fun jpeg(name: String) = AttachmentSource.Image(AttachmentContent.Binary.Bytes(byteArrayOf(1, 2, 3)), "jpg", "image/jpeg", name)
+
+    @Test
+    fun `a user's picture is stored as a marker with its words and a screenshot note is dropped`() {
+        val messages = prompt("t") {
+            user {
+                text("what is on this receipt")
+                image(jpeg("receipt.jpg"))
+            }
+            assistant("A coffee for 180.")
+            user {
+                text(ContextAssembler.SCREEN_IMAGE_NOTE)
+                image(jpeg("screen.png"))
+            }
+        }.messages
+
+        val stored = ContextAssembler.forStorage(messages)
+
+        assertEquals(2, stored.size)
+        assertTrue(stored.none { m -> m.parts.any { it is MessagePart.Attachment } })
+        assertEquals("what is on this receipt\n[image: receipt.jpg]", stored[0].textContent())
+        assertEquals(listOf(0 to "receipt.jpg"), ContextAssembler.imagesToReplay(stored))
+    }
+
+    @Test
+    fun `a replayed picture is stored once and only the newest three come back`() {
+        val stored = (1..4).map { n -> prompt("t") { user { text("look"); image(jpeg("p$n.jpg")) } }.messages.single() }
+            .let(ContextAssembler::forStorage)
+        assertEquals(listOf(1, 2, 3), ContextAssembler.imagesToReplay(stored).map { it.first })
+
+        val replayed = ContextAssembler.withImages(stored[3], listOf(MessagePart.Attachment(jpeg("p4.jpg"))))
+        val again = ContextAssembler.forStorage(listOf(replayed)).single()
+        assertEquals(stored[3].textContent(), again.textContent())
+        assertTrue(again.parts.none { it is MessagePart.Attachment })
     }
 }

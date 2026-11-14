@@ -161,6 +161,9 @@ interface AgentDao {
     )
     suspend fun itemsBetween(threadId: String, fromMs: Long, toMs: Long): List<ItemRow>
 
+    @Query("SELECT attachmentsJson FROM items WHERE threadId = :threadId AND attachmentsJson IS NOT NULL ORDER BY atMs, rowid")
+    suspend fun attachmentRows(threadId: String): List<String>
+
     @Insert
     suspend fun insertMemory(row: MemoryRow): Long
 
@@ -350,6 +353,12 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         }
 
     suspend fun setSummary(threadId: String, summary: String) = dao.setSummary(threadId, summary)
+
+    /** Every file attached in [threadId], oldest first. A row that does not parse is skipped. */
+    suspend fun attachments(threadId: String): List<Attachment> = dao.attachmentRows(threadId).flatMap { json ->
+        runCatching { kotlinx.serialization.json.Json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(Attachment.serializer()), json) }
+            .getOrDefault(emptyList())
+    }
 
     /** The user and assistant messages within [AROUND_MS] of item [id] in its thread, oldest first, at most [AROUND_MAX]. */
     suspend fun around(id: Long): List<ItemRow> {
