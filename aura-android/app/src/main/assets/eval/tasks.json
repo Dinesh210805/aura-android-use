@@ -229,6 +229,13 @@
       "category": "assistant",
       "needs_human": true,
       "truth_check": "Type it in the chat; the cockpit runs goals through the overlay, which does not read /goal. PASS: it stops by itself (done, or a Goal paused line with a reason) within 8 turns, each extra turn shows a Working on line, and the notifications it names are really in the shade. FAIL: it keeps taking turns after the answer is complete, or names notifications that are not there."
+    },
+    {
+      "number": 34,
+      "goal": "/btw How many minutes are there in a week",
+      "category": "assistant",
+      "needs_human": true,
+      "truth_check": "Start a long phone task in the chat first (for example Open YouTube and search for lofi music), then type this in the chat while it runs. PASS: the answer (10080) appears in the chat within seconds, the running task carries on unchanged and never mentions minutes, and nothing on the phone is touched for the side question. FAIL: the task stops, changes course, or treats the question as part of the task."
     }
   ]
 }

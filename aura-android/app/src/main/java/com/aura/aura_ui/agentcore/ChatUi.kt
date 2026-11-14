@@ -313,6 +313,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (text.isBlank() && uris.isEmpty()) return
         viewModelScope.launch {
             val id = threadId.value ?: core.threads.create().id.also { threadId.value = it }
+            // Before steering: a side question must not reach the running task.
+            Btw.questionIn(text)?.let { core.btw(id, it); return@launch }
             if (running.value && core.engine.steer(id, text)) return@launch
             core.releaseIdlePause()
             outOfTime.value = false

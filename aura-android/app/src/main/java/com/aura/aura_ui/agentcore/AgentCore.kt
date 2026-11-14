@@ -206,6 +206,17 @@ class AgentCore private constructor(private val app: Context) {
 
     fun forgetInterrupted() = prefs.edit().remove(KEY_RUNNING).apply()
 
+    /**
+     * Answer a `/btw` side question in [threadId] on the FAST model ([Btw]), with no tools.
+     * - Fails: no FAST model or an error puts [Btw.NO_ANSWER] in the chat.
+     */
+    suspend fun btw(threadId: String, question: String) {
+        val transcript = threads.recentTranscript(threadId, BTW_CONTEXT)
+        threads.append(threadId, ItemKind.USER, Btw.PREFIX + question)
+        val answer = models.resolve(ModelRole.FAST)?.ask(Btw.SYSTEM, Btw.input(transcript, question))
+        threads.append(threadId, ItemKind.ASSISTANT, answer?.trim()?.takeIf { it.isNotEmpty() } ?: Btw.NO_ANSWER)
+    }
+
     /** The FAST model's verdict line on a goal's progress ([Goals.goalLoop]), or null without one. */
     suspend fun judgeGoal(evidence: String): String? = models.resolve(ModelRole.FAST)?.ask(Goals.JUDGE_SYSTEM, evidence)
 
@@ -557,6 +568,7 @@ class AgentCore private constructor(private val app: Context) {
         private const val SURFACE_THREAD_IDLE_MS = 15 * 60_000L
         private const val KEEP_GOING_HINT = " I stopped before finishing. Say \"keep going\" to continue."
         private const val ASK_TIMEOUT_MS = 120_000L
+        private const val BTW_CONTEXT = 20
         private const val CHANNEL = "aura_agentcore"
         private const val WORK = "agentcore-tick"
         private const val DIGEST_ID = 0x41555241

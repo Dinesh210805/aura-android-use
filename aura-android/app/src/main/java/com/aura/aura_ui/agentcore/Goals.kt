@@ -67,7 +67,7 @@ object Goals {
      * Run [goal] as up to [MAX_TURNS] turns.
      * @param turn starts one turn with the text the model is sent; `quiet` is true for a "keep going"
      *   the transcript should not show as a user message.
-     * @param judge the FAST model's reply to [JUDGE_SYSTEM] for the evidence, or null.
+     * @param judge the FAST model's reply to [JUDGE_SYSTEM] for the evidence, or null when it failed; must not throw.
      * @param notice adds a line to the visible chat.
      */
     fun goalLoop(
@@ -89,7 +89,7 @@ object Goals {
             val ended = end ?: return@flow
             if (ended.end != TurnEnd.ANSWERED) return@flow
             done += tools to ended.message.orEmpty()
-            when (val verdict = parse(runCatching { judge(evidence(goal, done)) }.getOrNull())) {
+            when (val verdict = parse(judge(evidence(goal, done)))) {
                 GoalVerdict.Done -> return@flow
                 GoalVerdict.Continue -> if (n == MAX_TURNS) notice(OUT_OF_TURNS)
                 is GoalVerdict.Blocked -> return@flow notice("Goal paused: ${verdict.reason}")

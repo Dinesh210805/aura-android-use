@@ -68,6 +68,7 @@ also pulls the folder.
 | `ToolSearch.kt` | Ranking for `find_tools`. A toolset with more than `ToolHub.BIG_TOOLSET` tools is a count in the menu and is reached with `find_tools` then `load_tools`, which appends just those schemas in load order. |
 | `ConnectorRisk.kt` | Connector tool risk from MCP annotations; per-call risk for Composio's multi-execute from the app tools it runs. |
 | `DoSteps.kt` | `do_steps`: runs a known step list in one call, finding each target by label on a fresh screen and sending every action through the hub's own gate. |
+| `Btw.kt` | `/btw <question>` in the chat: a side question answered on the FAST model with no tools, from the fenced recent chat, while a task runs. Checked before steering, so it never reaches the running turn; the Q and A are visible items only. |
 | `Goals.kt` | Goal mode: `/goal <text>` in the chat runs up to 8 turns in the chat (no hand-off). After each turn the FAST model judges `DONE`, `CONTINUE` or `BLOCKED: reason` from the goal, each turn's tool names and its fenced answer. The next turn gets a fixed "keep going" message, never the judge's words; anything unparseable stops the goal. |
 | `Scheduler.kt` | Scheduled prompts (`schedule_task`), run read-only in the background. |
 | `Ambient.kt` | Notification triage and digests. |
