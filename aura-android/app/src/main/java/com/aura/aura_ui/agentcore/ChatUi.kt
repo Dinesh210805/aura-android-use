@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.CircularProgressIndicator
@@ -449,6 +450,12 @@ fun AgentChatScreen(
     val learned by vm.learned.collectAsState()
     val profile by vm.profile.collectAsState()
     var draft by rememberSaveable { mutableStateOf("") }
+    // Find in chat: the words (null when the bar is closed) and which match is in view, newest first.
+    var finding by remember { mutableStateOf<String?>(null) }
+    val matches = remember(items, finding) { ChatFind.matches(items, finding.orEmpty()) }
+    var findAt by remember { mutableStateOf(0) }
+    LaunchedEffect(matches) { findAt = (matches.size - 1).coerceAtLeast(0) }
+    LaunchedEffect(current) { finding = null }
     var modelsOpen by remember { mutableStateOf(false) }
     val composerFocus = remember { FocusRequester() }
     val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -500,17 +507,30 @@ fun AgentChatScreen(
                         } else {
                             null
                         }
-                        Transcript(items, vm::pick, insets, Modifier.fillMaxSize(), live, redo)
+                        Transcript(items, vm::pick, insets, Modifier.fillMaxSize(), live, redo, found = matches.getOrNull(findAt).takeIf { finding != null })
                     }
                 }
-                TopBar(
-                    title = threads.firstOrNull { it.id == current }?.title.takeIf { items.isNotEmpty() },
-                    profile = profile,
-                    onMenu = { scope.launch { drawer.open() } },
-                    onNewChat = { vm.open(null) }.takeIf { current != null },
-                    onProfile = { onNavigate(AuraRoutes.SETTINGS) },
-                    modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { topPx = it.height },
-                )
+                if (finding != null) {
+                    FindBar(
+                        query = finding.orEmpty(),
+                        onQuery = { finding = it },
+                        count = matches.size,
+                        at = findAt,
+                        onStep = { step -> if (matches.isNotEmpty()) findAt = (findAt + step).mod(matches.size) },
+                        onClose = { finding = null },
+                        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().onSizeChanged { topPx = it.height },
+                    )
+                } else {
+                    TopBar(
+                        title = threads.firstOrNull { it.id == current }?.title.takeIf { items.isNotEmpty() },
+                        profile = profile,
+                        onMenu = { scope.launch { drawer.open() } },
+                        onNewChat = { vm.open(null) }.takeIf { current != null },
+                        onProfile = { onNavigate(AuraRoutes.SETTINGS) },
+                        onFind = { finding = "" }.takeIf { items.isNotEmpty() },
+                        modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { topPx = it.height },
+                    )
+                }
                 // Floats under the top bar, so it moves nothing when it appears or goes.
                 AnimatedVisibility(
                     !phoneAccess,
@@ -585,6 +605,7 @@ private fun TopBar(
     onMenu: () -> Unit,
     onNewChat: (() -> Unit)?,
     onProfile: () -> Unit,
+    onFind: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val aura = LocalAura.current
@@ -602,6 +623,10 @@ private fun TopBar(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
+        }
+        if (onFind != null) {
+            GlassIconButton(Icons.Rounded.Search, "Find in chat", onFind)
+            Spacer(Modifier.width(8.dp))
         }
         if (onNewChat != null) {
             GlassIconButton(Icons.Outlined.Edit, "New chat", onNewChat)
@@ -755,6 +780,8 @@ private fun Transcript(
     modifier: Modifier,
     live: String? = null,
     redo: Redo? = null,
+    /** The find match in view: scrolled to and marked. */
+    found: Long? = null,
 ) {
     val list = rememberLazyListState()
     val shown = remember(items) { entries(items) }
@@ -763,19 +790,25 @@ private fun Transcript(
     val aura = LocalAura.current
     LaunchedEffect(shown.size, live != null) {
         val last = shown.size + (if (live != null) 1 else 0) - 1
-        if (last >= 0) list.animateScrollToItem(last)
+        if (last >= 0 && found == null) list.animateScrollToItem(last)
+    }
+    LaunchedEffect(found) {
+        val at = shown.indexOfFirst { it is Entry.One && it.row.rowid == found }
+        if (found != null && at >= 0) list.animateScrollToItem(at)
     }
     LazyColumn(modifier.fillMaxWidth(), state = list, contentPadding = padding, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(shown, key = { it.key }) { entry ->
             when (entry) {
                 is Entry.Steps -> StepsFold(entry.rows)
-                is Entry.One -> ItemView(
-                    entry.row,
-                    onPick,
-                    // Edit and run-again sit on the last exchange only, and only when it changed nothing.
-                    redo?.takeIf { entry.row.rowid == lastAsked || entry.row.rowid == lastAnswer },
-                    retry = entry.row.rowid == lastAsked && lastAnswer == null,
-                )
+                is Entry.One -> Box(if (entry.row.rowid == found) Modifier.background(aura.label.copy(alpha = FOUND_TINT)) else Modifier) {
+                    ItemView(
+                        entry.row,
+                        onPick,
+                        // Edit and run-again sit on the last exchange only, and only when it changed nothing.
+                        redo?.takeIf { entry.row.rowid == lastAsked || entry.row.rowid == lastAnswer },
+                        retry = entry.row.rowid == lastAsked && lastAnswer == null,
+                    )
+                }
             }
         }
         // The reply while it is being written; the stored item replaces it when it is done.
@@ -786,6 +819,8 @@ private fun Transcript(
         }
     }
 }
+
+private const val FOUND_TINT = 0.08f
 
 /** Taking back the last turn: run it again, or edit the message (the text goes to the composer). */
 private class Redo(val regenerate: () -> Unit, val edit: (String) -> Unit)
