@@ -135,19 +135,18 @@ data class Usage(val input: Int, val output: Int, val cached: Int?, val window: 
 
     companion object {
         /**
-         * Cached input tokens from a response's metadata, under the names providers use:
-         * `cached_tokens` (OpenAI and compatible), `cache_read_input_tokens` (Anthropic),
-         * `cachedContentTokenCount` (Gemini). Searched at any depth. Pure.
+         * The meter's reading of one reply, or null when the provider sent no token counts.
+         * - Why: only Koog's Anthropic client reports a cache, as `cacheReadInputTokens` and
+         *   `cacheCreationInputTokens` in the metadata, and its input count leaves both out, so they
+         *   are added back. Koog's OpenAI-compatible client drops the cached count; [cached] is null there.
          */
-        fun cached(metadata: kotlinx.serialization.json.JsonElement?): Int? = when (metadata) {
-            is kotlinx.serialization.json.JsonObject -> metadata.entries.firstNotNullOfOrNull { (key, value) ->
-                if (key in CACHED_KEYS) (value as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() else cached(value)
-            }
-            is kotlinx.serialization.json.JsonArray -> metadata.firstNotNullOfOrNull { cached(it) }
-            else -> null
+        fun of(meta: ai.koog.prompt.message.ResponseMetaInfo, window: Int?): Usage? {
+            val input = meta.inputTokensCount ?: return null
+            fun count(key: String) = (meta.metadata?.get(key) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull()
+            val read = count("cacheReadInputTokens")
+            val written = count("cacheCreationInputTokens") ?: 0
+            return Usage(input + (read ?: 0) + written, meta.outputTokensCount ?: 0, read, window)
         }
-
-        private val CACHED_KEYS = setOf("cached_tokens", "cache_read_input_tokens", "cachedContentTokenCount", "cached_content_token_count")
     }
 }
 

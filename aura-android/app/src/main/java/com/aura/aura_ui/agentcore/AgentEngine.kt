@@ -571,9 +571,7 @@ class AgentEngine(
      */
     private suspend fun AIAgentLLMWriteSession.ask(turn: TurnState, stream: Boolean, window: Int?): Message.Assistant =
         streamOrNot(turn, stream).also { reply ->
-            reply.metaInfo.inputTokensCount?.let { input ->
-                _usage.update { it + (turn.threadId to Usage(input, reply.metaInfo.outputTokensCount ?: 0, Usage.cached(reply.metaInfo.metadata), window)) }
-            }
+            Usage.of(reply.metaInfo, window)?.let { usage -> _usage.update { it + (turn.threadId to usage) } }
         }
 
     private suspend fun AIAgentLLMWriteSession.streamOrNot(turn: TurnState, stream: Boolean): Message.Assistant {

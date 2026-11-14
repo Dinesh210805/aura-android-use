@@ -1,20 +1,34 @@
 package com.aura.aura_ui.agentcore
 
-import kotlinx.serialization.json.Json
+import ai.koog.prompt.message.ResponseMetaInfo
+import ai.koog.prompt.streaming.StreamFrame
+import ai.koog.prompt.streaming.toMessageResponse
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+@OptIn(kotlin.time.ExperimentalTime::class)
 class UsageTest {
-    private fun cached(json: String) = Usage.cached(Json.parseToJsonElement(json))
+    private fun meta(input: Int?, output: Int?, metadata: JsonObject? = null) =
+        ResponseMetaInfo.Empty.copy(inputTokensCount = input, outputTokensCount = output, metadata = metadata)
 
     @Test
-    fun `cached tokens are read under each provider's name`() {
-        assertEquals(800, cached("""{"usage":{"prompt_tokens_details":{"cached_tokens":800}}}"""))
-        assertEquals(1200, cached("""{"cache_read_input_tokens":1200,"cache_creation_input_tokens":40}"""))
-        assertEquals(64, cached("""{"usageMetadata":{"cachedContentTokenCount":64}}"""))
-        assertNull(cached("""{"usage":{"prompt_tokens":10}}"""))
-        assertNull(Usage.cached(null))
+    fun `a streamed reply keeps the token counts of its end frame`() {
+        val reply = listOf(StreamFrame.TextDelta("Hi"), StreamFrame.End("stop", meta(900, 12))).toMessageResponse()
+        assertEquals(Usage(900, 12, null, 128_000), Usage.of(reply.metaInfo, 128_000))
+    }
+
+    @Test
+    fun `anthropic's cached tokens are added back to the input`() {
+        val cache = JsonObject(mapOf("cacheReadInputTokens" to JsonPrimitive(3000), "cacheCreationInputTokens" to JsonPrimitive(500)))
+        assertEquals(Usage(4000, 20, 3000, null), Usage.of(meta(500, 20, cache), null))
+    }
+
+    @Test
+    fun `no counts, no reading`() {
+        assertNull(Usage.of(meta(null, null), 128_000))
     }
 
     @Test

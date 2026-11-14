@@ -65,10 +65,16 @@ import kotlinx.coroutines.withContext
  * - Fails: a file that can no longer be read shows its chip without a picture; nothing throws.
  */
 @Composable
-fun AttachmentRail(items: List<Attachment>, onRemove: ((Attachment) -> Unit)? = null, modifier: Modifier = Modifier) {
+fun AttachmentRail(items: List<Attachment>, onRemove: ((Attachment) -> Unit)? = null, modifier: Modifier = Modifier, wrap: Boolean = false) {
     var open by remember { mutableStateOf<Attachment?>(null) }
     val context = LocalContext.current
-    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    val layout: @Composable (@Composable () -> Unit) -> Unit = if (wrap) {
+        { content -> androidx.compose.foundation.layout.FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() } }
+    } else {
+        { content -> Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() } }
+    }
+    layout {
         items.forEach { item ->
             val onOpen = { if (item.isImage) open = item else openFile(context, item) }
             Box {
@@ -134,6 +140,23 @@ private fun rememberBitmap(uri: String, size: Dp): Bitmap? {
         if (value == null) value = withContext(Dispatchers.IO) { Thumbnails.load(context.contentResolver, uri, px) }
     }
     return bitmap
+}
+
+/** Every file sent in [rows], newest first, each once. Pure. */
+internal fun chatFiles(rows: List<ItemRow>): List<Attachment> =
+    rows.filter { it.kind == ItemKind.USER.name }.flatMap { attachments(it.attachmentsJson) }.distinctBy { it.uri }.reversed()
+
+/** The chat's Files sheet: every picture and document sent in it, to open again. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun FilesSheet(files: List<Attachment>, onDismiss: () -> Unit) {
+    val aura = LocalAura.current
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = aura.surfaceStrong) {
+        androidx.compose.foundation.layout.Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
+            Text("Files in this chat", style = AuraType.headline, color = aura.label, modifier = Modifier.padding(bottom = 12.dp))
+            AttachmentRail(files, wrap = true)
+        }
+    }
 }
 
 private fun fileIcon(mime: String): ImageVector = when {

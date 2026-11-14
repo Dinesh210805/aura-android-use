@@ -37,6 +37,9 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.TextFields
@@ -461,6 +464,14 @@ fun AgentChatScreen(
     LaunchedEffect(matches) { findAt = (matches.size - 1).coerceAtLeast(0) }
     LaunchedEffect(current) { finding = null }
     var modelsOpen by remember { mutableStateOf(false) }
+    var filesOpen by remember { mutableStateOf(false) }
+    val files = remember(items) { chatFiles(items) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Warms the read-aloud voice so the first tap is not lost; leaving the chat stops reading.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        ReadAloud.warm(context)
+        onDispose { ReadAloud.stop() }
+    }
     val composerFocus = remember { FocusRequester() }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -532,6 +543,7 @@ fun AgentChatScreen(
                         onNewChat = { vm.open(null) }.takeIf { current != null },
                         onProfile = { onNavigate(AuraRoutes.SETTINGS) },
                         onFind = { finding = "" }.takeIf { items.isNotEmpty() },
+                        onFiles = { filesOpen = true }.takeIf { files.isNotEmpty() },
                         modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { topPx = it.height },
                     )
                 }
@@ -586,6 +598,7 @@ fun AgentChatScreen(
         }
     }
 
+    if (filesOpen) FilesSheet(files, onDismiss = { filesOpen = false })
     if (modelsOpen) {
         ModelSheet(
             vm,
@@ -610,6 +623,7 @@ private fun TopBar(
     onNewChat: (() -> Unit)?,
     onProfile: () -> Unit,
     onFind: (() -> Unit)? = null,
+    onFiles: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val aura = LocalAura.current
@@ -630,6 +644,10 @@ private fun TopBar(
         }
         if (onFind != null) {
             GlassIconButton(Icons.Rounded.Search, "Find in chat", onFind)
+            Spacer(Modifier.width(8.dp))
+        }
+        if (onFiles != null) {
+            GlassIconButton(Icons.Outlined.FolderOpen, "Files in this chat", onFiles)
             Spacer(Modifier.width(8.dp))
         }
         if (onNewChat != null) {
@@ -883,7 +901,7 @@ private fun ItemView(item: ItemRow, onPick: (String) -> Unit, redo: Redo? = null
 
 /** Copies text to the clipboard and says so. Android 13+ shows its own clipboard preview, so no toast there. */
 @Composable
-private fun rememberCopy(): (String) -> Unit {
+internal fun rememberCopy(): (String) -> Unit {
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -907,12 +925,18 @@ private fun ReplyActions(text: String, copy: (String) -> Unit, regenerate: (() -
     val aura = LocalAura.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val tint = if (aura.sky != null) aura.onSkyMuted else aura.tertiary
+    val reading by ReadAloud.reading.collectAsState()
     Row(Modifier.padding(start = 14.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         ReplyAction(Icons.Outlined.ContentCopy, "Copy reply", tint) { copy(text) }
         ReplyAction(Icons.Outlined.TextFields, "Copy as plain text", tint) { copy(plainText(text)) }
         ReplyAction(Icons.Outlined.Share, "Share reply", tint) {
             val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, plainText(text))
             context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        if (reading == text) {
+            ReplyAction(Icons.Outlined.StopCircle, "Stop reading", tint) { ReadAloud.stop() }
+        } else {
+            ReplyAction(Icons.AutoMirrored.Outlined.VolumeUp, "Read aloud", tint) { ReadAloud.toggle(context, text) }
         }
         regenerate?.let { ReplyAction(Icons.Outlined.Refresh, "Regenerate reply", tint, it) }
     }
@@ -939,7 +963,7 @@ internal fun plainText(markdown: String): String = markdown
     .replace("`", "")
     .trim()
 
-private fun attachments(json: String?): List<Attachment> = json?.let {
+internal fun attachments(json: String?): List<Attachment> = json?.let {
     runCatching { Json.decodeFromString(ListSerializer(Attachment.serializer()), it) }.getOrNull()
 }.orEmpty()
 
@@ -1165,13 +1189,22 @@ private fun thinkingHint(level: ReasoningLevel): String = when (level) {
 private val BULLET = Regex("""^\s*(?:[-*•]|\d+[.)])\s+(.*)$""")
 
 /**
- * Text as the model writes it: paragraphs, "- " and "1." lists, "#" headings and `**bold**`.
+ * Text as the model writes it: paragraphs, "- " and "1." lists, "#" headings, `**bold**` and
+ * ``` code blocks, each with its own copy button.
  * - Contract: anything else is shown as written. This is not a markdown renderer.
  */
 @Composable
 fun RichText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
     val aura = LocalAura.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        blocks(text.trim()).forEach { block -> if (block.code) CodeBlock(block.text, style) else Prose(block.text, style, color) }
+    }
+}
+
+@Composable
+private fun Prose(text: String, style: TextStyle, color: Color) {
+    val aura = LocalAura.current
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         text.trim().lines().forEach { raw ->
             val line = raw.trimEnd()
             val bullet = BULLET.find(line)
