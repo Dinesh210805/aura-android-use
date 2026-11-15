@@ -17,11 +17,15 @@ The openWakeWord code is Apache-2.0. Its README puts its *bundled pre-trained wa
 ## Training `hey_aura.onnx`
 
 1. Open the patched 2026 notebook in Colab:
-   https://colab.research.google.com/github/alfiedennen/openwakeword-colab-2026/blob/main/train_wakeword.ipynb
-   (openWakeWord's official notebook no longer runs on current Colab).
+   https://colab.research.google.com/github/Dinesh210805/aura-android-use/blob/feat/agentcore/train_wakeword.ipynb
+   (patched from alfiedennen/openwakeword-colab-2026; openWakeWord's official notebook no longer
+   runs on current Colab).
 2. Runtime → Change runtime type → T4 GPU (free) or L4 (Colab Pro, about twice as fast).
-3. In cell 10 set `TARGET_PHRASE = ['hey aura', 'hey ora', 'hey awra']` and
-   `MODEL_NAME = 'hey_aura'`. The respellings steer the TTS toward how people say "aura".
+3. Use the repo's own copy, `train_wakeword.ipynb` at the repo root (open it in Colab from GitHub).
+   Its cell 10 is already set: ten spellings of the phrase (`hey ora`, `hay aura`, `hey ahra`...)
+   so it wakes across accents, near-miss names as `custom_negative_phrases` (`hey laura`,
+   `hey nora`, `hey alexa`...), 4,000 clips, two augmentation rounds, 30,000 steps. Keep the
+   negatives to different words: a variant of "aura" itself there makes it strict about accents.
 4. Runtime → Run all, wait about 75 to 90 minutes. The last cell downloads `hey_aura.onnx`.
 5. Put it here. The detector reads the window length from the model's input `[1, N, 96]`, and the
    notebook bakes the sigmoid in, so scores are 0..1.
