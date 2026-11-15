@@ -75,4 +75,16 @@ class ComposioAppsTest {
     fun `well-known documents live at the root of the server's host`() {
         assertEquals("https://connect.composio.dev/.well-known/oauth-protected-resource", McpOAuth.wellKnown(COMPOSIO_MCP_URL, "oauth-protected-resource"))
     }
+
+    @Test
+    fun `an off app is matched by whole slug prefix, toolkit arguments, and an unnamed execute fails closed`() {
+        fun args(j: String) = Json.parseToJsonElement(j).jsonObject
+        val exec = "COMPOSIO_MULTI_EXECUTE_TOOL"
+        assertEquals("google_tasks", ComposioAccounts.blockedApp(exec, args("""{"tools":[{"tool_slug":"GOOGLE_TASKS_LIST_TASKS"}]}"""), setOf("google_tasks")))
+        assertEquals("gmail", ComposioAccounts.blockedApp(exec, args("""{"tools":[{"tool_slug":"GMAIL_SEND_EMAIL"}]}"""), setOf("gmail")))
+        assertNull(ComposioAccounts.blockedApp(exec, args("""{"tools":[{"tool_slug":"GMAILX_SEND"}]}"""), setOf("gmail")))
+        assertEquals("slack", ComposioAccounts.blockedApp("COMPOSIO_SEARCH_TOOLS", args("""{"toolkits":["slack"]}"""), setOf("slack")))
+        assertEquals("gmail", ComposioAccounts.blockedApp(exec, args("""{"tools":[{"name":"x"}]}"""), setOf("gmail")))
+        assertNull(ComposioAccounts.blockedApp(exec, args("""{"tools":[]}"""), emptySet()))
+    }
 }

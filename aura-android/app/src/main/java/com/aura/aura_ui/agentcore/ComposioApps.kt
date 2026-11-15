@@ -135,6 +135,45 @@ class ComposioAccounts(private val store: ConnectorStore) {
             else -> ConnectorRisk.slugs(args).map { it.substringBefore('_').lowercase() }.filter { it.isNotEmpty() }.toSet()
         }
 
+        /**
+         * The turned-off app a call of [tool] reaches, or null when it reaches none.
+         *
+         * - Contract: pure. Fails closed: each tool slug is matched against every off app as a
+         *   whole-word prefix (`GOOGLE_TASKS_LIST` reaches `google_tasks`), the tool name and any
+         *   `toolkit`/`toolkits` argument count too, and an execute call that names no tool slug
+         *   is refused while any app is off.
+         */
+        fun blockedApp(tool: String, args: JsonObject, off: Set<String>): String? {
+            if (off.isEmpty()) return null
+            val names = (ConnectorRisk.slugs(args) + tool + toolkitArgs(args)).map { it.lowercase() }
+            off.firstOrNull { app -> names.any { it == app || it.startsWith(app + "_") } }?.let { return it }
+            val executes = tool in setOf("COMPOSIO_MULTI_EXECUTE_TOOL", "COMPOSIO_EXECUTE_TOOL")
+            return if (executes && ConnectorRisk.slugs(args).isEmpty()) off.first() else null
+        }
+
+        private fun toolkitArgs(args: JsonObject): List<String> {
+            val out = mutableListOf<String>()
+            fun walk(e: JsonElement) {
+                when (e) {
+                    is JsonObject -> e.forEach { (k, v) ->
+                        if (k == "toolkit" || k == "toolkits" || k == "toolkit_slug") {
+                            when (v) {
+                                is JsonPrimitive -> v.contentOrNull?.let(out::add)
+                                is JsonArray -> v.mapNotNullTo(out) { (it as? JsonPrimitive)?.contentOrNull }
+                                else -> walk(v)
+                            }
+                        } else {
+                            walk(v)
+                        }
+                    }
+                    is JsonArray -> e.forEach(::walk)
+                    else -> Unit
+                }
+            }
+            walk(args)
+            return out
+        }
+
         fun manageArgs(slug: String): JsonObject = buildJsonObject {
             putJsonArray("toolkits") { add(JsonPrimitive(slug)) }
             put("reinitiate_all", false)

@@ -362,7 +362,7 @@ class ConnectorToolSource(
     override suspend fun call(name: String, args: JsonObject, turn: TurnState): SourceResult {
         val tool = name.removePrefix("${config.id}__")
         val apps = ComposioAccounts.appsIn(tool, args)
-        apps.firstOrNull { it in turnedOff() }?.let { app ->
+        ComposioAccounts.blockedApp(tool, args, turnedOff())?.let { app ->
             return SourceResult("The user turned $app off for AURA on the Connectors page. Tell them; it can be turned back on there.", isError = true)
         }
         val result = callDirect(tool, args)
