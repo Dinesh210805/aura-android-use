@@ -8,13 +8,16 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.aura.aura_ui.MainActivity
 import com.aura.aura_ui.R
 import com.aura.aura_ui.overlay.AuraOverlayService
@@ -70,6 +73,8 @@ class WakeWordListeningService : Service() {
     private var foregroundReady = false
     private var activeModeSince = 0L  // timestamp when mode became ACTIVE, 0 = not active
     private var watchdogJob: Job? = null
+    private var unlockReceiver: BroadcastReceiver? = null
+    private var unlockTimeoutJob: Job? = null
 
     companion object {
         private const val TAG = "WakeWordService"
@@ -78,6 +83,8 @@ class WakeWordListeningService : Service() {
         private const val LEGACY_CHANNEL_ID = "aura_wake_word_channel"
         private const val PAUSED_CHANNEL_ID = "aura_wake_word_paused"
         private const val PAUSED_NOTIFICATION_ID = 2002
+        /** Below the watchdog's 40 s stuck-in-ACTIVE limit. Matches MainActivity.UNLOCK_PROMPT_MS. */
+        private const val UNLOCK_WAIT_MS = 30_000L
         
         const val ACTION_START = "com.aura.aura_ui.START_WAKE_WORD"
         const val ACTION_STOP = "com.aura.aura_ui.STOP_WAKE_WORD"
@@ -207,6 +214,7 @@ class WakeWordListeningService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         
+        clearUnlockWait()
         disableWakeWord(persist = false)
         releaseWakeLock()
         serviceScope.cancel()
@@ -506,10 +514,52 @@ class WakeWordListeningService : Service() {
         }
     }
     
-    /** Locked phone: light the screen and hand off to MainActivity, which asks for the unlock. */
+    /** Locked phone: wait for the unlock, light the screen, and let MainActivity ask for it. */
     private fun requestUnlockAndShowOverlay() {
+        awaitUnlockThenListen()
         wakeUpScreen()
         launchUnlockActivity()
+    }
+
+    /**
+     * Opens the overlay listening as soon as the user unlocks, within [UNLOCK_WAIT_MS] of the wake
+     * word; otherwise goes back to PASSIVE.
+     *
+     * - Why ACTION_USER_PRESENT and not the keyguard-dismiss callback: the callback can report
+     *   "cancelled" immediately while the lock state is changing, which left the user unlocking
+     *   into nothing. USER_PRESENT is sent for every unlock (PIN, fingerprint, face, Smart Lock).
+     * - Contract: at most one wait at a time; a newer wake word replaces it. Cleared in onDestroy.
+     */
+    private fun awaitUnlockThenListen() {
+        clearUnlockWait()
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                clearUnlockWait()
+                Log.i(TAG, "🔓 Unlocked after wake word, opening overlay")
+                serviceScope.launch {
+                    delay(300) // let the unlock animation finish
+                    AuraOverlayService.showAndListen(this@WakeWordListeningService, source = "wake_word")
+                }
+            }
+        }
+        ContextCompat.registerReceiver(
+            this, receiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        unlockReceiver = receiver
+        unlockTimeoutJob = serviceScope.launch {
+            delay(UNLOCK_WAIT_MS)
+            Log.i(TAG, "No unlock within ${UNLOCK_WAIT_MS / 1000} s, back to listening")
+            unlockTimeoutJob = null
+            clearUnlockWait()
+            listeningModeController?.transitionToPassive()
+        }
+    }
+
+    private fun clearUnlockWait() {
+        unlockReceiver?.let { runCatching { unregisterReceiver(it) } }
+        unlockReceiver = null
+        unlockTimeoutJob?.cancel()
+        unlockTimeoutJob = null
     }
 
     /**
@@ -554,7 +604,6 @@ class WakeWordListeningService : Service() {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra("UNLOCK_AND_SHOW_OVERLAY", true)
-            putExtra("AUTO_START_LISTENING", true)
         }
         startActivity(intent)
     }

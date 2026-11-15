@@ -62,11 +62,14 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "MainActivity"
+        /** Matches the service's wait for the unlock; see `WakeWordListeningService.UNLOCK_WAIT_MS`. */
+        private const val UNLOCK_PROMPT_MS = 30_000L
         private const val EXTRA_REQUEST_SCREEN_CAPTURE = "REQUEST_SCREEN_CAPTURE"
 
         /**
@@ -224,8 +227,6 @@ class MainActivity : FragmentActivity() {
     private var showingSettings = false
     
     // Track if we need to show overlay after unlock
-    private var pendingOverlayAfterUnlock = false
-    private var pendingAutoStartListening = false
     
     // Track if we're only here to request screen capture (finish after result)
     private var pendingScreenCaptureRequest = false
@@ -286,11 +287,10 @@ class MainActivity : FragmentActivity() {
 
         // Handle wake word unlock request - this activity shows on lock screen
         val unlockAndShowOverlay = intent?.getBooleanExtra("UNLOCK_AND_SHOW_OVERLAY", false) ?: false
-        val autoStartListening = intent?.getBooleanExtra("AUTO_START_LISTENING", false) ?: false
         
         if (unlockAndShowOverlay) {
             Log.i(TAG, "Wake word triggered - showing on lock screen for unlock")
-            handleWakeWordUnlockRequest(autoStartListening)
+            handleWakeWordUnlockRequest()
             return
         }
         
@@ -382,13 +382,15 @@ class MainActivity : FragmentActivity() {
      * Wake word heard on a locked phone: show "Unlock to talk to AURA" over the lock screen and
      * raise the unlock prompt (PIN, pattern or fingerprint).
      *
-     * - Contract: unlocked → overlay opens and starts listening; cancelled or failed → the wake
-     *   word goes back to PASSIVE at once (otherwise it stays deaf until the 40 s watchdog).
-     * - Why the prompt is drawn on every API level: requestDismissKeyguard alone leaves this
-     *   translucent activity blank behind the bouncer, so nothing says why it appeared.
-     * - Change together: `WakeWordListeningService.launchUnlockActivity`, which sends the extras.
+     * - Contract: this activity only asks. Opening the overlay after the unlock is owned by
+     *   `WakeWordListeningService.awaitUnlockThenListen`, which waits for ACTION_USER_PRESENT.
+     * - Why the prompt does not open the overlay itself: requestDismissKeyguard can report
+     *   "cancelled" at once when the lock state is changing (screen just locked or turning off),
+     *   and an unlock done a moment later would then open nothing.
+     * - Stays up until the phone is unlocked or [UNLOCK_PROMPT_MS] passes, so it can be read.
+     * - Change together: `WakeWordListeningService.launchUnlockActivity`, which sends the extra.
      */
-    private fun handleWakeWordUnlockRequest(autoStartListening: Boolean) {
+    private fun handleWakeWordUnlockRequest() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -400,63 +402,22 @@ class MainActivity : FragmentActivity() {
                     WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
             )
         }
-        pendingOverlayAfterUnlock = true
-        pendingAutoStartListening = autoStartListening
         showUnlockPromptUI()
+        requestUnlock()
 
         val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            keyguardManager.requestDismissKeyguard(
-                this,
-                object : KeyguardManager.KeyguardDismissCallback() {
-                    override fun onDismissSucceeded() {
-                        Log.i(TAG, "Keyguard dismissed")
-                        lifecycleScope.launch {
-                            delay(300) // let the unlock animation finish
-                            showOverlayAfterUnlock()
-                        }
-                    }
-
-                    override fun onDismissCancelled() {
-                        Log.i(TAG, "Unlock cancelled")
-                        abandonUnlock()
-                    }
-
-                    override fun onDismissError() {
-                        Log.e(TAG, "Keyguard dismiss failed")
-                        abandonUnlock()
-                    }
-                }
-            )
-        } else {
-            // FLAG_DISMISS_KEYGUARD raises the prompt; poll until it is gone.
-            lifecycleScope.launch {
-                while (keyguardManager.isKeyguardLocked) delay(500)
-                showOverlayAfterUnlock()
+        lifecycleScope.launch {
+            withTimeoutOrNull(UNLOCK_PROMPT_MS) {
+                while (keyguardManager.isKeyguardLocked) delay(300)
             }
+            finish()
         }
     }
 
-    private fun abandonUnlock() {
-        pendingOverlayAfterUnlock = false
-        pendingAutoStartListening = false
-        com.aura.aura_ui.voice.ListeningModeController.getInstance(this).transitionToPassive()
-        finish()
-    }
-
-    /** Opens the overlay once the phone is unlocked, then gets this activity out of the way. */
-    private fun showOverlayAfterUnlock() {
-        if (!pendingOverlayAfterUnlock) return
-        pendingOverlayAfterUnlock = false
-        val autoStart = pendingAutoStartListening
-        pendingAutoStartListening = false
-        Log.i(TAG, "Unlocked, showing overlay (autoStart=$autoStart)")
-        if (autoStart) {
-            com.aura.aura_ui.overlay.AuraOverlayService.showAndListen(this, source = "wake_word")
-        } else {
-            com.aura.aura_ui.overlay.AuraOverlayService.show(this)
-        }
-        finish()
+    private fun requestUnlock() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return // FLAG_DISMISS_KEYGUARD asks instead
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        keyguardManager.requestDismissKeyguard(this, null)
     }
 
     private fun showUnlockPromptUI() {
@@ -483,6 +444,8 @@ class MainActivity : FragmentActivity() {
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
                         )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(onClick = { requestUnlock() }) { Text("Unlock") }
                     }
                 }
             }
@@ -640,8 +603,7 @@ class MainActivity : FragmentActivity() {
         }
         if (intent.getBooleanExtra("UNLOCK_AND_SHOW_OVERLAY", false)) {
             Log.d(TAG, "Wake word unlock request via onNewIntent")
-            val autoStartListening = intent.getBooleanExtra("AUTO_START_LISTENING", false)
-            handleWakeWordUnlockRequest(autoStartListening)
+            handleWakeWordUnlockRequest()
             return
         }
         
