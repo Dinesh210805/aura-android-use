@@ -211,7 +211,11 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Opens Composio's sign-in page: AURA signs in with OAuth, no key to paste. */
     fun signInComposio(open: (String) -> Unit) = viewModelScope.launch {
-        core.oauth.start(COMPOSIO_ID, COMPOSIO_MCP_URL).onSuccess(open)
+        if (core.oauth.isSignedIn(COMPOSIO_ID)) {
+            core.oauth.reconnect(COMPOSIO_ID, COMPOSIO_MCP_URL)
+        } else {
+            core.oauth.start(COMPOSIO_ID, COMPOSIO_MCP_URL).onSuccess(open)
+        }
     }
 
     /**

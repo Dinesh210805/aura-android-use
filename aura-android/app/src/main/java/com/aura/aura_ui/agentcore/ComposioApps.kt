@@ -20,6 +20,9 @@ const val COMPOSIO_MCP_URL = "https://connect.composio.dev/mcp"
 /** The connector id a Composio sign-in is saved under. */
 const val COMPOSIO_ID = "composio"
 
+/** An app's logo is this plus its toolkit slug (SVG). */
+const val COMPOSIO_LOGO_URL = "https://logos.composio.dev/api/"
+
 /** Where the user removes an app's access at Composio. */
 const val COMPOSIO_DASHBOARD_URL = "https://dashboard.composio.dev"
 

@@ -148,6 +148,12 @@ class McpOAuth(
         }
     }
 
+    /** Adds [id] again from tokens already saved, when the sign-in worked but the server did not answer. */
+    suspend fun reconnect(id: String, url: String) {
+        status.value = "Connecting"
+        status.value = onSignedIn(id, url).fold({ null }, { "Signed in, but the server did not answer: ${it.message}" })
+    }
+
     fun isSignedIn(id: String): Boolean = load(id) != null
 
     fun signOut(id: String) = keys.clearKey("oauth_$id")

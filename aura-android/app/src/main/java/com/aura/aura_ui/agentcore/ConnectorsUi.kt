@@ -1,6 +1,14 @@
 package com.aura.aura_ui.agentcore
 
+import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalContext
+import coil.ImageLoader
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -103,8 +111,8 @@ private fun ComposioSignIn(status: String?, onSignIn: () -> Unit) {
     AuraSection {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 20.dp)) {
             Row {
-                COMPOSIO_APPS.take(5).forEachIndexed { i, app ->
-                    AppTile(app.name, app.color, Modifier.offset(x = (-10 * i).dp).border(2.dp, aura.surface, RoundedCornerShape(13.dp)))
+                listOf("gmail", "slack", "notion", "github", "googlecalendar").mapNotNull { s -> COMPOSIO_APPS.firstOrNull { it.slug == s } }.forEachIndexed { i, app ->
+                    AppTile(app, Modifier.offset(x = (-10 * i).dp).border(2.dp, aura.surface, RoundedCornerShape(13.dp)))
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -171,7 +179,7 @@ private fun AppRow(app: ComposioApp, state: AppState?, toggle: (String, Boolean)
             .heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppTile(app.name, app.color)
+        AppTile(app)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(app.name, style = AuraType.headline, color = aura.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -186,11 +194,33 @@ private fun AppRow(app: ComposioApp, state: AppState?, toggle: (String, Boolean)
     }
 }
 
-/** A rounded tile with the app's first letter on its colour. */
+/**
+ * The app's logo from Composio on a white tile; its first letter on its colour until the logo
+ * loads or when there is none.
+ */
 @Composable
-private fun AppTile(name: String, color: Long, modifier: Modifier = Modifier) {
-    Box(modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Color(color)), contentAlignment = Alignment.Center) {
-        Text(name.take(1).uppercase(), style = AuraType.headline.copy(fontWeight = FontWeight.Bold), color = Color.White)
+private fun AppTile(app: ComposioApp, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val painter = rememberAsyncImagePainter(
+        ImageRequest.Builder(context).data("$COMPOSIO_LOGO_URL${app.slug}").crossfade(true).build(),
+        imageLoader = AppLogos.loader(context),
+    )
+    val loaded = painter.state is AsyncImagePainter.State.Success
+    Box(
+        modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (loaded) Color.White else Color(app.color)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (!loaded) Text(app.name.take(1).uppercase(), style = AuraType.headline.copy(fontWeight = FontWeight.Bold), color = Color.White)
+        Image(painter, contentDescription = null, modifier = Modifier.size(26.dp))
+    }
+}
+
+/** One image loader for every logo, with the SVG decoder they need; cached on disk by Coil. */
+private object AppLogos {
+    @Volatile private var loader: ImageLoader? = null
+
+    fun loader(context: Context): ImageLoader = loader ?: synchronized(this) {
+        loader ?: ImageLoader.Builder(context.applicationContext).components { add(SvgDecoder.Factory()) }.build().also { loader = it }
     }
 }
 

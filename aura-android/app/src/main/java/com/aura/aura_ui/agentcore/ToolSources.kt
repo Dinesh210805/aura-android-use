@@ -318,7 +318,8 @@ class ConnectorToolSource(
 
     override val id: String = config.id
 
-    private val http by lazy { HttpClient(OkHttp) }
+    /** The MCP transport streams over SSE; without the plugin every connect fails. */
+    private val http by lazy { HttpClient(OkHttp) { install(io.ktor.client.plugins.sse.SSE) } }
     private var client: Client? = null
 
     @Volatile

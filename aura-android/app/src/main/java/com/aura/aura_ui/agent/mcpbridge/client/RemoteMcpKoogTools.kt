@@ -154,7 +154,7 @@ internal suspend fun attachRemoteMcpIfEnabled(
 
     return runCatching {
         val secretStore = McpSecretStore(context)
-        val httpClient = HttpClient(OkHttp)
+        val httpClient = HttpClient(OkHttp) { install(io.ktor.client.plugins.sse.SSE) }
         val connector = KtorMcpConnector(McpClientTransportFactory(httpClient), secretStore)
         val manager = RemoteMcpManager.forApp(store, secretStore, connector)
         val connections = manager.connectEnabled()
