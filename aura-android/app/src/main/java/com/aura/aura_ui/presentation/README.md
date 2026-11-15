@@ -79,7 +79,7 @@ story view). Every build records, shows and exports the same full log.
 ### Overlay UI
 | File | What it does |
 |---|---|
-| `screens/VoiceAssistantOverlay.kt` | The floating prompt box: close, text field (Enter sends), AURA button; while listening, the white voice ribbon and a "Type" button. Lifted above Resume/Cancel while a run is paused. |
+| `screens/VoiceAssistantOverlay.kt` | The floating prompt box: close, text field (Enter sends), AURA button; while listening, the white voice ribbon. In a voice conversation the AURA button ends it and leaves the text field; a short tip over it ("Tap to type" / "Tap to talk") shows when the box opens. Resume and Cancel sit on top of it while a run is paused. |
 | `overlay/QuestionCardOverlay.kt` | The question card at the top when AURA's agent or an MCP client calls `ask_user`: choices, Type (opens the prompt box), Speak, Skip. Answers go to `AskUserBroker.shared`; voice conversations also ask it aloud. |
 | `overlay/AgentStatusOverlay.kt` | The strip at the top (`services/AgentStatusRegistry`): a small centered "Thinking…" pill while the model thinks, nothing while a task drives the phone, and a rounded glass card for what the person said and what AURA is saying |
 | `overlay/PausePillOverlay.kt` | Pause/stop controls, shown only while a run acts on the phone (`AgentStatusRegistry.acting`), not while it only thinks. A paused on-device run's Resume and Cancel move onto the prompt box (`PausedRunControls` in `screens/VoiceAssistantOverlay.kt`) and this window hides, so the two never overlap. The browser window reads its geometry. |
