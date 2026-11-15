@@ -1,6 +1,6 @@
 # agentcore
 
-> **Last reviewed:** 2026-11-14.
+> **Last reviewed:** 2026-11-15.
 >
 > **Keep this file and the KDoc current.** If you change a file listed here, update its header
 > comment and this README in the same commit.
@@ -69,6 +69,9 @@ also pulls the folder.
 | `Steps.kt` | `Step`: one label-anchored phone action. The run's trace, a skill's `steps:` and `do_steps` input share it; `Step.forSkill` strips typed text, links and personal details. |
 | `Learning.kt` | The idle review: each finished run leaves a digest (`digests` table); when the agent is idle and the phone is charging or above 30%, the 15-minute worker has the FAST model read up to three and propose memory changes and a skill draft. A tainted run only stages memory adds; drafts always wait in `skill-drafts/` until the user keeps them. The chat shows "AURA learned N things". |
 | `ToolSearch.kt` | Ranking for `find_tools`. A toolset with more than `ToolHub.BIG_TOOLSET` tools is a count in the menu and is reached with `find_tools` then `load_tools`, which appends just those schemas in load order. |
+| `McpOAuth.kt` | OAuth sign-in for a connector by the MCP authorization spec: protected-resource discovery, dynamic client registration (once per authorization server), Authorization Code with PKCE through `McpOAuthCoordinator` and the `aura://mcp/oauth` redirect in `MainActivity`, refresh a minute before expiry. Tokens are stored encrypted (`ProviderKeyStore`, `oauth_<id>`); a connector with `oauth = true` reads its bearer from here before every request. |
+| `ComposioApps.kt` | The app catalog and per-app sign-in for Composio Connect: turning an app on calls `COMPOSIO_MANAGE_CONNECTIONS` for that one toolkit and opens the link it returns; turning one off puts it in `connector_apps_off_<id>`, and `ConnectorToolSource.call` refuses any call that reaches it. Apps the model signs in from a chat show as on. |
+| `ConnectorsUi.kt` | The Connectors page: "Sign in with Composio" (OAuth, no key), then every app one below the other with a switch and a search that takes any Composio app name; other MCP servers below. |
 | `ConnectorRisk.kt` | Connector tool risk from MCP annotations; per-call risk for Composio's multi-execute from the app tools it runs. |
 | `DoSteps.kt` | `do_steps`: runs a known step list in one call, finding each target by label on a fresh screen and sending every action through the hub's own gate. |
 | `Btw.kt` | `/btw <question>` in the chat: a side question answered on the FAST model with no tools, from the fenced recent chat, while a task runs. Checked before steering, so it never reaches the running turn; the Q and A are visible items only. |

@@ -77,6 +77,9 @@ class PhoneToolSource(context: Context) : ToolSource {
     private var client: Client? = null
 
     @Volatile
+    private var secret: String? = null
+
+    @Volatile
     private var labelOf: (Int) -> String? = { null }
 
     @Volatile
@@ -289,6 +292,8 @@ data class ConnectorConfig(
      * Composio); null sends it as `Authorization: Bearer`.
      */
     val keyHeader: String? = null,
+    /** Signed in with OAuth (`McpOAuth`); the bearer comes from there, refreshed as needed. */
+    val oauth: Boolean = false,
 )
 
 /**
@@ -303,13 +308,21 @@ data class ConnectorConfig(
  */
 class ConnectorToolSource(
     private val config: ConnectorConfig,
-    private val token: () -> String?,
+    /** Read before every request, so a refreshed OAuth token is picked up. */
+    private val token: suspend () -> String?,
+    /** Apps (Composio toolkit slugs) the user turned off; a call that uses one is refused. */
+    private val turnedOff: () -> Set<String> = { emptySet() },
+    /** Hears apps a call of the model's found signed in, so the Connectors page shows them on. */
+    private val onActive: (Set<String>) -> Unit = {},
 ) : ToolSource {
 
     override val id: String = config.id
 
     private val http by lazy { HttpClient(OkHttp) }
     private var client: Client? = null
+
+    @Volatile
+    private var secret: String? = null
     private var specs: List<ToolSpec>? = null
 
     /** Every tool the server lists now, name to fingerprint. Throws when it cannot be reached. */
@@ -347,16 +360,38 @@ class ConnectorToolSource(
     }
 
     override suspend fun call(name: String, args: JsonObject, turn: TurnState): SourceResult {
-        val result = connected().callTool(name = name.removePrefix("${config.id}__"), arguments = args)
+        val tool = name.removePrefix("${config.id}__")
+        val apps = ComposioAccounts.appsIn(tool, args)
+        apps.firstOrNull { it in turnedOff() }?.let { app ->
+            return SourceResult("The user turned $app off for AURA on the Connectors page. Tell them; it can be turned back on there.", isError = true)
+        }
+        val result = callDirect(tool, args)
+        if (tool == ComposioAccounts.MANAGE && !result.isError) {
+            apps.filter { ComposioAccounts.parse(result.text, it) == ComposioLink.Active }.toSet().takeIf { it.isNotEmpty() }?.let(onActive)
+        }
+        return result
+    }
+
+    /**
+     * Calls the server's own tool [tool] (no id prefix), pinned or not.
+     * - Contract: for calls the user started on a settings page, never for the model's.
+     */
+    suspend fun callDirect(tool: String, args: JsonObject): SourceResult {
+        val result = connected().callTool(name = tool, arguments = args)
         return SourceResult(
             text = result?.content.orEmpty().filterIsInstance<TextContent>().joinToString("\n") { it.text.orEmpty() },
             isError = result?.isError == true,
         )
     }
 
-    private suspend fun connected(): Client = client ?: run {
-        val secret = token()
+    private suspend fun connected(): Client {
+        secret = token()
+        return client ?: open()
+    }
+
+    private suspend fun open(): Client = run {
         val transport = http.mcpStreamableHttpTransport(config.url, requestBuilder = {
+            val secret = secret
             if (!secret.isNullOrBlank()) {
                 val name = config.keyHeader?.takeIf { it.isNotBlank() }
                 if (name == null) header("Authorization", "Bearer $secret") else header(name, secret)
@@ -416,10 +451,17 @@ object ConnectorPins {
  *   the user's approval. A tool that is new or changed afterwards stays hidden until the
  *   connector is added again.
  * - Reads/Writes: key [KEY] in the prefs file passed in (a JSON list of [ConnectorConfig]);
+ *   `connector_apps_<id>` there, the apps signed in through a connector, and
+ *   `connector_apps_off_<id>`, the apps the user turned off (string sets);
  *   tokens in `ProviderKeyStore` under `connector_<id>`, never in the JSON.
  * - Fails: [add] returns the reason as a failure and saves nothing.
  */
-class ConnectorStore(private val prefs: SharedPreferences, private val keys: ProviderKeyStore) {
+class ConnectorStore(
+    private val prefs: SharedPreferences,
+    private val keys: ProviderKeyStore,
+    /** The OAuth access token for a connector with [ConnectorConfig.oauth]; null when signed out. */
+    private val oauthToken: suspend (id: String) -> String? = { null },
+) {
     private val serializer = ListSerializer(ConnectorConfig.serializer())
 
     @Volatile
@@ -431,13 +473,13 @@ class ConnectorStore(private val prefs: SharedPreferences, private val keys: Pro
     fun sources(): List<ToolSource> = live
 
     /** Returns how many tools were approved. */
-    suspend fun add(name: String, url: String, token: String?, keyHeader: String? = null): Result<Int> = try {
+    suspend fun add(name: String, url: String, token: String?, keyHeader: String? = null, oauth: Boolean = false): Result<Int> = try {
         val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').take(MAX_ID)
         require(id.isNotEmpty() && id !in RESERVED) { "Pick a different name." }
         require(url.startsWith("https://")) { "The address must start with https://" }
         val header = keyHeader?.trim()?.takeIf { it.isNotEmpty() }
         require(header == null || header.matches(Regex("[A-Za-z0-9-]{1,64}"))) { "A header name is letters, digits and hyphens." }
-        val probe = ConnectorToolSource(ConnectorConfig(id, name.trim(), url.trim(), keyHeader = header)) { token }
+        val probe = ConnectorToolSource(ConnectorConfig(id, name.trim(), url.trim(), keyHeader = header, oauth = oauth), token = { if (oauth) oauthToken(id) else token })
         val pins = try {
             probe.fingerprints()
         } finally {
@@ -445,7 +487,7 @@ class ConnectorStore(private val prefs: SharedPreferences, private val keys: Pro
         }
         require(pins.isNotEmpty()) { "The server listed no tools. Check the address and the token." }
         if (token.isNullOrBlank()) keys.clearKey(keyFor(id)) else keys.setKey(keyFor(id), token)
-        save(configs().filterNot { it.id == id } + ConnectorConfig(id, name.trim(), url.trim(), pins, header))
+        save(configs().filterNot { it.id == id } + ConnectorConfig(id, name.trim(), url.trim(), pins, header, oauth))
         Result.success(pins.size)
     } catch (e: CancellationException) {
         throw e
@@ -455,8 +497,31 @@ class ConnectorStore(private val prefs: SharedPreferences, private val keys: Pro
 
     suspend fun remove(id: String) {
         keys.clearKey(keyFor(id))
+        prefs.edit().remove(appsKey(id)).remove(offKey(id)).apply()
         save(configs().filterNot { it.id == id })
     }
+
+    /** Runs [tool] on connector [id] for a settings page; see [ConnectorToolSource.callDirect]. */
+    suspend fun callDirect(id: String, tool: String, args: JsonObject): SourceResult =
+        live.firstOrNull { it.id == id }?.callDirect(tool, args) ?: error("No connector named $id.")
+
+    /** Apps signed in through connector [id] (Composio toolkit slugs), as last checked. */
+    fun signedInApps(id: String): Set<String> = prefs.getStringSet(appsKey(id), null)?.toSet().orEmpty()
+
+    fun setSignedInApps(id: String, apps: Set<String>) {
+        prefs.edit().putStringSet(appsKey(id), apps.toSet()).apply()
+    }
+
+    /** Apps the user turned off for connector [id]; their calls are refused. */
+    fun offApps(id: String): Set<String> = prefs.getStringSet(offKey(id), null)?.toSet().orEmpty()
+
+    fun setOffApps(id: String, apps: Set<String>) {
+        prefs.edit().putStringSet(offKey(id), apps.toSet()).apply()
+    }
+
+    private fun appsKey(id: String) = "connector_apps_$id"
+
+    private fun offKey(id: String) = "connector_apps_off_$id"
 
     private suspend fun save(configs: List<ConnectorConfig>) {
         prefs.edit().putString(KEY, Json.encodeToString(serializer, configs)).apply()
@@ -465,7 +530,12 @@ class ConnectorStore(private val prefs: SharedPreferences, private val keys: Pro
         old.forEach { it.close() }
     }
 
-    private fun source(config: ConnectorConfig) = ConnectorToolSource(config) { keys.getKey(keyFor(config.id)) }
+    private fun source(config: ConnectorConfig) = ConnectorToolSource(
+        config,
+        token = { if (config.oauth) oauthToken(config.id) else keys.getKey(keyFor(config.id)) },
+        turnedOff = { offApps(config.id) },
+        onActive = { found -> setSignedInApps(config.id, signedInApps(config.id) + (found - offApps(config.id))) },
+    )
 
     private fun keyFor(id: String) = "connector_$id"
 

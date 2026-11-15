@@ -318,6 +318,8 @@ class ToolHub(
     private val elementLabel: (somId: Int) -> String? = { null },
     /** Hears each `do_steps` chain: the skill it came from and whether every step ran. */
     private val onChain: suspend (skill: String?, ok: Boolean) -> Unit = { _, _ -> },
+    /** A few words after a toolset's menu line (a connector's signed-in apps), or null. */
+    private val toolsetNote: (toolset: String) -> String? = { null },
 ) {
     private val control = NativeToolSource(
         "control",
@@ -413,7 +415,8 @@ class ToolHub(
         .filter { it.toolset != CORE }
         .groupBy { it.toolset }
         .map { (toolset, specs) ->
-            if (specs.size > BIG_TOOLSET) "$toolset: ${specs.size} tools; search them with find_tools" else "$toolset: ${specs.joinToString(", ") { it.name }}"
+            val line = if (specs.size > BIG_TOOLSET) "$toolset: ${specs.size} tools; search them with find_tools" else "$toolset: ${specs.joinToString(", ") { it.name }}"
+            toolsetNote(toolset)?.let { "$line ($it)" } ?: line
         }
         .sorted()
         .joinToString("\n")

@@ -108,7 +108,11 @@ class AgentCore private constructor(private val app: Context) {
             Result.success((answer as? AskUserAnswer.Answered)?.text)
         }
     }
-    val connectors = ConnectorStore(prefs, ProviderKeyStore(app))
+    private val keyStore = ProviderKeyStore(app)
+
+    /** OAuth sign-in for connectors; a finished sign-in adds the server as a connector. */
+    val oauth: McpOAuth = McpOAuth(keyStore) { id, url -> connectors.add(id.replaceFirstChar(Char::uppercase), url, null, oauth = true) }
+    val connectors: ConnectorStore = ConnectorStore(prefs, keyStore) { id -> oauth.accessToken(id) }
 
     private val native = NativeToolSource(
         "native",
@@ -128,6 +132,11 @@ class AgentCore private constructor(private val app: Context) {
         findTarget = phone::idsFor,
         elementLabel = phone::labelAt,
         onChain = { skill, ok -> skill?.let { withContext(Dispatchers.IO) { skills.noteChain(it, ok) } } },
+        toolsetNote = { id ->
+            connectors.signedInApps(id).sorted().takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "signed in: ") { slug ->
+                COMPOSIO_APPS.firstOrNull { it.slug == slug }?.name ?: slug
+            }
+        },
     )
 
     /**

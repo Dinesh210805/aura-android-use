@@ -613,12 +613,13 @@ class MainActivity : FragmentActivity() {
     /**
      * If [intent] is the `aura://mcp/oauth` OAuth callback, hand it to [McpOAuthCoordinator] and
      * return true (caller should stop). The coordinator validates `state` against the in-flight
-     * PKCE handshake; the code→token exchange + secret persistence are the remaining glue.
+     * PKCE handshake; `McpOAuth.onRedirect` swaps the code for tokens and adds the connector.
      */
     private fun handleMcpOAuthRedirect(intent: Intent?): Boolean {
         val data = intent?.data ?: return false
         if (data.scheme != "aura" || data.host != "mcp" || data.path != "/oauth") return false
         val result = McpOAuthCoordinator.completeRedirect(data.toString())
+        com.aura.aura_ui.agentcore.AgentCore.get(this).oauth.onRedirect(result)
         Log.i(
             TAG,
             if (result.isSuccess) "MCP OAuth redirect captured for server '${result.getOrNull()?.serverId}'"

@@ -191,8 +191,77 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeConnector(id: String) = viewModelScope.launch {
         core.connectors.remove(id)
+        core.oauth.signOut(id)
         connectors.value = core.connectors.configs()
+        if (composio.connector() == null) apps.value = emptyMap()
     }
+
+    private val composio = ComposioAccounts(core.connectors)
+
+    /** How the last connector sign-in went; null when it worked or none ran. */
+    val oauthStatus = core.oauth.status
+
+    /** Each app's row state by toolkit slug; an app missing here is off. */
+    val apps = MutableStateFlow<Map<String, AppState>>(composio.signedIn().associateWith { AppState.Connected })
+
+    init {
+        // A sign-in finishes after the browser returns; its last status change follows the new connector.
+        viewModelScope.launch { core.oauth.status.collect { connectors.value = core.connectors.configs() } }
+    }
+
+    /** Opens Composio's sign-in page: AURA signs in with OAuth, no key to paste. */
+    fun signInComposio(open: (String) -> Unit) = viewModelScope.launch {
+        core.oauth.start(COMPOSIO_ID, COMPOSIO_MCP_URL).onSuccess(open)
+    }
+
+    /**
+     * The app's toggle. On asks Composio about [slug]: already signed in turns on at once,
+     * otherwise its sign-in page goes to [open] and the row waits for the user's return.
+     * Off stops AURA using the app.
+     */
+    fun toggleApp(slug: String, on: Boolean, open: (String) -> Unit) = viewModelScope.launch {
+        val app = ComposioAccounts.normalizeSlug(slug) ?: return@launch
+        if (!on) {
+            composio.turnOff(app)
+            apps.value = apps.value - app
+            return@launch
+        }
+        apps.value = apps.value + (app to AppState.Working)
+        val state = when (val link = composio.turnOn(app)) {
+            ComposioLink.Active -> AppState.Connected
+            is ComposioLink.SignIn -> AppState.Waiting(link.url).also { open(link.url) }
+            is ComposioLink.Failed -> AppState.Failed(link.reason)
+        }
+        apps.value = apps.value + (app to state)
+    }
+
+    /**
+     * Called when the page comes back to the front: picks up apps the agent signed in from a
+     * chat, and re-checks apps the user went to sign in to and connected ones. A connected app
+     * Composio now wants signed in again shows off.
+     */
+    fun recheck() = viewModelScope.launch {
+        connectors.value = core.connectors.configs()
+        apps.value = composio.signedIn().associateWith { AppState.Connected as AppState } + apps.value
+        apps.value.filterValues { it is AppState.Waiting || it == AppState.Connected }.forEach { (app, before) ->
+            val state = when (val link = composio.check(app)) {
+                ComposioLink.Active -> AppState.Connected
+                is ComposioLink.SignIn -> if (before == AppState.Connected) null else AppState.Waiting(link.url)
+                is ComposioLink.Failed -> if (before == AppState.Connected) before else AppState.Failed(link.reason)
+            }
+            apps.value = if (state == null) apps.value - app else apps.value + (app to state)
+        }
+    }
+}
+
+/** One app row on the Connectors page. */
+sealed interface AppState {
+    data object Working : AppState
+    data object Connected : AppState
+
+    /** The user was sent to [url] to sign in; re-checked when AURA comes back to the front. */
+    data class Waiting(val url: String) : AppState
+    data class Failed(val reason: String) : AppState
 }
 
 // ── Chats ────────────────────────────────────────────────────────────────────
@@ -579,65 +648,6 @@ fun SkillsPage(vm: AgentPagesViewModel = viewModel()) {
     }
 }
 
-// ── Connectors ───────────────────────────────────────────────────────────────
-
-/** Remote MCP servers whose tools the agent may use. */
-@Composable
-fun ConnectorsPage(vm: AgentPagesViewModel = viewModel()) {
-    val connectors by vm.connectors.collectAsState()
-    val status by vm.connectorStatus.collectAsState()
-    var name by rememberSaveable { mutableStateOf("") }
-    var url by rememberSaveable { mutableStateOf("") }
-    var token by remember { mutableStateOf("") }
-    var keyHeader by rememberSaveable { mutableStateOf("") }
-
-    AuraPage("Connectors") {
-        AuraSection(title = "Connected") {
-            if (connectors.isEmpty()) AuraHint("Connect a service that speaks MCP, such as GitHub, and AURA can use its tools.")
-            connectors.forEachIndexed { i, connector ->
-                if (i > 0) AuraDivider(16.dp)
-                DeletableRow(connector.displayName, "${connector.approvedTools.size} tools", "Remove ${connector.displayName}", { vm.removeConnector(connector.id) })
-            }
-        }
-        AuraSection(
-            title = "Add a connector",
-            footer = status ?: "What AURA sends a connector and what it reads back pass through that provider's servers. AURA treats what comes back as untrusted.",
-        ) {
-            Field(name, { name = it }, "Name")
-            AuraDivider(16.dp)
-            Field(url, { url = it }, "MCP server address (https)")
-            AuraDivider(16.dp)
-            Field(token, { token = it }, "Access token or API key (optional)", secret = true)
-            AuraDivider(16.dp)
-            Field(keyHeader, { keyHeader = it }, "Key header, if not Authorization (e.g. x-consumer-api-key)")
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AuraButton("Use GitHub", {
-                name = "GitHub"
-                url = GITHUB_MCP_URL
-                keyHeader = ""
-            }, Modifier.weight(1f), primary = false)
-            AuraButton("Use Composio", {
-                name = "Composio"
-                url = COMPOSIO_MCP_URL
-                keyHeader = COMPOSIO_KEY_HEADER
-            }, Modifier.weight(1f), primary = false)
-            AuraButton("Connect", {
-                vm.addConnector(name, url, token, keyHeader)
-                token = ""
-            }, Modifier.weight(1f), enabled = name.isNotBlank() && url.isNotBlank())
-        }
-    }
-}
-
-/** GitHub's hosted MCP server; it takes a personal access token as the bearer. */
-private const val GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
-
-/** Composio Connect: Gmail, Calendar, Drive and more through one endpoint, keyed by the user's own consumer key. */
-private const val COMPOSIO_MCP_URL = "https://connect.composio.dev/mcp"
-private const val COMPOSIO_KEY_HEADER = "x-consumer-api-key"
-
 // ── Pieces ───────────────────────────────────────────────────────────────────
 
 /**
@@ -647,7 +657,7 @@ private const val COMPOSIO_KEY_HEADER = "x-consumer-api-key"
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DeletableRow(
+internal fun DeletableRow(
     title: String,
     detail: String,
     deleteLabel: String,
@@ -686,7 +696,7 @@ private fun DeletableRow(
 
 /** A text field as a table row: the label as placeholder. */
 @Composable
-private fun Field(value: String, onChange: (String) -> Unit, label: String, secret: Boolean = false) {
+internal fun Field(value: String, onChange: (String) -> Unit, label: String, secret: Boolean = false) {
     val aura = LocalAura.current
     Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 14.dp)) {
         if (value.isEmpty()) Text(label, style = AuraType.body, color = aura.tertiary)
