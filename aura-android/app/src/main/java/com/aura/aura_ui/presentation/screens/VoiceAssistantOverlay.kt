@@ -187,8 +187,8 @@ data class VoiceAssistantState(
     // Screen-share (MediaProjection) is currently held — AURA can see the screen. Drives the
     // brand-tinted screen-share toggle in the input pill.
     val isScreenSharing: Boolean = false,
-    /** Space kept free under the prompt box, for the run controls while a run is paused. */
-    val bottomLiftDp: Int = 0,
+    /** An on-device run is paused: Resume and Cancel sit on the prompt box (the run controls window hides). */
+    val runPaused: Boolean = false,
     /** How AURA's last task went, shown above the prompt box until closed or the next task. */
     val report: com.aura.aura_ui.services.RemoteRun.Report? = null,
 )
@@ -221,6 +221,8 @@ data class VoiceAssistantCallbacks(
     val onMessageLike: (ConversationMessage) -> Unit = {},
     val onMessageDislike: (ConversationMessage) -> Unit = {},
     val onReportClose: () -> Unit = {},
+    val onRunResume: () -> Unit = {},
+    val onRunCancel: () -> Unit = {},
 )
 
 /**
@@ -315,6 +317,13 @@ fun VoiceAssistantOverlay(
                     )
                 }
 
+                if (state.runPaused) {
+                    PausedRunControls(onResume = callbacks.onRunResume, onCancel = callbacks.onRunCancel)
+                }
+
+                val wave = showsWave(state, pendingQuestion != null)
+                AuraButtonTip(text = if (wave) "Tap to type" else "Tap to talk", key = wave)
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Swipe down on the pill to close. Tapping the empty space above no
@@ -349,7 +358,6 @@ fun VoiceAssistantOverlay(
                             ) { _, dragAmount -> pillDragDy += dragAmount }
                         }
                 )
-                if (state.bottomLiftDp > 0) Spacer(modifier = Modifier.height(state.bottomLiftDp.dp))
             }
         }
     }
@@ -429,6 +437,93 @@ private fun ResumeChip(
 
 
 
+/** The pill shows the voice ribbon instead of the text field. A pending question always gets the field. */
+private fun showsWave(state: VoiceAssistantState, questionPending: Boolean): Boolean =
+    !questionPending && (state.isListening || (state.isGeminiLiveSession && (state.isProcessing || state.isResponding)))
+
+/**
+ * Resume and Cancel for a paused on-device run, centred on top of the prompt box.
+ * - Why here and not in the run controls window: that window floats at a fixed spot and covered
+ *   the prompt box once it came up on pause.
+ */
+@Composable
+private fun PausedRunControls(onResume: () -> Unit, onCancel: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RunControlButton(Icons.Default.PlayArrow, "Resume", Mono.Ink, onResume)
+        Spacer(modifier = Modifier.width(16.dp))
+        RunControlButton(Icons.Default.Close, "Cancel run", Color(0xFFA31621), onCancel)
+    }
+}
+
+@Composable
+private fun RunControlButton(icon: ImageVector, label: String, fill: Color, onClick: () -> Unit) {
+    val haptic = rememberHapticFeedback()
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .clip(CircleShape)
+            .background(fill)
+            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+            .clickable(onClickLabel = label) {
+                haptic(AuraHapticType.MEDIUM)
+                onClick()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(26.dp))
+    }
+}
+
+/**
+ * A small bubble over the AURA button saying what a tap does now ("Tap to type" in a voice
+ * conversation, "Tap to talk" otherwise). Shows for a few seconds when the prompt box opens and
+ * when [key] (the mode) changes.
+ * - Contract: its end padding lines the caret up with the AURA button: the pill's 16 dp margin,
+ *   its 10 dp inner padding and half the 48 dp button. Change together: `InputBar`.
+ */
+@Composable
+private fun AuraButtonTip(text: String, key: Any) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(key) {
+        shown = true
+        kotlinx.coroutines.delay(TIP_MS)
+        shown = false
+    }
+    AnimatedVisibility(
+        visible = shown,
+        enter = fadeIn(tween(220)),
+        exit = fadeOut(tween(220)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth().padding(end = 16.dp)) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF0B0B0C))
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+            // The caret: a small rotated square under the bubble, over the button's centre.
+            Box(
+                modifier = Modifier
+                    .padding(end = (10 + 24 - 6).dp)
+                    .offset(y = (-5).dp)
+                    .size(10.dp)
+                    .graphicsLayer { rotationZ = 45f }
+                    .background(Color(0xFF0B0B0C)),
+            )
+        }
+    }
+}
+
+private const val TIP_MS = 3_500L
+
 /**
  * Bottom Input Bar (Compact Floating Pill)
  */
@@ -472,11 +567,7 @@ private fun InputBar(
     // window focusable and set inputActive, but the focusRequester it targets lives inside the
     // TextField branch, which was never composed. There was literally nothing on screen to type
     // into, deterministically, in exactly the situation where the answer is needed most.
-    val showWave = !questionPending &&
-        (
-            state.isListening ||
-                (state.isGeminiLiveSession && (state.isProcessing || state.isResponding))
-            )
+    val showWave = showsWave(state, questionPending)
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -553,20 +644,6 @@ private fun InputBar(
                         )
                     }
                 }
-                // Talking isn't always possible: switch to the keyboard. The mic closes.
-                Text(
-                    text = "Type",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.textPrimary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(colors.iconBackground)
-                        .clickable {
-                            hapticFeedback(AuraHapticType.LIGHT)
-                            onInputActivate()
-                        }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                )
             } else {
                 val focusRequester = remember { FocusRequester() }
                 val keyboard = LocalSoftwareKeyboardController.current

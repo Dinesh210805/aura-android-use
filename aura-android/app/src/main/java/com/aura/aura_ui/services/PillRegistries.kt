@@ -90,9 +90,14 @@ object AgentStatusRegistry {
     /** The only status line the strip shows during a run: the model is working out what to do. */
     const val THINKING = "Thinking…"
 
-    /** True once the run has acted on the phone; from then on the strip stays off until the run ends. */
-    @Volatile
-    private var acting = false
+    private val _acting = MutableStateFlow(false)
+
+    /**
+     * True once the on-device run has acted on the phone, until the next run starts. The strip
+     * stays off from then on, and the overlay shows the Pause pill only now: a run that is still
+     * thinking (a Live question being answered) has nothing on screen to pause.
+     */
+    val acting: StateFlow<Boolean> = _acting.asStateFlow()
 
     /**
      * An on-device run is starting: forget the last run's line and that it acted, so
@@ -100,7 +105,7 @@ object AgentStatusRegistry {
      * sees the run before this.
      */
     fun startRun() {
-        acting = false
+        _acting.value = false
         _status.value = ""
         _beat.value = null
     }
@@ -110,7 +115,7 @@ object AgentStatusRegistry {
      * is not blocked by it. Keeps the state of a run that is already acting.
      */
     fun clearStaleLine() {
-        if (acting || _status.value == THINKING) return
+        if (_acting.value || _status.value == THINKING) return
         _status.value = ""
         _beat.value = null
     }
@@ -121,7 +126,7 @@ object AgentStatusRegistry {
      * line is already up.
      */
     fun seedThinking() {
-        if (!acting && _status.value.isBlank()) setStatus(THINKING)
+        if (!_acting.value && _status.value.isBlank()) setStatus(THINKING)
     }
 
     /** The run ended: [THINKING] is no longer true, so it comes down before the reply's caption. */
@@ -134,7 +139,7 @@ object AgentStatusRegistry {
      * screen belongs to the task, and the Pause pill is the only AURA surface on it.
      */
     fun noteActing() {
-        acting = true
+        _acting.value = true
         if (_status.value == THINKING) setStatus("")
     }
 
@@ -160,7 +165,7 @@ object AgentStatusRegistry {
     }
 
     fun clear() {
-        acting = false
+        _acting.value = false
         _status.value = ""
         _beat.value = null
         _speech.value = null

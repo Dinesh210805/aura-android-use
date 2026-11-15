@@ -176,9 +176,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
 
         private const val NOTIFICATION_ID = 1001
 
-        /** Change together: `PausePillOverlay.BUTTON_DP` plus a gap. */
-        private const val PANEL_LIFT_DP = 84
-
         /** How long "Speak" on a question listens. */
         private const val ANSWER_WINDOW_MS = 10_000L
 
@@ -1028,13 +1025,14 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     }
 
     /**
-     * A paused run hands the person the prompt box: the panel comes up above Resume and Cancel,
-     * so they can type, talk (AURA button) or just carry on; Resume puts it back down.
+     * A paused run hands the person the prompt box, with Resume and Cancel on top of it (the run
+     * controls window hides meanwhile, so the two never overlap), so they can type, talk (AURA
+     * button) or just carry on; Resume puts it back down.
      * - Why [agentDriving] follows the pause: the touch guard refuses the panel touches while
      *   the agent drives, and a paused agent is not driving.
      */
     private fun onLocalPause(paused: Boolean) {
-        panelLiftDp.intValue = if (paused) PANEL_LIFT_DP else 0
+        runPausedState.value = paused
         if (paused) {
             agentDriving = false
             if (_isMinimized.value) restoreOverlay() else setOverlayTouchable(true)
@@ -1156,8 +1154,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     // UI State (observable)
     private val audioAmplitude = mutableFloatStateOf(0f)
 
-    /** Extra space under the prompt box while paused, so Resume and Cancel stay visible below it. */
-    private val panelLiftDp = androidx.compose.runtime.mutableIntStateOf(0)
+    /** An on-device run is paused: the prompt box carries Resume and Cancel instead of the run controls window. */
+    private val runPausedState = androidx.compose.runtime.mutableStateOf(false)
 
 
     override fun onCreate() {
@@ -1202,8 +1200,9 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 lock.localRunning,
                 remoteRun.active,
                 lock.pausedByHuman,
-            ) { local, remote, paused -> Triple(local, remote, paused) }
-                .collect { (local, remote, paused) ->
+                com.aura.aura_ui.services.AgentStatusRegistry.acting,
+            ) { local, remote, paused, acting -> RunSignals(local, remote, paused, acting) }
+                .collect { (local, remote, paused, acting) ->
                     val running = local || remote
                     // Report progress only for a deliberate Pause: an inferred pause means the
                     // user just grabbed the phone, and a card would land on what they reached for.
@@ -1211,7 +1210,10 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     if (!paused) remoteRun.noteResumed()
                     if (local && paused != pausedWas) onLocalPause(paused)
                     pausedWas = paused
-                    pausePill.render(localRunActive = running, paused = paused)
+                    // Only while a run drives the phone: an on-device run that is still thinking (a
+                    // Live question going to the agent) has nothing to pause. A paused on-device
+                    // run's controls are on the prompt box (onLocalPause), so the window hides.
+                    pausePill.render(localRunActive = remote || (local && acting && !paused), paused = paused && remote)
                     // On the TRANSITION into a run only — during the run AURA may speak, and
                     // clearing on every emission would swallow that. A USER line is kept: it is
                     // the command that started this run, and it should stay up while AURA works.
@@ -2499,7 +2501,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             agentSteps = agentSteps,
             resumeOffer = conversationState.resumeOffer,
             isScreenSharing = isSharingScreen,
-            bottomLiftDp = panelLiftDp.intValue,
+            runPaused = runPausedState.value,
             report = onDeviceReport,
         )
 
@@ -2526,13 +2528,15 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 hide(this@AuraOverlayService)
             },
             onMicClick = {
-                // The AURA button. Listening → stop listening. Anything else (idle, AURA talking,
-                // a task running) → listen: a new conversation greets first; talking to a running
-                // task changes it rather than cancelling it.
-                if (voiceOn && voiceLoop.phase.value == com.aura.aura_ui.voice.VoiceLoop.Phase.LISTENING) {
-                    voiceLoop.quiet()
+                // The AURA button. In a voice conversation → end it (Live included) and leave the
+                // prompt box with its text field; a task it started keeps running. Otherwise →
+                // listen: a new conversation greets first; talking to a running task changes it
+                // rather than cancelling it.
+                if (voiceOn) {
+                    voiceLoop.stopSpeaking()
+                    voiceLoop.end()
                 } else {
-                    voiceLoop.start(greet = !voiceOn && agentRunJob?.isActive != true)
+                    voiceLoop.start(greet = agentRunJob?.isActive != true)
                 }
             },
             onSettingsClick = {
@@ -2588,6 +2592,10 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 conversationViewModel.clearAllMessages()
             },
             onInputActivate = { activateTextInput() },
+            onRunResume = { com.aura.aura_ui.services.ControlLockStore.shared.resume() },
+            onRunCancel = {
+                startService(Intent(this@AuraOverlayService, AuraOverlayService::class.java).apply { action = ACTION_CANCEL_TASK })
+            },
             onInputDeactivate = { deactivateTextInput() },
             onResumeClick = { handleResumeClick() },
             onResumeDismiss = { dismissResumeOffer() },
@@ -2866,3 +2874,6 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         overlayView = null
     }
 }
+
+/** What the run controls depend on, read together so they never disagree. */
+private data class RunSignals(val local: Boolean, val remote: Boolean, val paused: Boolean, val acting: Boolean)

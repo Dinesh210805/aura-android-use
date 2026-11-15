@@ -199,6 +199,9 @@ class AuraAgent(private val context: Context) {
         // than at the call sites because this is the one funnel every local run passes
         // through — fresh runs and resumed ones alike.
         ControlLockStore.shared.noteLocalRunStarted()
+        // This agent only runs phone tasks, so its run counts as acting from the start: the
+        // overlay shows the Pause pill only for a run that is acting.
+        com.aura.aura_ui.services.AgentStatusRegistry.noteActing()
         // Name the task at the SAME funnel, for the same reason. noteTaskStarted was wired
         // only into the overlay's text entry, so every other way in — voice, the Gemini Live
         // handoff, a resumed run, the debug harness — left activeTask null. That silently
