@@ -110,7 +110,7 @@ fun MonoSettingsScreen(onOpen: (String) -> Unit, debug: Boolean = false) {
                     if (on) WakeWordListeningService.start(context) else WakeWordListeningService.stop(context)
                 },
                 icon = Icons.Outlined.Hearing,
-                subtitle = "Say \"Wake up AURA\"",
+                subtitle = "Say \"Hey AURA\"",
             )
             if (android.os.Build.VERSION.SDK_INT >= 36) {
                 AuraDivider(ICON_INSET)

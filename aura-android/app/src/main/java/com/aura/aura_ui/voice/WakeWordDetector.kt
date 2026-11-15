@@ -18,8 +18,8 @@ import kotlinx.coroutines.launch
  * WakeWordDetector - Interface for wake word detection.
  * 
  * Implementations:
- * - SherpaKwsWakeWordDetector: the engine, sherpa-onnx keyword spotting
- * - StubWakeWordDetector: no-op fallback when that engine cannot load
+ * - OpenWakeWordDetector: the engine, openWakeWord models on ONNX Runtime
+ * - StubWakeWordDetector: no-op fallback when that engine cannot load (e.g. hey_aura.onnx missing)
  * 
  * CRITICAL: Only ONE audio consumer can be active at a time.
  * Wake word detection must stop before STT starts.
@@ -62,17 +62,17 @@ interface WakeWordDetector {
         /**
          * Create a WakeWordDetector instance.
          *
-         * Primary engine is [SherpaKwsWakeWordDetector] — free, offline, no access
+         * Primary engine is [OpenWakeWordDetector] — free, offline, no access
          * key. Falls back to [StubWakeWordDetector] (no-op) if the engine cannot
          * initialize, so the rest of the voice pipeline never crashes on a bad load.
          */
         fun create(context: Context): WakeWordDetector {
             return try {
-                val detector = SherpaKwsWakeWordDetector(context)
-                Log.i("WakeWordDetector", "✅ SherpaKwsWakeWordDetector created (free, offline)")
+                val detector = OpenWakeWordDetector(context)
+                Log.i("WakeWordDetector", "✅ OpenWakeWordDetector created (free, offline)")
                 detector
             } catch (e: Exception) {
-                Log.e("WakeWordDetector", "❌ Failed to create sherpa-onnx detector: ${e.message}", e)
+                Log.e("WakeWordDetector", "❌ Failed to create openWakeWord detector: ${e.message}", e)
                 Log.e("WakeWordDetector", "⚠️ Using StubWakeWordDetector — wake word will NOT work!")
                 StubWakeWordDetector()
             }
@@ -80,7 +80,7 @@ interface WakeWordDetector {
 
         /**
          * Check if wake word detection is available on this device.
-         * sherpa-onnx needs no access key — only microphone permission.
+         * openWakeWord needs no access key — only microphone permission.
          */
         fun isAvailable(context: Context): Boolean {
             return ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -92,7 +92,7 @@ interface WakeWordDetector {
 /**
  * Stub implementation for development/testing.
  * Does not perform actual wake word detection.
- * Used when the sherpa-onnx engine cannot load.
+ * Used when the openWakeWord engine cannot load.
  */
 class StubWakeWordDetector : WakeWordDetector {
 
@@ -102,11 +102,7 @@ class StubWakeWordDetector : WakeWordDetector {
     private val _isListening = MutableStateFlow(false)
     override val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
-    override val availableKeywords: List<String> = listOf(
-        "Hey AURA",
-        "OK AURA",
-        "AURA"
-    )
+    override val availableKeywords: List<String> = listOf(OpenWakeWordDetector.PHRASE)
 
     private var onWakeWordCallback: ((String) -> Unit)? = null
 

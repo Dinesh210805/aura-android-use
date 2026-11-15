@@ -36,11 +36,11 @@ import kotlinx.coroutines.launch
  * WakeWordListeningService - Background service for always-on wake word detection.
  * 
  * This foreground service runs continuously in the background, listening for the
- * "Wake up AURA" wake phrase. When detected, it triggers the voice assistant overlay.
+ * "Hey AURA" wake phrase. When detected, it triggers the voice assistant overlay.
  * 
  * Key features:
  * - Runs as foreground service with low-priority notification
- * - Uses sherpa-onnx keyword spotting ([WakeWordDetector.create]) for the wake word
+ * - Uses openWakeWord ([WakeWordDetector.create]) for the wake word
  * - Coordinates with ListeningModeController to avoid audio conflicts
  * - Battery efficient (~1% CPU usage)
  * 
@@ -323,7 +323,7 @@ class WakeWordListeningService : Service() {
             Log.i(TAG, "Wake word detector created: $detectorType")
             
             if (wakeWordDetector is StubWakeWordDetector) {
-                Log.w(TAG, "⚠️ Using stub detector - wake word will not work! The sherpa-onnx engine failed to load.")
+                Log.w(TAG, "⚠️ Using stub detector - wake word will not work! The openWakeWord engine failed to load (is assets/wakeword/hey_aura.onnx present?).")
             }
             
             setupWakeWordDetector()
@@ -614,7 +614,7 @@ class WakeWordListeningService : Service() {
                 "Wake word (background)",
                 NotificationManager.IMPORTANCE_MIN,
             ).apply {
-                description = "Required by Android to keep listening for \"Wake up AURA\" in the background"
+                description = "Required by Android to keep listening for \"Hey AURA\" in the background"
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_SECRET
                 setSound(null, null)
@@ -646,7 +646,7 @@ class WakeWordListeningService : Service() {
         )
 
         val statusText = if (isListening) {
-            "Say \"Wake up AURA\""
+            "Say \"Hey AURA\""
         } else {
             "Wake word paused"
         }
