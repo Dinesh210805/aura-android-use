@@ -16,16 +16,20 @@ The openWakeWord code is Apache-2.0. Its README puts its *bundled pre-trained wa
 
 ## Training `hey_aura.onnx`
 
-1. Open openWakeWord's `notebooks/automatic_model_training.ipynb` in Google Colab (free GPU).
-2. Set `target_phrase: ["hey aura"]` and `model_name: hey_aura`. Use the synthetic Piper TTS
-   positives it generates, at least 5,000 samples.
-3. **Licensing:** the notebook's default negative features (ACAV100M) are CC BY-NC-SA. For a
-   commercial build, swap them for permissively licensed negatives (for example Common Voice
-   CC0, MUSAN, or your own recordings).
-4. Export ONNX and drop it here as `hey_aura.onnx`. The detector reads the window length from the
-   model's input shape `[1, N, 96]`, so N need not be 16.
-5. Tune `threshold` in `OpenWakeWordDetector` (default 0.5) on-device: raise it if it fires on
-   TV or "or a", lower it if it misses you across the room.
+1. Open the patched 2026 notebook in Colab:
+   https://colab.research.google.com/github/alfiedennen/openwakeword-colab-2026/blob/main/train_wakeword.ipynb
+   (openWakeWord's official notebook no longer runs on current Colab).
+2. Runtime → Change runtime type → T4 GPU (free) or L4 (Colab Pro, about twice as fast).
+3. In cell 10 set `TARGET_PHRASE = ['hey aura', 'hey ora', 'hey awra']` and
+   `MODEL_NAME = 'hey_aura'`. The respellings steer the TTS toward how people say "aura".
+4. Runtime → Run all, wait about 75 to 90 minutes. The last cell downloads `hey_aura.onnx`.
+5. Put it here. The detector reads the window length from the model's input `[1, N, 96]`, and the
+   notebook bakes the sigmoid in, so scores are 0..1.
+6. Tune `threshold` in `OpenWakeWordDetector` (default 0.5) on-device: raise it if it fires on
+   TV or "or a", lower it if it misses you across the room. Logcat tag `OpenWakeWord`.
+
+**Licensing:** the notebook validates against ACAV100M audio (CC BY-NC-SA). For a commercial
+build, retrain with permissively licensed negatives (Common Voice CC0, MUSAN, own recordings).
 
 Why "Hey AURA" and not "AURA": bare "aura" is two open vowels and collides with everyday "or a" /
 "our a". The "hey" adds a consonant onset and a third syllable for the model to anchor on.

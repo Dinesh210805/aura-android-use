@@ -76,6 +76,8 @@ class WakeWordListeningService : Service() {
         private const val NOTIFICATION_ID = 2001
         private const val CHANNEL_ID = "aura_wake_word_quiet_v2"
         private const val LEGACY_CHANNEL_ID = "aura_wake_word_channel"
+        private const val PAUSED_CHANNEL_ID = "aura_wake_word_paused"
+        private const val PAUSED_NOTIFICATION_ID = 2002
         
         const val ACTION_START = "com.aura.aura_ui.START_WAKE_WORD"
         const val ACTION_STOP = "com.aura.aura_ui.STOP_WAKE_WORD"
@@ -140,11 +142,13 @@ class WakeWordListeningService : Service() {
             // Not fatal: the wake word simply stays off until something starts us from a
             // foreground-eligible state (opening the app, or the Settings toggle).
             Log.w(TAG, "wake word unavailable in this state — stopping without crashing")
+            if (savedWakeWordEnabled()) postPausedNotification()
             instance = null
             stopSelf()
             return
         }
         foregroundReady = true
+        getSystemService(NotificationManager::class.java)?.cancel(PAUSED_NOTIFICATION_ID)
 
         // Initialize components
         listeningModeController = ListeningModeController.getInstance(this)
@@ -502,53 +506,12 @@ class WakeWordListeningService : Service() {
         }
     }
     
-    /**
-     * Request device unlock before showing the overlay.
-     * Uses KeyguardManager to prompt for unlock on lock screen.
-     */
+    /** Locked phone: light the screen and hand off to MainActivity, which asks for the unlock. */
     private fun requestUnlockAndShowOverlay() {
-        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-        
-        // Turn on the screen if it's off
         wakeUpScreen()
-        
-        val activity = createUnlockActivity()
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && activity != null) {
-            // Use the dismiss keyguard API for Android O+ when we have an activity
-            // This shows the unlock prompt on the lock screen
-            keyguardManager.requestDismissKeyguard(
-                activity,
-                object : KeyguardManager.KeyguardDismissCallback() {
-                    override fun onDismissSucceeded() {
-                        Log.i(TAG, "🔓 Device unlocked successfully")
-                        serviceScope.launch {
-                            // Small delay to let the unlock animation complete
-                            delay(300)
-                            AuraOverlayService.showAndListen(this@WakeWordListeningService, source = "wake_word")
-                        }
-                    }
-                    
-                    override fun onDismissCancelled() {
-                        Log.i(TAG, "🔒 Unlock cancelled by user")
-                        // Return to passive mode
-                        listeningModeController?.transitionToPassive()
-                    }
-                    
-                    override fun onDismissError() {
-                        Log.e(TAG, "❌ Error dismissing keyguard")
-                        // Return to passive mode
-                        listeningModeController?.transitionToPassive()
-                    }
-                }
-            )
-        } else {
-            // For older Android versions or when no activity reference available,
-            // launch an activity that handles unlock
-            launchUnlockActivity()
-        }
+        launchUnlockActivity()
     }
-    
+
     /**
      * Wake up the screen using PowerManager.
      */
@@ -579,17 +542,11 @@ class WakeWordListeningService : Service() {
     }
     
     /**
-     * Create a dummy activity reference for keyguard dismiss callback.
-     * Note: This is a workaround - in production, you'd want a dedicated unlock activity.
-     */
-    private fun createUnlockActivity(): android.app.Activity? {
-        // For keyguard dismiss, we need an Activity reference
-        // Try to get MainActivity if it exists
-        return null // Will show on lock screen without specific activity
-    }
-    
-    /**
-     * Launch an activity to handle unlock for older Android versions.
+     * Opens MainActivity over the lock screen with the unlock extras.
+     *
+     * - Why this may start an activity from the background: AURA holds SYSTEM_ALERT_WINDOW, one
+     *   of Android's background-activity-start exemptions.
+     * - Change together: `MainActivity.handleWakeWordUnlockRequest`.
      */
     private fun launchUnlockActivity() {
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -645,7 +602,9 @@ class WakeWordListeningService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val statusText = if (isListening) {
+        val statusText = if (wakeWordDetector is StubWakeWordDetector) {
+            "Wake word model missing, not listening"
+        } else if (isListening) {
             "Say \"Hey AURA\""
         } else {
             "Wake word paused"
@@ -669,6 +628,45 @@ class WakeWordListeningService : Service() {
             .build()
     }
     
+    /**
+     * Tells the user the wake word is off because Android refused the background microphone,
+     * with one tap to turn it back on.
+     *
+     * - Why: Android 14+ refuses a `microphone` foreground service started from the background,
+     *   which covers boot, a sticky restart after an OEM kill, and the swipe-away restart alarm.
+     *   Every one of those ends in [onCreate]'s refusal branch, so this is the one place that
+     *   keeps it from failing silently.
+     * - Why the tap goes straight to the service: starting a foreground service "by interacting
+     *   with a notification" is a documented exemption from the while-in-use restriction, so
+     *   the tap succeeds even with the app closed.
+     * - Fails: on Android 13+ without POST_NOTIFICATIONS nothing is shown; only logcat remains.
+     */
+    private fun postPausedNotification() {
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            nm.createNotificationChannel(
+                NotificationChannel(PAUSED_CHANNEL_ID, "Wake word paused", NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = "Shown when Android stops the wake word in the background" }
+            )
+        }
+        val resume = Intent(this, WakeWordListeningService::class.java).apply { action = ACTION_START }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val tap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(this, 2, resume, flags)
+        } else {
+            PendingIntent.getService(this, 2, resume, flags)
+        }
+        val notification = NotificationCompat.Builder(this, PAUSED_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("\"Hey AURA\" is paused")
+            .setContentText("Android stopped the wake word in the background. Tap to turn it back on.")
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build()
+        runCatching { nm.notify(PAUSED_NOTIFICATION_ID, notification) }
+            .onFailure { Log.w(TAG, "paused notification refused: ${it.message}") }
+    }
+
     private fun updateNotification(isListening: Boolean) {
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager?.notify(NOTIFICATION_ID, createNotification(isListening))

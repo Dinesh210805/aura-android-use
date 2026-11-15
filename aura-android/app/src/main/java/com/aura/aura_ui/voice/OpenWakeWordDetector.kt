@@ -82,6 +82,8 @@ class OpenWakeWordDetector(
         val info = wakeSession.inputInfo.entries.first()
         wakeInput = info.key
         featureFrames = ((info.value.info as TensorInfo).shape[1]).toInt()
+        // A dynamic time axis exports as -1; the streaming window needs a fixed length.
+        require(featureFrames > 0) { "$CLASSIFIER has no fixed window length (input shape ${info.value.info})" }
         Log.i(TAG, "openWakeWord ready: $CLASSIFIER takes $featureFrames embeddings, threshold $threshold")
     }
 
