@@ -11,6 +11,13 @@ to the no-op stub (logcat tag `WakeWordDetector`).
 | `embedding_model.onnx` | mel to 96-d speech embedding (frozen) | openWakeWord v0.5.1 release asset, a re-implementation of Google's Apache-2.0 `speech_embedding` |
 | `hey_aura.onnx` | embeddings to "Hey AURA" score | **trained by us**, see below |
 
+`hey_aura.onnx` is the accent run (7 positive spellings incl. "hey ohra", 15 sound-alike negatives,
+5,000 clips). The first model is kept, outside the APK, at `aura-android/wakeword-models/hey_aura_v1.onnx`;
+copy it over `hey_aura.onnx` to switch back. On 180 Windows-TTS clips (5 voices, 3 speeds) at
+threshold 0.5, the accent run versus v1: "hi aura" 10/15 vs 5/15, "hey ohra" 13/15 both, false
+wakes on "hey dora" 3/15 vs 9/15. Both still fire on "hey laura" (12/15, 14/15) and on "aura"
+inside a sentence (8/15).
+
 The openWakeWord code is Apache-2.0. Its README puts its *bundled pre-trained wake-word classifiers*
 (hey_jarvis, alexa, ...) under CC BY-NC-SA 4.0. Do not ship one of those here.
 
