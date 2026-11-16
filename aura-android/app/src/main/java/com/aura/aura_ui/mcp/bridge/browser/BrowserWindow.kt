@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -335,7 +336,7 @@ internal class BrowserWindow(
             addView(ball, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         }
 
-        return TouchReportingFrame(context) { lastTouchAtMs = System.currentTimeMillis() }.apply {
+        return TouchReportingFrame(context, onTouch = { lastTouchAtMs = System.currentTimeMillis() }, onBack = ::back).apply {
             // Absorb the window's initial focus. This window is focusable (the user has to
             // be able to type), so on attach Android hands focus to the first focusable
             // descendant — which is the address bar. Observed on device: opening the
@@ -499,11 +500,29 @@ internal class BrowserWindow(
     private class TouchReportingFrame(
         context: Context,
         private val onTouch: () -> Unit,
+        private val onBack: () -> Unit,
     ) : FrameLayout(context) {
         override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
             onTouch()
             return super.dispatchTouchEvent(ev)
         }
+
+        /**
+         * Back while this window has focus. Without it Back reaches no one: the window is an
+         * overlay, not an Activity. An open keyboard still closes first (the IME takes the
+         * key before the window does).
+         */
+        override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+            if (event.keyCode != KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event)
+            if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) onBack()
+            return true
+        }
+    }
+
+    /** Back on the page: the previous page, or out of the way to the ball when there is none. */
+    private fun back() {
+        val page = adopted
+        if (page != null && page.canGoBack()) page.goBack() else resize(Size.BALL)
     }
 
     private fun layoutParams(size: Size): WindowManager.LayoutParams {
@@ -523,14 +542,7 @@ internal class BrowserWindow(
             Size.HIDDEN -> 1 to 1
         }
 
-        // NOT_FOCUSABLE at BALL: a minimized bubble must not steal the keyboard from
-        // whatever the user is doing elsewhere on the phone while the task keeps running
-        // behind it — the same reasoning `PausePillOverlay` uses. FULL is the one
-        // deliberate exception among AURA's overlays, because the user may be typing.
-        var flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-        if (size == Size.BALL) {
-            flags = flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        }
+        val flags = BrowserChromeBehavior.windowFlags(ball = size == Size.BALL)
 
         // TRANSLUCENT at both sizes: the ball is a circle in a square window and the card
         // has rounded corners, and an opaque format paints whatever lies outside those

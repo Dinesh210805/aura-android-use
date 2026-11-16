@@ -195,6 +195,8 @@ class AgentCore private constructor(private val app: Context) {
         research = ::research,
         refusal = { request -> DestructiveGoal.REFUSAL.takeIf { DestructiveGoal.isBulkDestruction(request) } },
         onTurn = ::onTurn,
+        // A browser window the run left full size would otherwise sit over the phone.
+        afterTurn = { AppBrowserBridge.shared(app).tidyAfterRun() },
         deviceLine = { deviceLine },
         style = { talkStyle },
         digest = { dao.insertDigest(it) },

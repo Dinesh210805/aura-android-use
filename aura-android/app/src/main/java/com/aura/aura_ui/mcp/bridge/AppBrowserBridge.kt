@@ -296,6 +296,7 @@ class AppBrowserBridge(
             mutex.withLock {
                 if (handoffPrompt != null) return@withLock
                 backgroundRequested = false
+                shownByAgent = false
                 val tab = active ?: newTab()
                 if (window.isShowing) {
                     window.resize(BrowserWindow.Size.FULL)
@@ -695,6 +696,7 @@ class AppBrowserBridge(
                     handoffEnd = HandoffEnd.USER_DONE
                 }
 
+                shownByAgent = true
                 val shown = window.attach(tab.view, BrowserWindow.Size.FULL, isHandoff = true, handoffPrompt = prompt)
                 if (!shown) {
                     return@withContext BrowserResult.Failure(
@@ -794,11 +796,40 @@ class AppBrowserBridge(
             return
         }
         if (!window.isShowing) {
+            shownByAgent = true
             // Attach at FULL, then shrink: BALL is only ever reached by resize, which keeps the
             // WebView's full-size layout. Attaching straight at BALL would lay the page out in a
             // 60dp window and extraction would read a 60px viewport.
             if (window.attach(view, BrowserWindow.Size.FULL, isHandoff = false) && openMinimized) {
                 window.resize(BrowserWindow.Size.BALL)
+            }
+        }
+    }
+
+    /**
+     * True when the window now up was put there by an agent run, false when the user opened
+     * the browser from AURA Home. Main thread only, like [backgroundRequested].
+     */
+    private var shownByAgent = false
+
+    /**
+     * Gets the browser window out of the way when an agent run ends, so nothing a run left
+     * full size sits over the phone with no one driving it.
+     *
+     * - Contract: an unfinished sign-in hand-off is ended (no run is left to poll it, and
+     *   while it stands every browser write is refused); the tab, its page and its cookies
+     *   stay. Otherwise a full-size window the agent opened shrinks to the ball. A window
+     *   the user opened from AURA Home is left alone. Safe to call from any thread; returns
+     *   at once.
+     * - Change together: `AgentCore` calls this from `AgentEngine`'s `afterTurn`.
+     */
+    fun tidyAfterRun() {
+        chromeScope.launch {
+            mutex.withLock {
+                when {
+                    handoffPrompt != null -> endHandoff(returnToTaskView = false)
+                    shownByAgent && window.size == BrowserWindow.Size.FULL -> window.resize(BrowserWindow.Size.BALL)
+                }
             }
         }
     }

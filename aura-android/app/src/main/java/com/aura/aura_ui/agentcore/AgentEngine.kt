@@ -81,6 +81,11 @@ class AgentEngine(
     private val refusal: (request: String) -> String? = { null },
     /** Called with true when a turn starts and false when it ends, however it ends. */
     private val onTurn: (started: Boolean, mode: RunMode) -> Unit = { _, _ -> },
+    /**
+     * Called once when a foreground turn ends however it ends (answer, failure, cancel), but not
+     * when it handed its task to the overlay, whose turn continues it. Must not throw or block.
+     */
+    private val afterTurn: () -> Unit = {},
     /** Keeps what a finished run did, for the idle review ([Learning]). Not called for a hand-off. */
     private val digest: suspend (DigestRow) -> Unit = {},
     /** The phone's name and Android version, for the system prompt. Must not change between turns. */
@@ -209,6 +214,7 @@ class AgentEngine(
         } finally {
             onTurn(false, mode)
             if (mode == RunMode.FOREGROUND) markRunning(threadId, null)
+            if (mode == RunMode.FOREGROUND && run.end != TurnEnd.HANDED_OFF) afterTurn()
         }
         running.remove(threadId, turn)
         // A handed-off turn saves what it did, and the overlay's turn continues from it.

@@ -1,5 +1,6 @@
 package com.aura.aura_ui.mcp.bridge.browser
 
+import android.view.WindowManager
 import java.net.URLEncoder
 
 /**
@@ -12,6 +13,20 @@ import java.net.URLEncoder
  * questions with right and wrong answers — and they are where the bugs live.
  */
 internal object BrowserChromeBehavior {
+
+    /**
+     * The browser window's `WindowManager` flags at ball size ([ball]) or full size.
+     *
+     * - Why NOT_FOCUSABLE at ball size: a minimized bubble must not take the keyboard from
+     *   whatever the user does elsewhere while the task runs behind it, as `PausePillOverlay`.
+     * - Why focusable at full size: the user may type into the page or the address bar.
+     * - Why NOT_TOUCH_MODAL at full size: a focusable window without it gets every touch on
+     *   the screen, not just those inside the card, so a card left up after a run locks the
+     *   whole phone. With it, a touch outside the card reaches the app behind.
+     */
+    fun windowFlags(ball: Boolean): Int =
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            if (ball) WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE else WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
 
     /**
      * DuckDuckGo rather than Google, for one specific reason: this is an embedded WebView,

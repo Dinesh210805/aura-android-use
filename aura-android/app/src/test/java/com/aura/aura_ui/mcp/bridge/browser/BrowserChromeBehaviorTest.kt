@@ -1,5 +1,6 @@
 package com.aura.aura_ui.mcp.bridge.browser
 
+import android.view.WindowManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -16,6 +17,21 @@ import org.junit.Test
  * checked. Keeping them here means they are testable at all.
  */
 class BrowserChromeBehaviorTest {
+
+    // ── window flags ───────────────────────────────────────────────────
+
+    @Test
+    fun `the full-size window lets touches outside it reach the phone`() {
+        val flags = BrowserChromeBehavior.windowFlags(ball = false)
+        assertTrue(flags and WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL != 0)
+        assertTrue(flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE == 0)
+    }
+
+    @Test
+    fun `the ball never takes the keyboard`() {
+        val flags = BrowserChromeBehavior.windowFlags(ball = true)
+        assertTrue(flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE != 0)
+    }
 
     // ── URL vs. search ─────────────────────────────────────────────────
     //

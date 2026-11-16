@@ -133,7 +133,9 @@ Tests are in `app/src/test/java/com/aura/aura_ui/agentcore/`. Run them with
    overlay's turn continues from it instead of sending the request again.
 
 A request to delete the user's data in bulk is refused before any model sees it. The screen is
-kept on for the length of a foreground turn.
+kept on for the length of a foreground turn. When a foreground turn ends (unless it handed off),
+`afterTurn` calls `AppBrowserBridge.tidyAfterRun`: an unfinished sign-in hand-off is ended and a
+full-size browser window the run opened shrinks to its bubble, so nothing is left over the phone.
 
 There is one agent and no sub-agents: the phone has one screen, so two agents cannot act at once.
 
