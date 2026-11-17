@@ -81,4 +81,22 @@ class AppMapsTest {
         assertTrue(shown, "button · top-right" in shown)
         assertTrue(shown, "button \"Settings\"" in shown)
     }
+
+    @Test
+    fun `after an app update the map says which version it was recorded on`() {
+        repeat(2) { maps.merge(insta, "r$it", listOf(visit(1, "Settings"))) }
+        assertFalse(maps.render(insta).orEmpty().contains("Recorded on version"))
+        installed = 11L to "2.0"
+        maps.merge(insta, "r3", listOf(visit(1, "Settings")))
+        assertTrue(maps.render(insta).orEmpty(), "Recorded on version 1.0; the app is now 2.0." in maps.render(insta).orEmpty())
+    }
+
+    @Test
+    fun `a control missing from two runs of its screen is gone`() {
+        repeat(2) { maps.merge(insta, "r$it", listOf(visit(1, "Settings", "Add account"))) }
+        maps.merge(insta, "r3", listOf(visit(1, "Settings")))
+        assertEquals(listOf("Settings", "Add account"), maps.read(insta)?.screens?.single()?.controls?.map { it.label })
+        maps.merge(insta, "r4", listOf(visit(1, "Settings")))
+        assertEquals(listOf("Settings"), maps.read(insta)?.screens?.single()?.controls?.map { it.label })
+    }
 }

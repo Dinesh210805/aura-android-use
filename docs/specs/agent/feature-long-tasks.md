@@ -510,7 +510,7 @@ in the same commit (AGENTS.md).
     - `grep -c "agentcore/" aura-android/app/src/main/res/xml/backup_rules.xml aura-android/app/src/main/res/xml/data_extraction_rules.xml`
       prints `…backup_rules.xml:3` and `…data_extraction_rules.xml:6`.
 
-- [ ] **8d-2. Maps follow app updates and correct themselves.**
+- [x] **8d-2. Maps follow app updates and correct themselves.**
   - **What changes:** `AppMaps.kt` (`missing` counts and version handling), `AppMapsTest`.
   - **Logic:**
     - **Self-correcting.** A control missing from 2 runs of its screen on the current version is
