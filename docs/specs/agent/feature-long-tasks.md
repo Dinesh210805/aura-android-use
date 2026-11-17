@@ -478,7 +478,7 @@ in the same commit (AGENTS.md).
     - a browser package, a sensitive package and a `(not recorded)` screen are not in it;
     - a reply writes one `screen_note` per known id, and an unknown id writes none.
 
-- [ ] **8d. Each app gets a map, updated a little after every run.**
+- [x] **8d. Each app gets a map, updated a little after every run.**
   - **What changes:** `agentcore/AppMaps.kt` (new), `ScreenReview.kt` (merges after 8c's call),
     `res/xml/backup_rules.xml` and both sections of `data_extraction_rules.xml` (exclude
     `agentcore/appmaps/`), `agentcore/README.md`.

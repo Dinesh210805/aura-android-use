@@ -21,6 +21,7 @@ class ScreenReviewTest {
         journal = journal,
         ask = { _, input -> inputs += input; reply },
         words = words,
+        maps = AppMaps(kotlin.io.path.createTempDirectory().toFile(), version = { null }),
         isBrowser = { it == "com.android.chrome" },
         appNames = { setOf("Instagram", "Google Pay") },
         ownPackage = "com.aura.aura_ui",

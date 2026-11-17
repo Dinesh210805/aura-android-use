@@ -7,11 +7,13 @@
         <exclude domain="sharedpref" path="aura_secure_keys.xml" />
         <exclude domain="file" path="agentcore/traces/" />
         <exclude domain="file" path="agentcore/screens/" />
+        <exclude domain="file" path="agentcore/appmaps/" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="aura_mcp_trust.xml" />
         <exclude domain="sharedpref" path="aura_secure_keys.xml" />
         <exclude domain="file" path="agentcore/traces/" />
         <exclude domain="file" path="agentcore/screens/" />
+        <exclude domain="file" path="agentcore/appmaps/" />
     </device-transfer>
 </data-extraction-rules>

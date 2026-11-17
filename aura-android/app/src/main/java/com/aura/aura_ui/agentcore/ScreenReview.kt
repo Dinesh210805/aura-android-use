@@ -34,6 +34,8 @@ class ScreenReview(
     /** The FAST model: instruction, input → reply, or null when none is set up. */
     private val ask: suspend (system: String, input: String) -> String?,
     private val words: UiWords,
+    /** Each reviewed app's map ([AppMaps]), merged after its call. */
+    private val maps: AppMaps,
     private val isBrowser: (String) -> Boolean,
     /** Names of the installed apps, from the launcher. */
     private val appNames: () -> Set<String>,
@@ -45,8 +47,18 @@ class ScreenReview(
     /** One clickable, editable or checkable element of a screen. [label] is the raw label, or null. */
     data class Control(val label: String?, val role: String, val region: String)
 
-    /** One screen file of a run, as the review sends it: everything already masked. */
-    data class Screen(val id: String, val pkg: String, val layoutKeys: Set<Long>, val controls: List<String>, val notes: List<String>, val exits: List<Pair<String, String>>)
+    /**
+     * One screen file of a run, as the review sends it: everything already masked. A control's
+     * label is null unless [UiWords] kept it; an exit's label is null for an unnamed control.
+     */
+    data class Screen(
+        val id: String,
+        val pkg: String,
+        val layoutKeys: Set<Long>,
+        val controls: List<Control>,
+        val notes: List<String>,
+        val exits: List<Pair<String?, String>>,
+    )
 
     /** Review what is pending. Returns how many runs were looked at. */
     suspend fun review(): Int {
@@ -57,10 +69,10 @@ class ScreenReview(
         ends.forEach { end ->
             val screens = screens(byRun[end.run].orEmpty())
             screens.groupBy { it.pkg }.forEach { (pkg, appScreens) ->
-                runCatching {
-                    val names = described(ask(SYSTEM, input(pkg, appScreens)), appScreens.map { it.id }.toSet())
-                    names.forEach { (id, named) -> journal.screenNote(end.run, id, "${named.first}: ${named.second}") }
-                }
+                val names = runCatching { described(ask(SYSTEM, input(pkg, appScreens)), appScreens.map { it.id }.toSet()) }.getOrDefault(emptyMap())
+                runCatching { names.forEach { (id, named) -> journal.screenNote(end.run, id, "${named.first}: ${named.second}") } }
+                // The map is built from the masked controls, so it is updated even when the model said nothing.
+                runCatching { withContext(Dispatchers.IO) { maps.merge(pkg, end.run, visits(appScreens, names)) } }
             }
             setReviewedAt(end.atMs)
         }
@@ -79,9 +91,9 @@ class ScreenReview(
         val frames = run.filter { it.type == RunJournal.TYPE_SEEN }.mapNotNull { r -> argsOf(r)?.let { r.detail.orEmpty() to it } }.toMap()
         val apps = appNames()
         val notes = mutableMapOf<String, MutableList<String>>()
-        val exits = mutableMapOf<String, MutableList<Pair<String, String>>>()
+        val exits = mutableMapOf<String, MutableList<Pair<String?, String>>>()
         var current: String? = null
-        var pressed: Pair<String, String>? = null
+        var pressed: Pair<String, String?>? = null
         // By time, not file order: a tap's record is written after the screens it led to, stamped with its start.
         run.sortedBy { it.atMs }.forEach { r ->
             when (r.type) {
@@ -94,7 +106,7 @@ class ScreenReview(
                 RunJournal.TYPE_TOOL -> current?.let { file ->
                     argsOf(r)?.get(PhoneToolSource.SEEN_PARAM)?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)
                         ?.let { notes.getOrPut(file) { mutableListOf() } += words.mask(it, apps) }
-                    if (r.ok && r.tool in PhoneToolSource.PRESS_TOOLS) pressed = file to (r.label?.let { maskLabel(it, apps) } ?: "an unnamed control")
+                    if (r.ok && r.tool in PhoneToolSource.PRESS_TOOLS) pressed = file to r.label?.let { maskLabel(it, apps) }
                 }
             }
         }
@@ -103,7 +115,7 @@ class ScreenReview(
             val pkg = framed.firstNotNullOfOrNull { it[RunJournal.FRAME]?.jsonObject?.get("pkg")?.jsonPrimitive?.contentOrNull }
             if (pkg.isNullOrBlank() || !reviewable(pkg)) return@mapNotNull null
             val controls = framed.flatMap { controls(it[RunJournal.FRAME]?.toString()) }
-                .map { c -> c.label?.let { maskLabel(it, apps) }?.let { "${c.role} \"$it\" · ${c.region}" } ?: "${c.role} · ${c.region}" }
+                .map { c -> c.copy(label = c.label?.let { maskLabel(it, apps) }) }
                 .distinct().take(MAX_CONTROLS)
             Screen(
                 id = file.id,
@@ -112,6 +124,23 @@ class ScreenReview(
                 controls = controls,
                 notes = notes[file.id].orEmpty().distinct(),
                 exits = exits[file.id].orEmpty().distinct(),
+            )
+        }
+    }
+
+    /**
+     * One app's screens as map visits. An exit leads to the target file's first layout key; one
+     * to another app, or by an unnamed control, is left out (its role and region are not known).
+     */
+    internal fun visits(screens: List<Screen>, names: Map<String, Pair<String, String>>): List<AppMaps.Visit> {
+        val keyOf = screens.associate { it.id to it.layoutKeys.firstOrNull() }
+        return screens.map { s ->
+            AppMaps.Visit(
+                layoutKeys = s.layoutKeys,
+                controls = s.controls.map { AppMaps.Control(it.label, it.role, it.region) },
+                name = names[s.id]?.first,
+                description = names[s.id]?.second,
+                exits = s.exits.mapNotNull { (label, to) -> label?.let { l -> keyOf[to]?.let { l to it } } },
             )
         }
     }
@@ -129,9 +158,9 @@ class ScreenReview(
         appendLine("<app>$pkg</app>")
         screens.forEach { s ->
             appendLine("<screen id=\"${s.id}\">")
-            appendLine("controls: " + s.controls.joinToString("; ").ifEmpty { "none" })
+            appendLine("controls: " + s.controls.joinToString("; ") { c -> c.role + c.label?.let { " \"$it\"" }.orEmpty() + " · " + c.region }.ifEmpty { "none" })
             if (s.notes.isNotEmpty()) appendLine("agent notes: " + s.notes.joinToString(" | "))
-            s.exits.forEach { (label, to) -> appendLine("tap ${if (label.startsWith("an ")) label else "\"$label\""} → $to") }
+            s.exits.forEach { (label, to) -> appendLine("tap ${label?.let { "\"$it\"" } ?: "an unnamed control"} → $to") }
             appendLine("</screen>")
         }
     }

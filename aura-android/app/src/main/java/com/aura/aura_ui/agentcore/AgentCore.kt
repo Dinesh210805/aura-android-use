@@ -101,12 +101,19 @@ class AgentCore private constructor(private val app: Context) {
     private val files = AttachmentReader(app)
     val telemetry = AgentTelemetry(File(root, "traces"), BuildConfig.VERSION_NAME, keepDays = { LogKeep.days(app) })
 
+    /** Each app's map from earlier runs; see [AppMaps]. */
+    val appMaps = AppMaps(File(root, "appmaps"), version = { pkg ->
+        runCatching { app.packageManager.getPackageInfo(pkg, 0) }.getOrNull()
+            ?.let { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(it) to it.versionName.orEmpty() }
+    })
+
     /** The after-run screen review; see [ScreenReview]. */
     private val screenReview by lazy {
         ScreenReview(
             journal = telemetry.journal,
             ask = { system, input -> models.resolve(ModelRole.FAST)?.ask(system, input) },
             words = UiWords.load(app),
+            maps = appMaps,
             isBrowser = { it in browserPackages() },
             appNames = { TaskResearch.launcherApps(app).map { it.label.trim() }.toSet() },
             ownPackage = app.packageName,

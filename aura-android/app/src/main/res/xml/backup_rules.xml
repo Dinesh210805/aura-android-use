@@ -8,4 +8,5 @@
     <!-- The agent's run log and screen history hold screen text and screenshots. -->
     <exclude domain="file" path="agentcore/traces/" />
     <exclude domain="file" path="agentcore/screens/" />
+    <exclude domain="file" path="agentcore/appmaps/" />
 </full-backup-content>
