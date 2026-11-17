@@ -1,6 +1,9 @@
 package com.aura.aura_ui.agentcore
 
 import com.aura.mcp.tools.ScreenSnapshot
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
 /**
  * Every screen one task went through, as a plain timeline: `S1`, `S2`, `S3`, in time order.
@@ -21,8 +24,15 @@ import com.aura.mcp.tools.ScreenSnapshot
  * - Why som_ids on a passed screen are not tappable: a snapshot numbers them fresh, outside the
  *   cache `tap` resolves against. The `screen` tool says so.
  * - Change together: `ScreenPayload.seenLine` (`:mcp-server`), which writes the caption.
+ * - Lasts for the whole chat: [encode] writes it, the next turn passes the decoded entries in as
+ *   [earlier], and numbering goes on (`S4`, not `S1`). [task] is this turn's run id, so earlier
+ *   tasks' screens can be told apart. Stuck detection ([distinct]) is never saved, so it counts the
+ *   current task only.
  */
-class ScreenHistory {
+class ScreenHistory(
+    private val task: String = "",
+    earlier: List<Entry> = emptyList(),
+) {
     data class Entry(
         val id: String,
         val caption: String,
@@ -38,12 +48,19 @@ class ScreenHistory {
         val sameAs: String? = null,
         /** The model's own line about this screen, from the `seen` argument of the action it took on it. */
         val note: String? = null,
+        /** The run id of the turn that recorded it. */
+        val task: String = "",
+        /** Recorded while a sensitive app was in front: saved without text or note. */
+        val hidden: Boolean = false,
     )
 
     /** Where a model read went: its id, whether it added an entry (false: one was marked read), and the entry. */
     data class Recorded(val id: String, val added: Boolean, val entry: Entry)
 
-    private val entries = mutableListOf<Entry>()
+    private val entries = earlier.takeLast(MAX_KEPT).toMutableList()
+
+    /** The next id's number. Not `entries.size + 1`: trimming the oldest would reuse ids. */
+    private var next = (earlier.maxOfOrNull { it.id.removePrefix("S").toIntOrNull() ?: 0 } ?: 0) + 1
     private val bodies = HashSet<Int>()
 
     /**
@@ -60,27 +77,43 @@ class ScreenHistory {
      * one. Returns null when [text] is not a screen.
      */
     @Synchronized
-    fun record(text: String, snap: ScreenSnapshot.Snapshot? = null): Recorded? {
+    fun record(text: String, snap: ScreenSnapshot.Snapshot? = null, hidden: Boolean = false): Recorded? {
         val caption = captionOf(text) ?: return null
         val body = text.lines().filterNot(::isHeader)
         if (!body.any { NO_CHANGES in it } && bodies.add(body.hashCode())) distinct++
         val newest = entries.lastOrNull()
         if (snap != null && newest != null && sameContent(newest, snap)) {
-            val marked = newest.copy(byModel = true)
+            // It may be the last screen of an earlier task: it now belongs to this one too.
+            val marked = newest.copy(byModel = true, task = task)
             entries[entries.lastIndex] = marked
             return Recorded(marked.id, added = false, entry = marked)
         }
-        val entry = append(caption, text, byModel = true, snap)
+        val entry = append(caption, text, byModel = true, snap, hidden)
         return Recorded(entry.id, added = true, entry = entry)
     }
 
     /** Record a screen nobody asked to read; null when it repeats the newest entry. */
     @Synchronized
-    fun passed(snap: ScreenSnapshot.Snapshot): Entry? {
+    fun passed(snap: ScreenSnapshot.Snapshot, hidden: Boolean = false): Entry? {
         val newest = entries.lastOrNull()
         if (newest != null && sameContent(newest, snap)) return null
-        return append(captionOf(snap.text).orEmpty(), snap.text, byModel = false, snap)
+        return append(captionOf(snap.text).orEmpty(), snap.text, byModel = false, snap, hidden)
     }
+
+    /**
+     * The history for the chat's screens file: at most [MAX_KEPT] entries, each text the whole
+     * screen cut to [MAX_KEPT_CHARS], a hidden entry with neither text nor note.
+     */
+    @Synchronized
+    fun encode(): String = Json.encodeToString(
+        ListSerializer(Saved.serializer()),
+        entries.takeLast(MAX_KEPT).map {
+            Saved(
+                it.id, it.caption, if (it.hidden) "" else (it.full ?: it.text).take(MAX_KEPT_CHARS), it.byModel, it.pkg,
+                it.contentKey, it.blind, it.sameAs, if (it.hidden) null else it.note, it.task, it.hidden,
+            )
+        },
+    )
 
     /**
      * Put the model's [note] on the newest screen: the one it decided its action on. A later note
@@ -92,13 +125,15 @@ class ScreenHistory {
         entries[entries.lastIndex] = newest.copy(note = note)
     }
 
-    private fun append(caption: String, text: String, byModel: Boolean, snap: ScreenSnapshot.Snapshot?): Entry {
+    private fun append(caption: String, text: String, byModel: Boolean, snap: ScreenSnapshot.Snapshot?, hidden: Boolean): Entry {
         val earlier = snap?.takeIf { !it.blind }?.let { s -> entries.lastOrNull { !it.blind && it.pkg == s.pkg && it.contentKey == s.contentKey } }
         val entry = Entry(
-            id = "S${entries.size + 1}", caption = caption, text = text, byModel = byModel, full = snap?.text,
+            id = "S${next++}", caption = caption, text = text, byModel = byModel, full = snap?.text,
             pkg = snap?.pkg.orEmpty(), contentKey = snap?.contentKey, blind = snap?.blind == true, sameAs = earlier?.id,
+            task = task, hidden = hidden,
         )
         entries += entry
+        if (entries.size > MAX_KEPT) entries.removeAt(0)
         return entry
     }
 
@@ -150,10 +185,47 @@ class ScreenHistory {
 
     private fun isHeader(line: String) = line.startsWith(SEEN) || line.startsWith("SCREEN ")
 
-    private companion object {
-        const val SEEN = "SEEN:"
-        const val NO_CHANGES = "NO CHANGES since your last look"
-        const val MAX_LOG = 60
+    /** One entry as the chat's screens file holds it. `text` is the whole screen, cut. */
+    @Serializable
+    private data class Saved(
+        val id: String,
+        val caption: String,
+        val text: String,
+        val byModel: Boolean,
+        val pkg: String,
+        val contentKey: Long?,
+        val blind: Boolean,
+        val sameAs: String?,
+        val note: String?,
+        val task: String,
+        val hidden: Boolean,
+    )
+
+    companion object {
+        private const val SEEN = "SEEN:"
+        private const val NO_CHANGES = "NO CHANGES since your last look"
+        private const val MAX_LOG = 60
+
+        /** Entries kept per chat, oldest dropped first. */
+        const val MAX_KEPT = 300
+
+        /** Characters of each screen written to the file; about 2.5 MB at [MAX_KEPT] entries. */
+        const val MAX_KEPT_CHARS = 8_000
+
+        private val json = Json { ignoreUnknownKeys = true }
+
+        /**
+         * The entries [encode] wrote, for the next turn's [ScreenHistory].
+         * - Fails: open. A missing, cut-off or unreadable file gives an empty list, never a failed turn.
+         */
+        fun decode(stored: String?): List<Entry> = stored?.let {
+            runCatching { json.decodeFromString(ListSerializer(Saved.serializer()), it) }.getOrNull()
+        }.orEmpty().map {
+            Entry(
+                id = it.id, caption = it.caption, text = it.text, byModel = it.byModel, pkg = it.pkg,
+                contentKey = it.contentKey, blind = it.blind, sameAs = it.sameAs, note = it.note, task = it.task, hidden = it.hidden,
+            )
+        }
     }
 }
 

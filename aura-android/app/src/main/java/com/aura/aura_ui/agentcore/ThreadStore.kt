@@ -17,8 +17,11 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Update
 import androidx.room.Upsert
+import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
@@ -294,7 +297,16 @@ object ContextCodec {
 /** What [ThreadStore.loadContext] returns. */
 class StoredContext(val messages: List<Message>, val taint: Set<Origin>)
 
-class ThreadStore(private val dao: AgentDao, private val now: () -> Long = System::currentTimeMillis) {
+/**
+ * Chats: Room for threads, items and context; one file per chat for its screen history.
+ * - Writes: `files/agentcore/screens/<threadId>.json` ([saveScreens]), left out of cloud backup by
+ *   `backup_rules.xml` and `data_extraction_rules.xml`; [delete] removes it with the chat.
+ */
+class ThreadStore(
+    private val dao: AgentDao,
+    private val screensDir: File,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
 
     fun threads(): Flow<List<ThreadRow>> = dao.threads()
 
@@ -315,7 +327,35 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         dao.deleteDigests(threadId)
         dao.deleteItems(threadId)
         dao.deleteThread(threadId)
+        withContext(Dispatchers.IO) { screensFile(threadId)?.delete() }
     }
+
+    /** The chat's saved screen history ([ScreenHistory.encode]), or null when there is none. */
+    suspend fun loadScreens(threadId: String): String? = withContext(Dispatchers.IO) {
+        screensFile(threadId)?.takeIf { it.isFile }?.let { runCatching { it.readText() }.getOrNull() }
+    }
+
+    /**
+     * Replace the chat's screen history.
+     * - Fails: open; a failed write keeps the previous file. Written to a temporary file and
+     *   renamed, so a crash mid-write never leaves half a file.
+     */
+    suspend fun saveScreens(threadId: String, encoded: String) = withContext(Dispatchers.IO) {
+        val file = screensFile(threadId) ?: return@withContext
+        runCatching {
+            screensDir.mkdirs()
+            val tmp = File(screensDir, "${file.name}.tmp")
+            tmp.writeText(encoded)
+            if (!tmp.renameTo(file)) {
+                file.delete()
+                tmp.renameTo(file)
+            }
+        }
+    }
+
+    /** Null for an id that is not a plain thread id, so no id can name a path outside [screensDir]. */
+    private fun screensFile(threadId: String): File? =
+        threadId.takeIf { SAFE_ID.matches(it) }?.let { File(screensDir, "$it.json") }
 
     /** Empty the visible transcript and keep the model's context. */
     suspend fun clearItems(threadId: String) = dao.deleteItems(threadId)
@@ -414,5 +454,6 @@ class ThreadStore(private val dao: AgentDao, private val now: () -> Long = Syste
         private const val AROUND_MAX = 8
         const val DEFAULT_TITLE = "New chat"
         private const val MAX_TITLE = 60
+        private val SAFE_ID = Regex("[A-Za-z0-9_-]{1,64}")
     }
 }

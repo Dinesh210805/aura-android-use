@@ -18,7 +18,8 @@ class ThreadStoreTest {
     private val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), AgentCoreDatabase::class.java)
         .allowMainThreadQueries().build()
     private var clock = 0L
-    private val threads = ThreadStore(db.dao(), now = { clock++ })
+    private val screensDir = kotlin.io.path.createTempDirectory().toFile()
+    private val threads = ThreadStore(db.dao(), screensDir, now = { clock++ })
 
     @After fun close() = db.close()
 
@@ -50,5 +51,15 @@ class ThreadStoreTest {
         assertEquals(listOf("first"), db.dao().items(t).first().map { it.text })
         assertEquals(setOf(Origin.WEB), threads.loadContext(t).taint)
         assertEquals(null, threads.undo(t))
+    }
+
+    @Test
+    fun `deleting a chat deletes its screens file`() = runBlocking {
+        val t = threads.create().id
+        threads.saveScreens(t, "[]")
+        assertEquals("[]", threads.loadScreens(t))
+        threads.delete(t)
+        assertEquals(null, threads.loadScreens(t))
+        assertEquals(0, screensDir.listFiles().orEmpty().size)
     }
 }

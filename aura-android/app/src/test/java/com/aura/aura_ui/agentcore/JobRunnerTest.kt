@@ -21,7 +21,7 @@ class JobRunnerTest {
     private val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), AgentCoreDatabase::class.java)
         .allowMainThreadQueries().build()
     private var clock = 1_000_000L
-    private val threads = ThreadStore(db.dao(), now = { clock })
+    private val threads = ThreadStore(db.dao(), kotlin.io.path.createTempDirectory().toFile(), now = { clock })
     private val jobs = JobStore(db.dao(), now = { clock }, zone = { ZoneId.of("UTC") })
     private var answer = Schedule.SILENT
     private val runs = mutableListOf<String>()

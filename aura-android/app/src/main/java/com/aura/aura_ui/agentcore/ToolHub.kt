@@ -113,6 +113,8 @@ class TurnState(
     inheritedTaint: Set<Origin> = emptySet(),
     /** True when this turn must not drive the screen itself: asking for the `screen` toolset ends it. */
     val handsOffScreen: Boolean = false,
+    /** The chat's screens from earlier turns ([ScreenHistory.decode]); this turn's ids continue after them. */
+    earlierScreens: List<ScreenHistory.Entry> = emptyList(),
     private val sink: suspend (AgentEvent) -> Unit,
 ) {
     /** Names this turn in the run log ([RunJournal]). */
@@ -128,8 +130,8 @@ class TurnState(
 
     val taint = TurnTaint(inheritedTaint)
 
-    /** Every screen this task went through; read by the `screens`, `screen` and `screen_diff` tools. */
-    val screens = ScreenHistory()
+    /** Every screen this chat went through; read by the `screens`, `screen` and `screen_diff` tools. */
+    val screens = ScreenHistory(runId, earlierScreens)
 
     /** Records the screens nobody read ([ScreenWatcher]); started by the turn's first phone call. */
     private var watcher: kotlinx.coroutines.Job? = null
@@ -356,8 +358,9 @@ class ToolHub(
             ScreenWatcher(
                 read = snapshot,
                 onScreen = { snap ->
-                    val entry = turn.screens.passed(snap)
-                    entry?.let { journal?.seen(turn.runId, it.id, it.caption, snap.text.takeUnless { hidden() }, RunJournal.BY_AURA, it.sameAs, snap.frame) }
+                    val hide = hidden()
+                    val entry = turn.screens.passed(snap, hide)
+                    entry?.let { journal?.seen(turn.runId, it.id, it.caption, snap.text.takeUnless { hide }, RunJournal.BY_AURA, it.sameAs, snap.frame) }
                     entry != null
                 },
                 onLimit = { journal?.note(turn.runId, "Stopped recording passed screens at ${ScreenWatcher.MAX_PASSED}") },
@@ -864,8 +867,9 @@ class ToolHub(
             val recorded = if (!result.isError && spec.name in ContextAssembler.SCREEN_TOOLS) {
                 // A browser tool's result is a web page, not the phone's screen: no snapshot with it.
                 val snap = if (spec.name in PHONE_LOOKS) runCatching { snapshot() }.getOrNull() else null
-                turn.screens.record(result.text, snap)?.also { r ->
-                    journal?.seen(turn.runId, r.id, r.entry.caption, (snap?.text ?: result.text).takeUnless { hidden() }, sameAs = r.entry.sameAs, frame = snap?.frame)
+                val hide = hidden()
+                turn.screens.record(result.text, snap, hide)?.also { r ->
+                    journal?.seen(turn.runId, r.id, r.entry.caption, (snap?.text ?: result.text).takeUnless { hide }, sameAs = r.entry.sameAs, frame = snap?.frame)
                 }
             } else {
                 null

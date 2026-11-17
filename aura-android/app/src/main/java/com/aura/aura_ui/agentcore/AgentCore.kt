@@ -86,7 +86,7 @@ class AgentCore private constructor(private val app: Context) {
     /** Work a notification starts (a heartbeat check); it outlives the listener callback. */
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val threads = ThreadStore(dao)
+    val threads = ThreadStore(dao, File(root, "screens"))
     val memory = MemoryStore(dao, installed = ::installedApp)
     val skills = SkillStore(File(root, "skills"), installedApps = { TaskResearch.launcherApps(app).map { it.label.trim().lowercase() }.toSet() })
 

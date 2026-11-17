@@ -21,7 +21,7 @@ class MemoryStoreTest {
     private val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), AgentCoreDatabase::class.java)
         .allowMainThreadQueries().build()
     private val memory = MemoryStore(db.dao())
-    private val tool = memoryTools(memory, ThreadStore(db.dao())) { _, _ -> true }.first { it.spec.name == MEMORY_TOOL }
+    private val tool = memoryTools(memory, ThreadStore(db.dao(), kotlin.io.path.createTempDirectory().toFile())) { _, _ -> true }.first { it.spec.name == MEMORY_TOOL }
 
     @After fun close() = db.close()
 

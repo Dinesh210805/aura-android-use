@@ -100,4 +100,38 @@ class ScreenHistoryTest {
         assertNull(h.passed(snap("SEEN: game | (no readable elements)", 5, pkg = "game", blind = true)))
         assertEquals("S2", h.passed(snap(uberHome, content = 1))?.id)
     }
+
+    @Test
+    fun `numbering goes on after the history is saved and loaded`() {
+        val h = ScreenHistory("run1").apply { record(uberHome); record(uberFares); record(fareChanged) }
+        val next = ScreenHistory("run2", ScreenHistory.decode(h.encode()))
+        assertEquals("S4", next.record(uberHome)?.id)
+    }
+
+    @Test
+    fun `a hidden entry is saved with no text and no note`() {
+        val h = ScreenHistory("run1")
+        h.record("SEEN: com.bank | Balance\nSCREEN 1x1\n| 1 Balance 4,000 |", hidden = true)
+        h.annotate("checking the balance")
+        val e = ScreenHistory.decode(h.encode()).single()
+        assertTrue(e.hidden)
+        assertEquals("", e.text)
+        assertNull(e.note)
+    }
+
+    @Test
+    fun `past 300 entries the oldest goes and ids are never reused`() {
+        val h = ScreenHistory("run1")
+        repeat(301) { h.passed(snap("SEEN: app | screen $it", content = it.toLong(), pkg = "app")) }
+        val kept = ScreenHistory.decode(h.encode())
+        assertEquals(ScreenHistory.MAX_KEPT, kept.size)
+        assertEquals("S2", kept.first().id)
+        assertEquals("S302", ScreenHistory("run2", kept).passed(snap("SEEN: app | new", content = 999, pkg = "app"))?.id)
+    }
+
+    @Test
+    fun `an unreadable file loads as an empty history`() {
+        assertTrue(ScreenHistory.decode("{not json").isEmpty())
+        assertTrue(ScreenHistory.decode(null).isEmpty())
+    }
 }

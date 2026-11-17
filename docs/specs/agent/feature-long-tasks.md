@@ -357,7 +357,7 @@ in the same commit (AGENTS.md).
     - A `tap` without `seen` still reaches the source.
     - Two failing taps with different notes count as the same repeated call.
 
-- [ ] **7. Screen history lasts for the whole chat.**
+- [x] **7. Screen history lasts for the whole chat.**
   - **What changes:** `ScreenHistory.kt` (`Entry` gets `task` and `hidden`; `encode`/`decode`
     (new)), `ThreadStore` (constructor parameter `screensDir: File` (new); `loadScreens`,
     `saveScreens` (new); `delete` also deletes the file), where `AgentCore.kt` builds

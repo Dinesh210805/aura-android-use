@@ -173,7 +173,8 @@ class AgentEngine(
         val idle = threads.thread(threadId)?.let { now() - it.updatedAtMs > FRESH_AFTER_MS } == true
         val carried = if (idle && !continuesHandOff && loaded.messages.isNotEmpty()) earlier(threadId) else null
         val stored = if (carried != null) StoredContext(emptyList(), loaded.taint) else loaded
-        val turn = TurnState(threadId, mode, stored.taint, handsOffScreen = handOffScreen) { event ->
+        val earlierScreens = ScreenHistory.decode(threads.loadScreens(threadId))
+        val turn = TurnState(threadId, mode, stored.taint, handsOffScreen = handOffScreen, earlierScreens = earlierScreens) { event ->
             record(threadId, event)
             send(event)
         }
@@ -701,6 +702,7 @@ class AgentEngine(
 
     private suspend fun save(turn: TurnState, run: TurnRun) {
         runCatching { threads.saveContext(turn.threadId, ContextAssembler.forStorage(run.messages), turn.taint.origins) }
+        threads.saveScreens(turn.threadId, turn.screens.encode())
     }
 
     private suspend fun record(threadId: String, event: AgentEvent) {
