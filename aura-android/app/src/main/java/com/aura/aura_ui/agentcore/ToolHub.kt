@@ -596,9 +596,9 @@ class ToolHub(
             NativeTool(
                 spec(
                     "screens",
-                    "List every screen this task went through, oldest first, one line each. \"S5 = S2\" means S5 looked exactly like S2 (you came back to it); \"passed, not read\" marks one AURA recorded that you were not shown. Use it to find something from earlier instead of going back.",
+                    "Search the screens of this chat before going back to a screen to read it again. With no query: this task's screens, oldest first, one line each with your note on it. \"S5 = S2\" means S5 looked exactly like S2 (you came back to it); \"passed, not read\" marks one AURA recorded that you were not shown. With a query: the matching lines of every screen in this chat, words or your notes, as \"S9: <line>\"; \"(earlier task)\" marks a screen from before this request.",
                     emptyList(),
-                    listOf(ToolParameterDescriptor("query", "Only screens whose text contains this.", ToolParameterType.String)),
+                    listOf(ToolParameterDescriptor("query", "A word or phrase to find in screen text, captions and notes, any case.", ToolParameterType.String)),
                 ),
             ) { args, turn -> SourceResult(turn.screens.log(arg(args, "query"))) },
             NativeTool(

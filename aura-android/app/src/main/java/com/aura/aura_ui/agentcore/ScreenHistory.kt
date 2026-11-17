@@ -144,16 +144,37 @@ class ScreenHistory(
         else -> e.contentKey == snap.contentKey
     }
 
-    /** One line per screen, newest last; only those whose caption or text contains [query]. */
+    /**
+     * With no [query]: the current task's screens, one line each, `S3 · caption · note: …`.
+     * With one: every screen of the chat whose text, caption or note holds it (any case), newest
+     * last, as `S3: <matching line>`, at most [LINES_PER_HIT] lines a screen and [MAX_LOG] in all.
+     * Hits from an earlier task say so; a hidden screen never matches.
+     */
     @Synchronized
     fun log(query: String?): String {
         val q = query?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
-        val hits = entries.filter { q == null || q in it.caption.lowercase() || q in (it.full ?: it.text).lowercase() }
-        if (hits.isEmpty()) return if (q == null) "No screens yet." else "No screen mentions \"$query\"."
-        return hits.takeLast(MAX_LOG).joinToString("\n") {
-            it.id + (it.sameAs?.let { s -> " = $s" } ?: "") + (if (it.byModel) "" else " (passed, not read)") + "  " + it.caption +
-                it.note?.let { n -> " · note: $n" }.orEmpty()
+        if (q == null) {
+            val current = entries.filter { it.task == task }
+            if (current.isEmpty()) return "No screens yet."
+            return current.takeLast(MAX_LOG).joinToString("\n") {
+                it.id + (it.sameAs?.let { s -> " = $s" } ?: "") + (if (it.byModel) "" else " (passed, not read)") + " · " + it.caption +
+                    it.note?.let { n -> " · note: $n" }.orEmpty()
+            }
         }
+        val hits = entries.filterNot { it.hidden }.flatMap { e ->
+            val earlier = if (e.task != task) " (earlier task)" else ""
+            matchingLines(e, q).take(LINES_PER_HIT).map { "${e.id}: $it$earlier" }
+        }
+        if (hits.isEmpty()) return "No screen mentions \"$query\"."
+        return hits.takeLast(MAX_LOG).joinToString("\n")
+    }
+
+    /** [e]'s screen lines holding [q], without the grid's borders; else its caption; and its note. */
+    private fun matchingLines(e: Entry, q: String): List<String> {
+        val body = (e.full ?: e.text).lines().filterNot(::isHeader).map { it.trim().trim('|').trim() }.filter { q in it.lowercase() }
+        val caption = listOf(e.caption).takeIf { body.isEmpty() && q in e.caption.lowercase() }.orEmpty()
+        val note = e.note?.takeIf { q in it.lowercase() }?.let { listOf("note: $it") }.orEmpty()
+        return body + caption + note
     }
 
     /** The first and last screen ids, e.g. "S1..S14", or null before any screen. */
@@ -205,6 +226,7 @@ class ScreenHistory(
         private const val SEEN = "SEEN:"
         private const val NO_CHANGES = "NO CHANGES since your last look"
         private const val MAX_LOG = 60
+        private const val LINES_PER_HIT = 3
 
         /** Entries kept per chat, oldest dropped first. */
         const val MAX_KEPT = 300

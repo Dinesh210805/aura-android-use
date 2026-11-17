@@ -386,7 +386,7 @@ in the same commit (AGENTS.md).
     - With 301 entries, the oldest is gone.
     - `ThreadStoreTest`: `delete` removes the thread's screens file.
 
-- [ ] **8. `screens` finds words, notes and earlier tasks and returns the matching lines.**
+- [x] **8. `screens` finds words, notes and earlier tasks and returns the matching lines.**
   - **What changes:** `ScreenHistory.log`, the `screens` tool description in `ToolHub.kt`,
     `agentcore/README.md`.
   - **Logic:**
@@ -399,7 +399,7 @@ in the same commit (AGENTS.md).
     - The description tells the model to search here before going back to a screen to read it
       again.
   - **Done when:** `ScreenHistoryTest` passes four new cases:
-    - `log("taxi")` returns `S9: Taxi  23.00`.
+    - `log("taxi")` returns `S9: 3 Taxi  23.00` (the grid line without its borders, som_id kept).
     - A query that only matches a note returns that screen.
     - A hit from an earlier task carries `(earlier task)`.
     - A hidden screen never matches.

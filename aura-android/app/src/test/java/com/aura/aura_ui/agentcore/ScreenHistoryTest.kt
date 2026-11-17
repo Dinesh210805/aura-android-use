@@ -30,7 +30,7 @@ class ScreenHistoryTest {
     fun `the log is searchable and a screen comes back exactly`() {
         val h = ScreenHistory().apply { record(uberHome); record(uberFares) }
         assertTrue(h.log(null).lines().size == 2)
-        assertEquals("S2  com.ubercab | UberGo ₹612 | Book", h.log("612"))
+        assertEquals("S2: 1 UberGo ₹612", h.log("612"))
         assertEquals(uberFares, h.show("s2"))
     }
 
@@ -133,5 +133,36 @@ class ScreenHistoryTest {
     fun `an unreadable file loads as an empty history`() {
         assertTrue(ScreenHistory.decode("{not json").isEmpty())
         assertTrue(ScreenHistory.decode(null).isEmpty())
+    }
+
+    private val expenses = "SEEN: Pro Expense | Expenses\nSCREEN 1x1\n| 1 Coffee  4.50 |\n| 2 Lunch  12.00 |\n| 3 Taxi  23.00 |"
+
+    @Test
+    fun `a query returns the matching line of each screen`() {
+        val h = ScreenHistory("run1")
+        repeat(8) { h.passed(snap("SEEN: app | screen $it", content = it.toLong(), pkg = "app")) }
+        h.record(expenses)
+        assertEquals("S9: 3 Taxi  23.00", h.log("TAXI"))
+    }
+
+    @Test
+    fun `a query that matches only a note finds that screen`() {
+        val h = ScreenHistory("run1").apply { record(uberHome); annotate("booking the airport ride") }
+        assertEquals("S1: note: booking the airport ride", h.log("airport"))
+    }
+
+    @Test
+    fun `a hit from an earlier task says so, and the plain list shows only this task`() {
+        val first = ScreenHistory("run1").apply { record(expenses) }
+        val h = ScreenHistory("run2", ScreenHistory.decode(first.encode())).apply { record(uberHome) }
+        assertEquals("S1: 3 Taxi  23.00 (earlier task)", h.log("taxi"))
+        assertEquals(listOf("S2"), h.log(null).lines().map { it.substringBefore(' ') })
+    }
+
+    @Test
+    fun `a hidden screen never matches`() {
+        val h = ScreenHistory("run1")
+        h.record("SEEN: com.bank | Balance\nSCREEN 1x1\n| 1 Taxi refund 23.00 |", hidden = true)
+        assertEquals("No screen mentions \"taxi\".", h.log("taxi"))
     }
 }
