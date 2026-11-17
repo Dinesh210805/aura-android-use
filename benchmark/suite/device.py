@@ -459,6 +459,70 @@ def pull_sessions(ids, dest):
   return True
 
 
+# --- agentcore's run log, per task --------------------------------------------
+
+# Change together: RunJournal.kt and Telemetry.kt (which write these), efficiency.py (which reads them).
+PHONE_TRACES = 'files/agentcore/traces'
+
+
+def trace_lines():
+  """AURA's run-log files on the phone: {file name: [lines]} for every `*.jsonl` in PHONE_TRACES.
+
+  Contract: one `run-as tar` over adb of the JSONL files only (not the screenshots beside them).
+  The glob is expanded by a shell running as the app, since the device shell cannot see the
+  folder. Needs a debuggable build for run-as, like pull_sessions.
+  Fails: {} when nothing could be read, so a task simply has no run log.
+  ponytail: copies whole day files each time; the clock is pinned to one day, so one steps file
+  and one spans file grow across a run. Fine for a few hundred tasks; tail by byte offset if not.
+  """
+  import io
+  import tarfile
+  cmd = "run-as %s sh -c 'cd %s && tar -cf - *.jsonl'" % (AURA_PACKAGE, PHONE_TRACES)
+  try:
+    p = subprocess.run([ADB, '-s', SERIAL, 'exec-out', cmd], capture_output=True, timeout=300)
+  except subprocess.TimeoutExpired:
+    return {}
+  if p.returncode != 0 or not p.stdout:
+    return {}
+  out = {}
+  try:
+    with tarfile.open(fileobj=io.BytesIO(p.stdout)) as tar:
+      for member in tar.getmembers():
+        name = os.path.basename(member.name)
+        f = tar.extractfile(member) if member.isfile() and name.endswith('.jsonl') else None
+        if f is not None:
+          out[name] = f.read().decode('utf-8', errors='replace').splitlines(keepends=True)
+  except (tarfile.TarError, OSError):
+    return {}
+  return out
+
+
+def trace_marks():
+  """How many lines each run-log file had before a task: {file name: count}.
+
+  Why line counts: AndroidWorld resets the clock to the same date at every task start, so
+  timestamps cannot split tasks; and a day change starts a new file, so marks are per file.
+  """
+  return {name: len(lines) for name, lines in trace_lines().items()}
+
+
+def pull_traces(marks, dest):
+  """Writes the run-log lines added since `marks` into dest/<file name>, one file per day file.
+
+  Contract: files with no new lines are not written. Returns how many lines were written.
+  """
+  written = 0
+  for name, lines in trace_lines().items():
+    new = lines[marks.get(name, 0):]
+    if not new:
+      continue
+    os.makedirs(dest, exist_ok=True)
+    with open(os.path.join(dest, name), 'w', encoding='utf-8') as f:
+      f.writelines(new)
+    written += len(new)
+  return written
+
+
 # --- AURA's own log, for the suite page -------------------------------------
 
 class AppLog:

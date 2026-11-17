@@ -37,6 +37,7 @@ sys.path.insert(0, HERE)
 
 import aura_androidworld  # noqa: E402
 import desktop  # noqa: E402
+import efficiency  # noqa: E402
 import device  # noqa: E402
 import external_agent  # noqa: E402
 import publish  # noqa: E402
@@ -48,7 +49,9 @@ PREVIEW = os.path.join(RUNTIME, 'preview')  # local copy of the pages publish wo
 
 PORT = 8777
 PROFILE = 'claude-code-aura-mcp'
-ONDEVICE_TIMEOUT_S = 300
+# Not a budget: AURA's own turn limit (TurnLimits.maxWallClockMs, 60 minutes) always ends a run
+# first, so this only stops a hung phone. Change together: goal_timeout in aura_androidworld.py.
+ONDEVICE_TIMEOUT_S = 3600
 MAX_EVENTS = 600
 MAX_APP_LINES = 2000
 SESSION_PULL_S = 4
@@ -85,7 +88,7 @@ TARGETS = {
         'deviations': [
             '91 tasks: the 25 information-retrieval tasks need a typed answer AURA cannot give.',
             'Device clock moved from 2023 to 2026, so the phone\'s calls to its model pass TLS.',
-            'A wall-clock limit instead of a step budget: AURA\'s steps happen on the phone.',
+            'No step or time budget: each task runs until AURA answers, fails or hits its own 60-minute limit.',
         ],
         'about': report.ABOUT_ONDEVICE,
     },
@@ -351,6 +354,7 @@ class Suite:
         puller = threading.Thread(target=self._pull_steps, args=(name, before, marks, done),
                                   daemon=True)
         puller.start()
+        traces = device.trace_marks() if self.target == 'ondevice' else None
         try:
           meta = external_agent.run_one(
               self.env, self._make_agent, name, tasks, SEED, self.results_dir(),
@@ -362,6 +366,10 @@ class Suite:
           done.set()
           puller.join()
         write_text(os.path.join(self.results_dir(), name, 'app.log'), app_text)
+        if traces is not None:
+          # agentcore's own run log for this task, then the table across every task so far.
+          device.pull_traces(traces, os.path.join(self.results_dir(), name, 'agentcore'))
+          efficiency.write(self.results_dir())
         with self.lock:
           key = 'stopped' if meta['success'] is None else 'passed' if meta['success'] else 'failed'
           self.session[key] += 1

@@ -212,6 +212,7 @@ class AgentEngine(
             threads.append(threadId, ItemKind.NOTICE, message)
             AgentEvent.TurnEnded(TurnEnd.FAILED, message)
         } finally {
+            turn.stopWatching()
             onTurn(false, mode)
             if (mode == RunMode.FOREGROUND) markRunning(threadId, null)
             if (mode == RunMode.FOREGROUND && run.end != TurnEnd.HANDED_OFF) afterTurn()

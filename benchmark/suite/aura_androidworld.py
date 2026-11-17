@@ -122,7 +122,7 @@ _N_COMBINATIONS = flags.DEFINE_integer('n_task_combinations', 1, 'Instances per 
 _SEED = flags.DEFINE_integer('task_random_seed', 30, 'Task parameter seed. Record it.')
 _CHECKPOINT_DIR = flags.DEFINE_string('checkpoint_dir', '', 'Resume this run directory.')
 _OUTPUT_PATH = flags.DEFINE_string('output_path', './runs', 'Where new runs go.')
-_TIMEOUT = flags.DEFINE_integer('goal_timeout', 300, 'Seconds to let AURA work.')
+_TIMEOUT = flags.DEFINE_integer('goal_timeout', 3600, 'Seconds before a hung run is stopped; AURA ends itself at 60 minutes.')
 _PACKAGE = flags.DEFINE_string(
     'aura_package', 'com.aura.aura_ui.feature.debug',
     'Installed AURA package. The spike receiver only exists in debug builds.',

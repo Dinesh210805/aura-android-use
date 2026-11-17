@@ -5,4 +5,7 @@
     <exclude domain="sharedpref" path="aura_mcp_trust.xml" />
     <!-- API keys: encrypted with a Keystore key that never leaves this phone. -->
     <exclude domain="sharedpref" path="aura_secure_keys.xml" />
+    <!-- The agent's run log and screen history hold screen text and screenshots. -->
+    <exclude domain="file" path="agentcore/traces/" />
+    <exclude domain="file" path="agentcore/screens/" />
 </full-backup-content>

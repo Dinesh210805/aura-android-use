@@ -15,8 +15,13 @@ import ai.koog.serialization.kotlinx.toKotlinxJsonObject
 import ai.koog.serialization.typeToken
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import com.aura.mcp.tools.ScreenSnapshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -123,8 +128,22 @@ class TurnState(
 
     val taint = TurnTaint(inheritedTaint)
 
-    /** Every screen this task saw; read by the `screens`, `screen` and `screen_diff` tools. */
+    /** Every screen this task went through; read by the `screens`, `screen` and `screen_diff` tools. */
     val screens = ScreenHistory()
+
+    /** Records the screens nobody read ([ScreenWatcher]); started by the turn's first phone call. */
+    private var watcher: kotlinx.coroutines.Job? = null
+
+    /** Starts [launch] once per turn; later calls do nothing. */
+    @Synchronized
+    fun watchScreens(launch: () -> kotlinx.coroutines.Job) {
+        if (watcher == null) watcher = launch()
+    }
+
+    /** Ends the watcher; called when the turn ends, however it ends. */
+    fun stopWatching() {
+        watcher?.cancel()
+    }
 
     /** What the run has done, for the ledger the engine shows the model on long tasks. */
     val ledger = RunLedger()
@@ -320,7 +339,35 @@ class ToolHub(
     private val onChain: suspend (skill: String?, ok: Boolean) -> Unit = { _, _ -> },
     /** A few words after a toolset's menu line (a connector's signed-in apps), or null. */
     private val toolsetNote: (toolset: String) -> String? = { null },
+    /** True when the app in front is kept out of logs; its screens are journalled without text. */
+    private val hiddenApp: suspend () -> Boolean = { false },
+    /**
+     * A silent full read of the phone's screen ([ScreenSnapshot]) for the screen history, or null
+     * when there is no phone. Never moves the som_ids `tap` resolves against.
+     */
+    private val snapshot: suspend () -> ScreenSnapshot.Snapshot? = { null },
 ) {
+    /** Where screen watchers run: apart from any tool call, so a call never waits on one. */
+    private val watchScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Starts this turn's [ScreenWatcher]; each new screen goes into its history and the run log. */
+    private fun startWatching(turn: TurnState) = turn.watchScreens {
+        watchScope.launch {
+            ScreenWatcher(
+                read = snapshot,
+                onScreen = { snap ->
+                    val entry = turn.screens.passed(snap)
+                    entry?.let { journal?.seen(turn.runId, it.id, it.caption, snap.text.takeUnless { hidden() }, RunJournal.BY_AURA, it.sameAs, snap.frame) }
+                    entry != null
+                },
+                onLimit = { journal?.note(turn.runId, "Stopped recording passed screens at ${ScreenWatcher.MAX_PASSED}") },
+            ).run()
+        }
+    }
+
+    /** Fails closed: unsure means hidden. */
+    private suspend fun hidden() = runCatching { hiddenApp() }.getOrDefault(true)
+
     private val control = NativeToolSource(
         "control",
         listOf(loadToolsetTool(), findToolsTool(), loadToolsTool(), askUserTool(), updatePlanTool(), proposeActionTool()) + screenHistoryTools() +
@@ -546,13 +593,13 @@ class ToolHub(
             NativeTool(
                 spec(
                     "screens",
-                    "List the screens seen in this task, one line each (S3 a new screen, S3.1 a change on it). Use it to find something you saw earlier instead of going back.",
+                    "List every screen this task went through, oldest first, one line each. \"S5 = S2\" means S5 looked exactly like S2 (you came back to it); \"passed, not read\" marks one AURA recorded that you were not shown. Use it to find something from earlier instead of going back.",
                     emptyList(),
                     listOf(ToolParameterDescriptor("query", "Only screens whose text contains this.", ToolParameterType.String)),
                 ),
             ) { args, turn -> SourceResult(turn.screens.log(arg(args, "query"))) },
             NativeTool(
-                spec("screen", "Show an earlier screen exactly as you saw it.", listOf(ToolParameterDescriptor("id", "Its id from screens, e.g. S3.", ToolParameterType.String))),
+                spec("screen", "Show an earlier screen in full, as it was. A record only: its som_ids are not tappable; to act, read the screen.", listOf(ToolParameterDescriptor("id", "Its id from screens, e.g. S3.", ToolParameterType.String))),
             ) { args, turn ->
                 turn.screens.show(arg(args, "id"))?.let { SourceResult(it) } ?: SourceResult("No screen ${arg(args, "id")}. Call screens to list them.", isError = true)
             },
@@ -791,6 +838,7 @@ class ToolHub(
             if (!result.isError && turn.mode == RunMode.FOREGROUND) {
                 ChatCard.fromToolResult(spec.name, result.text)?.let { turn.emit(AgentEvent.Card(it)) }
             }
+            if (spec.origin == ToolOrigin.PHONE) startWatching(turn)
             if (!result.isError && spec.risk != ToolRisk.READ && spec.origin == ToolOrigin.PHONE) turn.noteAction()
             val repeat = if (result.isError) turn.noteFailure(callKey(args)) else 0
             val hint = if (repeat >= WARN_AFTER_FAILURES) "\nThis exact call has now failed $repeat times. Do not repeat it." else ""
@@ -801,7 +849,16 @@ class ToolHub(
             if (!result.isError && spec.name == RESOLVE_CONTACT) {
                 PHONE_IN_TEXT.findAll(result.text).forEach { turn.contactNumbers += it.value.filter(Char::isDigit).takeLast(PHONE_TAIL) }
             }
-            val screenId = if (!result.isError && spec.name in ContextAssembler.SCREEN_TOOLS) turn.screens.record(result.text) else null
+            val recorded = if (!result.isError && spec.name in ContextAssembler.SCREEN_TOOLS) {
+                // A browser tool's result is a web page, not the phone's screen: no snapshot with it.
+                val snap = if (spec.name in PHONE_LOOKS) runCatching { snapshot() }.getOrNull() else null
+                turn.screens.record(result.text, snap)?.also { r ->
+                    journal?.seen(turn.runId, r.id, r.entry.caption, (snap?.text ?: result.text).takeUnless { hidden() }, sameAs = r.entry.sameAs, frame = snap?.frame)
+                }
+            } else {
+                null
+            }
+            val screenId = recorded?.id
             val text = (screenId?.let { "[$it] " }.orEmpty()) + ContextAssembler.clamp(result.text, MAX_RESULT_CHARS) + hint
             val body = spec.resultOrigin?.takeIf { !result.isError }?.let { Fence.wrap(it, text) } ?: text
             return ToolOutcome(body, result.isError)
@@ -997,6 +1054,9 @@ class ToolHub(
             appendLine("origin: ${request.origin}")
             appendLine("sends data out: ${request.egress}")
             request.targetLabel?.let { appendLine("pressed label: $it") }
+        /** Screen tools that read the phone itself; a silent snapshot is taken with each. */
+        private val PHONE_LOOKS = setOf("read_screen", "perceive_screen", "get_screenshot")
+
             appendLine("private or untrusted content this turn: ${taint.joinToString().ifEmpty { "none" }}")
             appendLine(
                 when (verdict) {

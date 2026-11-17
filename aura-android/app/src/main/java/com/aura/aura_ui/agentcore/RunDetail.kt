@@ -36,8 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +49,15 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aura.aura_ui.presentation.components.AuraEmpty
 import com.aura.aura_ui.presentation.components.AuraPage
@@ -82,6 +93,7 @@ fun RunDetailPage(id: String, onDeleted: () -> Unit, vm: AgentPagesViewModel = v
     val loaded by produceState<RunDetail?>(null, id) { value = vm.runDetail(id) }
     var filter by rememberSaveable { mutableStateOf(StepFilter.ALL) }
     var confirm by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<String?>(null) }
     val run = loaded?.run
 
     AuraPage("Run", scrollable = false, actions = {
@@ -117,14 +129,26 @@ fun RunDetailPage(id: String, onDeleted: () -> Unit, vm: AgentPagesViewModel = v
                             AuraSegmented(StepFilter.entries, filter, { it.title }, { filter = it })
                         }
                     }
-                    itemsIndexed(steps, key = { i, step -> "${step.atMs}-$i" }) { _, step ->
-                        StepCard(run.steps.indexOf(step) + 1, step, run.startMs)
+                    if (filter == StepFilter.SCREENS) {
+                        itemsIndexed(run.screens, key = { _, file -> "file-${file.id}" }) { _, file ->
+                            ScreenFileCard(file, run.startMs) { viewing = it }
+                        }
+                        if (run.screens.isEmpty()) item(key = "none") { Card { Text("No screens were recorded in this run.", style = AuraType.callout, color = LocalAura.current.secondary) } }
+                    } else {
+                        itemsIndexed(steps, key = { i, step -> "${step.atMs}-$i" }) { _, step ->
+                            StepCard(run.steps.indexOf(step) + 1, step, run.startMs)
+                        }
+                        if (steps.isEmpty()) item(key = "none") { Card { Text("No steps of this kind.", style = AuraType.callout, color = LocalAura.current.secondary) } }
                     }
-                    if (steps.isEmpty()) item(key = "none") { Card { Text("No steps of this kind.", style = AuraType.callout, color = LocalAura.current.secondary) } }
                     loaded?.system?.let { prompt -> item(key = "prompt") { Fold("What the model was told") { Payload("system prompt", prompt) } } }
                 }
             }
         }
+    }
+
+    val screens = run?.screens?.flatMap { it.versions }?.sortedBy { it.atMs }.orEmpty()
+    viewing?.let { start ->
+        ScreenViewer(screens, screens.indexOfFirst { it.id == start }.coerceAtLeast(0)) { viewing = null }
     }
 
     if (confirm) {
@@ -146,13 +170,17 @@ enum class StepFilter(val title: String) {
     ALL("All"),
     ACTIONS("Actions"),
     MODEL("Model"),
-    FAILED("Failed");
+    FAILED("Failed"),
+
+    /** Not a step filter: the page shows the run's screens as files instead of its steps. */
+    SCREENS("Screens");
 
     fun keeps(step: LogStep): Boolean = when (this) {
         ALL -> true
-        ACTIONS -> step.kind == LogKind.ACTION || step.kind == LogKind.LOOK || step.kind == LogKind.ASK
+        ACTIONS -> step.kind == LogKind.ACTION || step.kind == LogKind.LOOK || step.kind == LogKind.ASK || step.kind == LogKind.SEEN
         MODEL -> step.kind == LogKind.MODEL || step.kind == LogKind.SAY || step.kind == LogKind.NOTE
         FAILED -> !step.ok
+        SCREENS -> false
     }
 }
 
@@ -193,6 +221,21 @@ private fun androidx.compose.foundation.layout.RowScope.Stat(name: String, value
     }
 }
 
+/** A screen the model was never shown reads as background, not as something the agent looked at. */
+private const val DIM_ALPHA = 0.6f
+
+/** How the screen viewer shows a screen; Picture falls back to Text when no frame was recorded. */
+private enum class ViewMode(val title: String) { PICTURE("Picture"), TEXT("Text"), DIFF("Diff") }
+
+/** A version's picture in its file card; the viewer shows it full width. */
+private val THUMB_WIDTH = 96.dp
+
+/** Lines of a screen shown in its file card before the viewer is opened. */
+private const val PREVIEW_LINES = 12
+
+/** The agent's grid is about 280 columns wide; small and scrollable beats wrapped and unreadable. */
+private val GRID_FONT = 9.sp
+
 /**
  * One step: its number and kind, the sentence with the quoted parts in bold, the time since the
  * run started and how long it took, the screen, and the raw values. A failed step opens with its
@@ -205,6 +248,7 @@ private fun StepCard(number: Int, step: LogStep, runStartMs: Long) {
     val tint = if (step.ok) aura.label else aura.danger
     Column(
         Modifier.fillMaxWidth().auraCard().animateContentSize()
+            .then(if (step.dim) Modifier.alpha(DIM_ALPHA) else Modifier)
             .then(if (step.details.isNotEmpty()) Modifier.clickable(onClickLabel = if (open) "Hide values" else "Show values") { open = !open } else Modifier)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -264,6 +308,7 @@ private fun kindName(step: LogStep): String = when (step.kind) {
     LogKind.SAY -> "SAID"
     LogKind.ASK -> "ASKED YOU"
     LogKind.SCREEN -> "SCREEN SENT"
+    LogKind.SEEN -> "SAW"
     LogKind.MODEL -> "MODEL"
     LogKind.NOTE -> "AURA"
 }
@@ -287,7 +332,9 @@ private fun emphasise(title: String): AnnotatedString = buildAnnotatedString {
 private fun Payload(name: String, value: String) {
     val aura = LocalAura.current
     val palette = remember(aura) { JsonPalette.of(aura.toMono()) }
-    val text = remember(value, palette) { highlightJson(humanizePayload(value), palette, aura.label) }
+    val text = remember(value, palette) {
+        if (name == RunLogBuilder.SCREEN_DETAIL) tintChanges(value, aura.success, aura.danger) else highlightJson(humanizePayload(value), palette, aura.label)
+    }
     val error = name == "error"
     Column(
         Modifier.fillMaxWidth().clip(AuraShape.Inner).background(if (error) aura.danger.copy(alpha = 0.08f) else aura.well).padding(10.dp),
@@ -299,6 +346,131 @@ private fun Payload(name: String, value: String) {
             Text("${"%,d".format(value.length)} characters", style = AuraType.caption, color = aura.tertiary)
         }
         SelectionContainer { Text(text, style = AuraType.code, color = aura.label) }
+    }
+}
+
+/**
+ * A screen's text with what changed in colour: `+` lines and the rows under "new or changed:" in
+ * [added], `-` lines and the "gone:" line in [removed]. Covers both the server's changes-only
+ * screen and `screen_diff` output.
+ */
+internal fun tintChanges(text: String, added: Color, removed: Color): AnnotatedString = buildAnnotatedString {
+    var inChanged = false
+    text.lines().forEachIndexed { i, line ->
+        if (i > 0) append('\n')
+        when {
+            line.startsWith("new or changed:") -> inChanged = true
+            line.startsWith("gone:") || line.startsWith("unchanged:") || line.isBlank() -> inChanged = false
+        }
+        val colour = when {
+            line.startsWith("+ ") || (inChanged && !line.startsWith("new or changed:") && !line.startsWith("som ")) -> added
+            line.startsWith("- ") || line.startsWith("gone:") -> removed
+            else -> null
+        }
+        if (colour == null) append(line) else withStyle(SpanStyle(color = colour)) { append(line) }
+    }
+}
+
+/**
+ * One screen file: its first id and caption, how many times the run was on it, and each version
+ * with what changed since the one before in colour. A version opens the full-screen viewer.
+ */
+@Composable
+private fun ScreenFileCard(file: ScreenFile, runStartMs: Long, onOpen: (String) -> Unit) {
+    val aura = LocalAura.current
+    var open by rememberSaveable(file.id) { mutableStateOf(false) }
+    val unread = file.versions.none { it.byModel }
+    Column(Modifier.fillMaxWidth().auraCard().animateContentSize().then(if (unread) Modifier.alpha(DIM_ALPHA) else Modifier)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.heightIn(min = 52.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("${file.id} · ${file.caption}", style = AuraType.callout, color = aura.label, maxLines = 2)
+                val count = file.versions.size
+                Text(
+                    (if (count == 1) "1 version" else "$count versions") + if (unread) " · not shown to the model" else "",
+                    style = AuraType.footnote,
+                    color = aura.tertiary,
+                )
+            }
+            FoldArrow(open, aura.secondary)
+        }
+        if (open) {
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                file.versions.forEachIndexed { i, v -> VersionRow(v, file.versions.getOrNull(i - 1)?.text, runStartMs, onOpen) }
+            }
+        }
+    }
+}
+
+/** One version in a file card: its id and time, then its first lines, or what changed since [before]. */
+@Composable
+private fun VersionRow(v: ScreenVersion, before: String?, runStartMs: Long, onOpen: (String) -> Unit) {
+    val aura = LocalAura.current
+    val picture = remember(v.frame) { ScreenPicture.parse(v.frame) }
+    Column(
+        Modifier.fillMaxWidth().clip(AuraShape.Inner).background(aura.well).clickable { onOpen(v.id) }.padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "${v.id} · +${duration(v.atMs - runStartMs)}" + (v.sameAs?.let { " · same as $it" } ?: "") + if (v.byModel) "" else " · not shown to the model",
+            style = AuraType.caption.copy(fontWeight = FontWeight.SemiBold),
+            color = aura.secondary,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            picture?.let { ScreenPictureView(it, Modifier.width(THUMB_WIDTH)) }
+            Text(screenBody(v, before, diff = before != null, aura.success, aura.danger), Modifier.weight(1f), style = AuraType.code, color = aura.label, maxLines = PREVIEW_LINES)
+        }
+    }
+}
+
+/** A version's text, or with [diff] what changed since [before] with + green and - red. */
+private fun screenBody(v: ScreenVersion, before: String?, diff: Boolean, added: Color, removed: Color): AnnotatedString {
+    val text = v.text ?: return AnnotatedString(RunJournal.NOT_RECORDED)
+    if (!diff || before == null) return AnnotatedString(text)
+    val lines = screenLineDiff(before.lines(), text.lines()).ifEmpty { listOf("No change from the screen before.") }
+    return tintChanges(lines.joinToString("\n"), added, removed)
+}
+
+/**
+ * Every screen of the run, one page each, swiped in time order: the screen's grid as the agent
+ * reads it, drawn when opened (nothing is stored as a picture). "Diff" colours what changed since
+ * the page before.
+ */
+@Composable
+private fun ScreenViewer(screens: List<ScreenVersion>, start: Int, onClose: () -> Unit) {
+    val aura = LocalAura.current
+    val pager = rememberPagerState(initialPage = start) { screens.size }
+    var mode by rememberSaveable { mutableStateOf(ViewMode.PICTURE) }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.fillMaxSize().background(aura.surfaceStrong)) {
+            val current = screens.getOrNull(pager.currentPage)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircleButton(Icons.Outlined.Close, "Close", onClose)
+                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                    Text("${current?.id.orEmpty()} · ${pager.currentPage + 1} of ${screens.size}", style = AuraType.headline, color = aura.label)
+                    Text(current?.caption.orEmpty(), style = AuraType.footnote, color = aura.secondary, maxLines = 1)
+                }
+            }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                AuraSegmented(ViewMode.entries, mode, { it.title }, { mode = it })
+            }
+            HorizontalPager(pager, Modifier.weight(1f)) { page ->
+                val v = screens[page]
+                val picture = remember(v.frame) { ScreenPicture.parse(v.frame) }
+                if (mode == ViewMode.PICTURE && picture != null) {
+                    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+                        ScreenPictureView(picture)
+                    }
+                } else {
+                    val body = screenBody(v, screens.getOrNull(page - 1)?.text, mode == ViewMode.DIFF, aura.success, aura.danger)
+                    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(12.dp)) {
+                        Text(body, style = AuraType.code.copy(fontSize = GRID_FONT), color = aura.label, softWrap = false)
+                    }
+                }
+            }
+        }
     }
 }
 

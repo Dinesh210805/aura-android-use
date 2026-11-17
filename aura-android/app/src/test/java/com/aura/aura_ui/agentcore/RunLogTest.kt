@@ -49,6 +49,89 @@ class RunLogTest {
     }
 
     @Test
+    fun `screens sit in time order with the taps, and history calls read as looks`() {
+        val journal = RunJournal(dir, now = { clock })
+        journal.start("r", "add the taxi expense", "Gemini / flash")
+        clock = 1_100
+        journal.seen("r", "S1", "Pro Expense: Add expense, Name", "name field\namount field")
+        clock = 1_200
+        journal.tool("r", "tap", """{"som_id":3}""", "ok", ok = true, durationMs = 0, shot = StepShot(null, "Name"))
+        clock = 1_300
+        journal.seen("r", "S1.1", "Pro Expense: Add expense", "CHANGES since your last look\nnew or changed:\n3 Name")
+        clock = 1_400
+        journal.tool("r", "screens", """{"query":"x"}""", "S1: x marks", ok = true, durationMs = 0, shot = null)
+
+        val run = RunLogBuilder.build(journal.read(), emptyList(), journal::file).single()
+
+        assertEquals(
+            listOf("S1 · Pro Expense: Add expense, Name", "Tapped “Name”", "S1.1 · Pro Expense: Add expense", "Searched past screens for “x”: 1 hit"),
+            run.steps.map { it.title },
+        )
+        assertEquals(listOf(LogKind.SEEN, LogKind.ACTION, LogKind.SEEN, LogKind.LOOK), run.steps.map { it.kind })
+        assertEquals("name field\namount field", run.steps.first().details.single { it.first == RunLogBuilder.SCREEN_DETAIL }.second)
+        assertEquals(1, run.actions)
+    }
+
+    @Test
+    fun `a screen only AURA recorded is marked, and one the model later read shows once as read`() {
+        val journal = RunJournal(dir, now = { clock })
+        journal.start("r", "go to my profile", "Gemini / flash")
+        clock = 1_100
+        journal.seen("r", "S1", "Instagram | Home", "home", RunJournal.BY_AURA)
+        clock = 1_200
+        journal.seen("r", "S2", "Instagram | Profile", "profile", RunJournal.BY_AURA)
+        clock = 1_300
+        journal.seen("r", "S2", "Instagram | Profile", "profile", RunJournal.BY_MODEL)
+
+        val steps = RunLogBuilder.build(journal.read(), emptyList(), journal::file).single().steps
+
+        assertEquals(listOf("S1 · Instagram | Home · not shown to the model", "S2 · Instagram | Profile"), steps.map { it.title })
+        assertEquals(listOf(true, false), steps.map { it.dim })
+    }
+
+    @Test
+    fun `screens group into files for the Screens view, without changing their ids`() {
+        val journal = RunJournal(dir, now = { clock })
+        journal.start("r", "unblock someone", "Gemini / flash")
+        clock = 1_100
+        journal.seen("r", "S1", "Insta | Settings | Privacy", "settings", RunJournal.BY_AURA)
+        journal.seen("r", "S1", "Insta | Settings | Privacy", "settings", RunJournal.BY_MODEL)
+        clock = 1_200
+        journal.seen("r", "S2", "Insta | Settings | Privacy | Blocked", "settings\nblocked", RunJournal.BY_AURA)
+        clock = 1_300
+        journal.seen("r", "S3", "Insta | Reels", "reels", RunJournal.BY_AURA)
+        clock = 1_400
+        journal.seen("r", "S4", "Insta | Something else", "settings", RunJournal.BY_AURA, sameAs = "S1")
+        clock = 1_500
+        journal.seen("r", "S5", "Bank", null, RunJournal.BY_AURA, frame = """{"w":10,"h":10,"e":[[0,0,5,5,"PIN","*","Button"]]}""")
+        clock = 1_600
+        journal.seen("r", "S6", "Insta | Reels", "reels 2", RunJournal.BY_AURA, frame = """{"w":10,"h":10,"e":[[0,0,5,5,"Reel","*","Button"]]}""")
+
+        val files = RunLogBuilder.build(journal.read(), emptyList(), journal::file).single().screens
+        assertEquals("Reel", ScreenPicture.parse(files[1].versions.last().frame)?.boxes?.single()?.label)
+        assertNull("a hidden screen keeps no frame", files[2].versions.single().frame)
+
+        assertEquals(listOf("S1", "S3", "S5"), files.map { it.id })
+        assertEquals(listOf("S1", "S2", "S4"), files[0].versions.map { it.id })
+        assertTrue(files[0].versions[0].byModel)
+        assertEquals("S1", files[0].versions[2].sameAs)
+        assertNull(files[2].versions.single().text)
+    }
+
+    @Test
+    fun `a screen from an app kept out of logs has no text`() {
+        val journal = RunJournal(dir, now = { clock })
+        journal.start("r", "check my balance", "Gemini / flash")
+        journal.seen("r", "S1", "Bank", null)
+
+        val step = RunLogBuilder.build(journal.read(), emptyList(), journal::file).single().steps.single()
+
+        assertEquals("S1 · Bank", step.title)
+        assertTrue(step.details.isEmpty())
+        assertTrue(journal.read().none { it.result?.contains("balance") == true })
+    }
+
+    @Test
     fun `secrets are redacted before a step is written`() {
         RunJournal(dir).tool("r", "type_text", """{"text":"card 4111 1111 1111 1111"}""", "typed 4111 1111 1111 1111", true, 0, null)
         val written = File(dir, dir.list()!!.first { it.startsWith("steps-") }).readText()

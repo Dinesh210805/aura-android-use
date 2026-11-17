@@ -1,0 +1,32 @@
+{
+  "tasks": [
+    "ExpenseAddMultiple",
+    "RecipeAddMultipleRecipes",
+    "VlcCreateTwoPlaylists",
+    "RetroSavePlaylist",
+    "ExpenseDeleteMultiple2",
+    "RecipeDeleteMultipleRecipesWithConstraint",
+
+    "ExpenseAddMultipleFromMarkor",
+    "RecipeAddMultipleRecipesFromMarkor",
+    "ExpenseAddMultipleFromGallery",
+    "RecipeAddMultipleRecipesFromImage",
+    "MarkorTranscribeVideo",
+    "TurnOnWifiAndOpenApp",
+
+    "MarkorMergeNotes",
+    "OsmAndTrack",
+    "SimpleCalendarAddRepeatingEvent",
+    "SimpleCalendarAddOneEventInTwoWeeks",
+    "RetroPlayingQueue",
+    "RetroPlaylistDuration",
+    "VlcCreatePlaylist",
+    "RecipeDeleteDuplicateRecipes3",
+    "FilesMoveFile",
+    "AudioRecorderRecordAudioWithFileName",
+
+    "BrowserMultiply",
+    "BrowserMaze",
+    "TurnOffWifiAndTurnOnBluetooth"
+  ]
+}

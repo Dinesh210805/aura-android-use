@@ -131,6 +131,8 @@ class AgentCore private constructor(private val app: Context) {
         opensInstalledApp = ::opensInstalledApp,
         findTarget = phone::idsFor,
         elementLabel = phone::labelAt,
+        hiddenApp = phone::hiddenApp,
+        snapshot = phone::snapshot,
         onChain = { skill, ok -> skill?.let { withContext(Dispatchers.IO) { skills.noteChain(it, ok) } } },
         toolsetNote = { id ->
             connectors.signedInApps(id).sorted().takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "signed in: ") { slug ->

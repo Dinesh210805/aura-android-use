@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.WebAsset
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -177,6 +178,7 @@ internal fun iconFor(kind: LogKind): ImageVector = when (kind) {
     LogKind.ACTION -> Icons.Outlined.TouchApp
     LogKind.LOOK -> Icons.Outlined.Visibility
     LogKind.SCREEN -> Icons.Outlined.Image
+    LogKind.SEEN -> Icons.Outlined.WebAsset
     LogKind.ASK -> Icons.Outlined.HelpOutline
     LogKind.SAY -> Icons.Outlined.ChatBubbleOutline
     LogKind.MODEL -> Icons.Outlined.AutoAwesome

@@ -51,7 +51,7 @@ class RunLedgerTest {
         assertEquals(2, h.distinct)
         h.record("SEEN: app | B\nSCREEN 1x1\nNO CHANGES since your last look.")
         assertEquals(2, h.distinct)
-        assertEquals("S1..S5.1", h.span())
+        assertEquals("S1..S6", h.span())
     }
 
     @Test

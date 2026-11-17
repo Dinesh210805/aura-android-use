@@ -7,9 +7,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * The readable half of the run log: what was asked, each thing AURA did, what it pressed, and how
@@ -47,6 +49,8 @@ data class StepRecord(
     val box: List<Float>? = null,
     /** File name of a picture in the traces folder. */
     val image: String? = null,
+    /** Seen: [RunJournal.BY_MODEL] when the model was given this screen, [RunJournal.BY_AURA] when only AURA recorded it. */
+    val by: String = "",
 )
 
 /**
@@ -90,6 +94,29 @@ class RunJournal(
     fun screen(run: String, png: ByteArray) {
         val name = save("screen", "png", png) ?: return
         write(StepRecord(run, now(), TYPE_SCREEN, image = name))
+    }
+
+    /**
+     * A screen the model was given, by its id in the task's screen history (`S3`, `S3.1`).
+     * - Contract: [text] null means the app in front is one AURA keeps out of logs; the record then
+     *   holds [NOT_RECORDED] and no screen text. [caption] is the `SEEN:` line.
+     */
+    /** One screen in the run's history ([ScreenHistory]); [text] null means a hidden app's screen. */
+    fun seen(run: String, id: String, caption: String, text: String?, by: String = BY_MODEL, sameAs: String? = null, frame: String? = null) = write(
+        StepRecord(
+            run, now(), TYPE_SEEN, text = caption, detail = id, result = text ?: NOT_RECORDED, by = by,
+            args = seenArgs(sameAs, frame.takeIf { text != null }),
+        ),
+    )
+
+    /** A seen record's `args`: the revisit link and the screen's frame for drawing; null when neither. */
+    private fun seenArgs(sameAs: String?, frame: String?): String? {
+        val element = frame?.takeIf { it.isNotBlank() }?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+        if (sameAs == null && element == null) return null
+        return buildJsonObject {
+            sameAs?.let { put(SAME_AS, it) }
+            element?.let { put(FRAME, it) }
+        }.toString()
     }
 
     fun tool(run: String, tool: String, args: String, result: String, ok: Boolean, durationMs: Long, shot: StepShot?) {
@@ -195,6 +222,18 @@ class RunJournal(
         const val TYPE_SCREEN = "screen"
         const val TYPE_END = "end"
         const val TYPE_NOTE = "note"
+
+        /** A screen's text, by its history id. Change together: `benchmark/suite/efficiency.py`. */
+        const val TYPE_SEEN = "seen"
+        const val NOT_RECORDED = "(not recorded)"
+        const val BY_MODEL = "model"
+        const val BY_AURA = "aura"
+
+        /** Seen: the `args` key naming the earlier screen with the same content. */
+        const val SAME_AS = "same_as"
+
+        /** Seen: the `args` key holding the screen's `ScreenFrame` (element boxes), drawn by the Screens view. */
+        const val FRAME = "frame"
         private const val MS_PER_DAY = 86_400_000L
     }
 }
@@ -215,6 +254,9 @@ enum class LogKind {
     /** The annotated screen sent to the model. */
     SCREEN,
 
+    /** A screen's text as the model got it, with its history id (`S3`). */
+    SEEN,
+
     /** One request to the model, from the OpenTelemetry span. */
     MODEL,
 
@@ -234,6 +276,8 @@ data class LogStep(
     val box: List<Float>? = null,
     /** Raw values for the "details" fold: tool name, arguments, result, token counts. */
     val details: List<Pair<String, String>> = emptyList(),
+    /** Drawn dimmer: a screen the run passed through that the model was never shown. */
+    val dim: Boolean = false,
 )
 
 /** One turn in the log, oldest step first. */
@@ -247,6 +291,8 @@ data class RunLog(
     val end: TurnEnd?,
     val answer: String?,
     val steps: List<LogStep>,
+    /** Every screen of the run, grouped into files for the Screens view ([ScreenFiles.group]). */
+    val screens: List<ScreenFile> = emptyList(),
 ) {
     val actions: Int get() = steps.count { it.kind == LogKind.ACTION }
     val modelCalls: Int get() = steps.count { it.kind == LogKind.MODEL }
@@ -329,7 +375,13 @@ object RunLogBuilder {
                     ),
                 )
             }
-            val steps = group.mapNotNull { step(it, image) }
+            // One row per screen id, at its first record: a screen AURA recorded and the model
+            // later read is one screen, shown as read.
+            val read = group.filter { it.type == RunJournal.TYPE_SEEN && it.by != RunJournal.BY_AURA }.mapNotNull { it.detail }.toSet()
+            val shownIds = HashSet<String>()
+            val steps = group
+                .filter { it.type != RunJournal.TYPE_SEEN || shownIds.add(it.detail.orEmpty()) }
+                .mapNotNull { step(it, image, read) }
             RunLog(
                 id = start.run,
                 startMs = start.atMs,
@@ -339,8 +391,28 @@ object RunLogBuilder {
                 end = end?.detail?.let { name -> TurnEnd.entries.firstOrNull { it.name == name } },
                 answer = end?.text,
                 steps = (steps + model).sortedBy { it.atMs },
+                screens = ScreenFiles.group(screenVersions(group)),
             )
         }.sortedByDescending { it.startMs }.take(limit)
+
+    private fun argsOf(record: StepRecord): JsonObject? = runCatching { Json.parseToJsonElement(record.args.orEmpty()).jsonObject }.getOrNull()
+
+    /** A run's `seen` records as one version per id, in time order; read by the model if any record says so. */
+    private fun screenVersions(group: List<StepRecord>): List<ScreenVersion> {
+        val seen = group.filter { it.type == RunJournal.TYPE_SEEN && !it.detail.isNullOrBlank() }
+        return seen.groupBy { it.detail.orEmpty() }.values.map { records ->
+            val first = records.first()
+            ScreenVersion(
+                id = first.detail.orEmpty(),
+                atMs = first.atMs,
+                caption = first.text.orEmpty(),
+                byModel = records.any { it.by != RunJournal.BY_AURA },
+                text = first.result?.takeIf { it != RunJournal.NOT_RECORDED },
+                sameAs = argsOf(first)?.get(RunJournal.SAME_AS)?.jsonPrimitive?.contentOrNull,
+                frame = records.firstNotNullOfOrNull { r -> argsOf(r)?.get(RunJournal.FRAME)?.takeIf { it is JsonObject }?.toString() },
+            )
+        }.sortedBy { it.atMs }
+    }
 
     /**
      * The model's choice in plain words: the tools it called, phrased like the steps, or the start
@@ -358,13 +430,13 @@ object RunLogBuilder {
         return text?.let { "Wrote: " + StepPhrase.quoted(it) } ?: "Thought about the next step"
     }
 
-    private fun step(record: StepRecord, image: (String) -> File): LogStep? = when (record.type) {
+    private fun step(record: StepRecord, image: (String) -> File, read: Set<String> = emptySet()): LogStep? = when (record.type) {
         RunJournal.TYPE_TOOL -> {
             val tool = record.tool.orEmpty()
             LogStep(
                 atMs = record.atMs,
                 kind = if (tool in StepPhrase.LOOKS) LogKind.LOOK else LogKind.ACTION,
-                title = StepPhrase.of(tool, record.args.orEmpty(), record.label),
+                title = StepPhrase.of(tool, record.args.orEmpty(), record.label) + hits(tool, record),
                 ok = record.ok,
                 durationMs = record.durationMs,
                 image = record.image?.let(image),
@@ -379,6 +451,16 @@ object RunLogBuilder {
         RunJournal.TYPE_SAY -> LogStep(record.atMs, LogKind.SAY, record.text.orEmpty())
         RunJournal.TYPE_ASK -> LogStep(record.atMs, LogKind.ASK, "Asked you: ${record.text.orEmpty()}")
         RunJournal.TYPE_SCREEN -> LogStep(record.atMs, LogKind.SCREEN, "Looked at the screen", image = record.image?.let(image))
+        RunJournal.TYPE_SEEN -> {
+            val unread = record.by == RunJournal.BY_AURA && record.detail !in read
+            LogStep(
+                atMs = record.atMs,
+                kind = LogKind.SEEN,
+                title = listOfNotNull(record.detail, record.text?.takeIf(String::isNotBlank), NOT_SHOWN.takeIf { unread }).joinToString(" · "),
+                details = listOfNotNull(record.result?.takeIf { it.isNotBlank() && it != RunJournal.NOT_RECORDED }?.let { SCREEN_DETAIL to it }),
+                dim = unread,
+            )
+        }
         RunJournal.TYPE_NOTE -> LogStep(
             atMs = record.atMs,
             kind = LogKind.NOTE,
@@ -387,6 +469,22 @@ object RunLogBuilder {
             details = listOfNotNull(record.text?.takeIf(String::isNotBlank)?.let { (if (record.ok) "detail" else "error") to it }),
         )
         else -> null
+    }
+
+    /** The details key holding a screen's text; the page colours its changed lines. */
+    const val SCREEN_DETAIL = "screen"
+
+    /** Ends the title of a screen the run passed through that the model was never shown. */
+    const val NOT_SHOWN = "not shown to the model"
+
+    /** ": 2 hits" after a `screens` search: one result line per hit, unless it found none. */
+    private fun hits(tool: String, record: StepRecord): String {
+        if (tool != "screens" || !record.ok) return ""
+        val query = runCatching { Json.parseToJsonElement(record.args.orEmpty()).jsonObject["query"]?.jsonPrimitive?.contentOrNull }.getOrNull()
+        if (query.isNullOrBlank()) return ""
+        val result = record.result.orEmpty()
+        val count = if (result.startsWith("No screen")) 0 else result.lines().count { it.isNotBlank() }
+        return ": $count ${if (count == 1) "hit" else "hits"}"
     }
 }
 
@@ -401,6 +499,7 @@ object StepPhrase {
         "web_search", "find_files", "resolve_contact", "lookup_app", "list_app_deeplinks", "resolve_deeplink", "wait_for",
         "verify_action", "watch_device_events", "browser_read", "browser_find", "browser_extract", "browser_tabs",
         "browser_screenshot", "search_history", "skill_view", "list_schedules", "load_toolset", "update_plan",
+        "screens", "screen", "screen_diff",
     )
 
     private const val MAX_QUOTE = 60
@@ -443,6 +542,9 @@ object StepPhrase {
             "ask_user" -> "Asked you a question"
             MEMORY_TOOL -> "Changed memory"
             "search_history" -> "Searched past chats"
+            "screens" -> arg("query")?.let { "Searched past screens for $it" } ?: "Listed past screens"
+            "screen" -> "Looked back at ${args["id"]?.jsonPrimitive?.contentOrNull ?: "a screen"}"
+            "screen_diff" -> "Compared ${args["from"]?.jsonPrimitive?.contentOrNull ?: "a screen"} with ${args["to"]?.jsonPrimitive?.contentOrNull ?: "another"}"
             "skill_view" -> "Read the skill ${arg("name").orEmpty()}".trim()
             "skill_save" -> "Saved a skill"
             "schedule_task" -> "Scheduled a task"
@@ -460,5 +562,53 @@ object StepPhrase {
     private fun quote(text: String): String {
         val flat = text.replace(Regex("\\s+"), " ").trim()
         return "“" + (if (flat.length > MAX_QUOTE) flat.take(MAX_QUOTE) + "…" else flat) + "”"
+    }
+}
+
+/** One screen of a run as recorded: [text] null for a hidden app's screen. */
+data class ScreenVersion(
+    val id: String,
+    val atMs: Long,
+    val caption: String,
+    val byModel: Boolean,
+    val text: String?,
+    val sameAs: String? = null,
+    /** The screen's `ScreenFrame` JSON (element boxes and labels) for drawing it; null when not recorded. */
+    val frame: String? = null,
+)
+
+/** Screens a person would call "the same screen", oldest version first; named by its first id. */
+data class ScreenFile(val id: String, val versions: List<ScreenVersion>) {
+    val caption: String get() = versions.first().caption
+}
+
+/**
+ * Groups a run's screens into files for display. Display only: the ids, the history tools and
+ * the run log never depend on it, so a wrong group costs nothing but the view.
+ */
+object ScreenFiles {
+    /**
+     * A version joins the file of its [ScreenVersion.sameAs] screen; else the newest file of the
+     * same app whose caption shares at least half of this caption's labels; else a new file.
+     * Pure; [versions] in time order.
+     */
+    fun group(versions: List<ScreenVersion>): List<ScreenFile> {
+        val files = mutableListOf<MutableList<ScreenVersion>>()
+        versions.forEach { v ->
+            val home = v.sameAs?.let { id -> files.firstOrNull { f -> f.any { it.id == id } } }
+                ?: files.lastOrNull { f -> similar(f.last().caption, v.caption) }
+            if (home != null) home += v else files += mutableListOf(v)
+        }
+        return files.map { ScreenFile(it.first().id, it) }
+    }
+
+    /** Captions read "app | label | label …". */
+    private fun similar(a: String, b: String): Boolean {
+        val pa = a.split(" | ")
+        val pb = b.split(" | ")
+        if (pa.first() != pb.first()) return false
+        val la = pa.drop(1).toSet()
+        val lb = pb.drop(1).toSet()
+        return lb.isNotEmpty() && la.intersect(lb).size * 2 >= lb.size
     }
 }

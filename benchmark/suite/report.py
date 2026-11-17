@@ -47,8 +47,8 @@ ABOUT_ONDEVICE = {
     'method': ('Not a like-for-like leaderboard number: the information-retrieval '
                'tasks are excluded (AURA has no channel for the typed answer they '
                'grade), the device clock is moved from 2023 to 2026 so TLS to the '
-               'model provider works, and AURA gets a wall-clock limit instead of '
-               'AndroidWorld\'s step budget.'),
+               'model provider works, and AURA has no step budget: each task runs until '
+               'it answers or fails.'),
 }
 
 esc = html.escape

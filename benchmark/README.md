@@ -1,6 +1,6 @@
 # AndroidWorld benchmark
 
-> **Last reviewed:** 2026-10-13.
+> **Last reviewed:** 2026-11-16.
 
 Scores AURA on Google's [AndroidWorld](https://github.com/google-research/android_world)
 benchmark, two ways: AURA's **on-device agent**, and AURA's **MCP server** driven by Claude
@@ -52,7 +52,7 @@ them under "How this run is scored". Change together: `TARGETS` in `suite.py`.
 |---|---|
 | The **information-retrieval** family (25 of 116 tasks) is excluded, so the score is out of 91. | Those tasks are graded on a typed answer; AURA's on-device agent has no channel to give one. Their seed data also uses literal 2023 dates that the clock shift cannot move. |
 | The device clock is shifted from 2023-10-15 to **2026-10-15**. | AURA calls a cloud model from the device. TLS on a phone that thinks it is 2023 rejects today's certificates. Every date in the scored tasks derives from `device_constants.DT`, so each task stays internally consistent. Weekdays change. |
-| A **wall-clock budget** (300 s) instead of the step budget. | AURA's loop runs on the phone, so its steps cannot be counted from the PC. |
+| **No budget.** Each task runs until the agent answers, fails or hits its own 60-minute limit (`TurnLimits.maxWallClockMs`); the suite's 3,600 s limit only stops a hung phone. | AURA's loop runs on the phone, so its steps cannot be counted from the PC. Speed is read from the run logs and `efficiency.md` instead of cut off. |
 
 ## One-time setup
 
@@ -170,6 +170,17 @@ the agent's raw output, `session/` and AndroidWorld's own `checkpoint/`.
 connection and agent run; the suite copies the sessions that started during the task off the
 phone every 4 s (`device.pull_sessions`, one `run-as tar` over adb, so AURA must be a debug
 build).
+
+On the on-device target that log stays empty for the new agent (`agentcore/`), which keeps its
+own run log in `files/agentcore/traces/`. The suite counts the lines of each of its JSONL files
+before a task and copies the lines added during it to `<Task>/agentcore/` (`device.pull_traces`,
+also one `run-as tar`). Line counts, not times, split tasks: AndroidWorld resets the clock to the
+same date at every task. After each task `efficiency.py` rewrites
+`benchmark/results/aura-on-device/efficiency.md`: per task the verdict, seconds, actions, model
+calls, input tokens, distinct screens, revisits, history-tool calls (`screens`, `screen`,
+`screen_diff`), the share of actions carrying a `seen` note, and the longest streak of the same
+failing call, then a totals row with the pass rate and medians. Run it by hand with
+`python benchmark/suite/efficiency.py` (or `--self-test`).
 
 ### How the MCP target reaches the emulator
 
@@ -303,12 +314,13 @@ All in `suite/`.
 | File | What it is |
 |---|---|
 | `suite.py`, `suite.html` | The browser suite: target, setup, task list, live run view with AURA's step log, the agent's activity and AURA's app log. |
-| `device.py` | The machine: emulator, adb, AURA's MCP server, the bench bridge and its pairing, the live display (`PhoneScreen`), AURA's app log (`AppLog`) and step log (`pull_sessions`), the phone recorder. |
+| `device.py` | The machine: emulator, adb, AURA's MCP server, the bench bridge and its pairing, the live display (`PhoneScreen`), AURA's app log (`AppLog`), step log (`pull_sessions`) and agentcore run log (`pull_traces`), the phone recorder. |
 | `desktop.py` | Page recording: finds the suite's browser window and films it with ffmpeg. |
 | `external_agent.py`, `../agents/` | The runner (`run_one`) and the command-line agent contract. |
 | `aura_androidworld.py` | The on-device adapter (`AuraAgent`) and the shared pieces: `RESULTS`, `RUNTIME`, `SEED`, `scored_tasks`, `restore_aura_a11y`, `shift_device_year`, `find_adb`. |
 | `referee.py` | Host side of the on-device cockpit: `/prepare` seeds a task, `/score` grades it. Binds to loopback only. |
 | `gen_androidworld_tasks.py` | Regenerates `app/src/main/assets/eval/androidworld.json`, which is the cockpit's task list and `report.py`'s denominator. Run it after bumping the pinned commit. |
+| `efficiency.py` | `efficiency.md` for the on-device target, from each task's `meta.json` and `agentcore/` run log. |
 | `report.py`, `theme.py` | Build a run's pages (index, task pages, step log) from a results folder, in the website's look; `theme.py` is shared with the suite page. |
 | `publish.py` | The Publish button: videos to a release, pages by pull request. |
 

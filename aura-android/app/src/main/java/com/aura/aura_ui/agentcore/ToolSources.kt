@@ -31,6 +31,7 @@ import com.aura.mcp.server.InProcessMcpHandle
 import com.aura.mcp.server.InProcessMcpServer
 import com.aura.mcp.server.McpToolScopes
 import com.aura.mcp.server.SensitivePolicy
+import com.aura.mcp.tools.ScreenSnapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -72,6 +73,7 @@ class PhoneToolSource(context: Context) : ToolSource {
     private val guard = ActionGuard()
     private val device = AppDeviceBridge(app)
     private val screenshots = AppScreenshotBridge(app)
+    private val uiTree = AppUiTreeBridge()
     private val connecting = Mutex()
     private var handle: InProcessMcpHandle? = null
     private var client: Client? = null
@@ -128,6 +130,25 @@ class PhoneToolSource(context: Context) : ToolSource {
         )
     }
 
+    /** True when the app in front is one `SensitivePolicy` keeps AURA out of; nothing of its screen is logged. */
+    suspend fun hiddenApp(): Boolean {
+        val front = runCatching { device.foregroundPackage() }.getOrNull()
+        return front != null && SensitivePolicy.screenPackage(front) is SensitivePolicy.Decision.Block
+    }
+
+    /**
+     * The whole screen read silently for the screen history; null when accessibility is off.
+     * Shares [uiTree] with the server but never its som_id cache, so the model's taps are unaffected.
+     * - Why the policy check is here: this read skips the server's `ForegroundGuard`, which keeps
+     *   `read_screen` out of sensitive apps. A blocked app's screen keeps only its package, judged
+     *   from the snapshot's own package so a switch between check and read can't slip through.
+     */
+    suspend fun snapshot(): ScreenSnapshot.Snapshot? {
+        val snap = ScreenSnapshot.read(uiTree) ?: return null
+        val blocked = snap.pkg.isEmpty() || SensitivePolicy.screenPackage(snap.pkg) is SensitivePolicy.Decision.Block
+        return if (blocked) snap.copy(text = "SEEN: ${snap.pkg} | $HIDDEN_SCREEN", frame = "") else snap
+    }
+
     /**
      * For the run log: the element a gesture is about to press, and a small picture of the screen
      * taken before the press.
@@ -139,9 +160,7 @@ class PhoneToolSource(context: Context) : ToolSource {
         val somId = (args["som_id"] as? JsonPrimitive)?.intOrNull ?: return null
         val label = labelOf(somId)
         val bounds = boundsOf(somId)
-        val front = runCatching { device.foregroundPackage() }.getOrNull()
-        val hidden = front != null && SensitivePolicy.screenPackage(front) is SensitivePolicy.Decision.Block
-        if (hidden || !runCatching { screenshots.isReady() }.getOrDefault(false)) return StepShot(null, label)
+        if (hiddenApp() || !runCatching { screenshots.isReady() }.getOrDefault(false)) return StepShot(null, label)
         // Only the capture happens before the press; decoding and shrinking wait for the journal.
         val capture = withTimeoutOrNull(SHOT_TIMEOUT_MS) {
             runCatching { screenshots.captureBase64Png() as? CaptureResult.Success }.getOrNull()
@@ -189,7 +208,7 @@ class PhoneToolSource(context: Context) : ToolSource {
             val server = InProcessMcpServer.connect(
                 deviceBridge = device,
                 screenshotBridge = screenshots,
-                uiTreeBridge = AppUiTreeBridge(),
+                uiTreeBridge = uiTree,
                 perceptionBridge = AppPerceptionBridge(app),
                 webSearchBridge = AppWebSearchBridge(TavilyKeyStore(app)),
                 deepLinkBridge = AppDeepLinkBridge(app, DeepLinkManager(app)),
@@ -236,6 +255,9 @@ class PhoneToolSource(context: Context) : ToolSource {
         private const val SHOT_WIDTH = 540
         private const val SHOT_QUALITY = 72
         private const val SHOT_TIMEOUT_MS = 1_500L
+
+        /** Stands in for a sensitive app's screen in the screen history; nothing else of it is kept. */
+        const val HIDDEN_SCREEN = "(hidden app: not recorded)"
 
         internal val SCREEN_TOOLS = setOf(
             "read_screen", "perceive_screen", "get_screenshot", "request_screen_capture_permission",

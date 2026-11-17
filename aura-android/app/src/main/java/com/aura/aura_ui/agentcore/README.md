@@ -1,6 +1,6 @@
 # agentcore
 
-> **Last reviewed:** 2026-11-15.
+> **Last reviewed:** 2026-11-17.
 >
 > **Keep this file and the KDoc current.** If you change a file listed here, update its header
 > comment and this README in the same commit.
@@ -39,6 +39,18 @@ files per day in `files/agentcore/traces/`, plus pictures:
   check, steering, research notes, pauses and raw errors.
 - `shot-<ms>.jpg` and `screen-<ms>.png`: the screen before each press, and the annotated
   screenshot sent to the model.
+- A `seen` record in the steps file for every screen the run went through, with its history
+  id (`S3`, `S3.1`), the `SEEN:` caption, the whole screen text and `by`: `model` when the model
+  was given it, `aura` when only `ScreenWatcher` recorded it. When the app in front is one
+  `SensitivePolicy` keeps AURA out of (`PhoneToolSource.hiddenApp`), it holds `(not recorded)`
+  instead of the text. The run page draws each id once as a "SAW" row, `S3 · <caption>`, with
+  what changed in colour, in time order with the taps it led to; a screen the model never read
+  ends "not shown to the model" and is drawn dimmer. The page's "Screens" choice groups them into
+  files (`ScreenFiles.group`, display only) with coloured diffs between versions, and a viewer
+  swipes through every screen in time order.
+
+`files/agentcore/traces/` and `files/agentcore/screens/` are left out of cloud backup and device
+transfer (`backup_rules.xml`, `data_extraction_rules.xml`): they hold screen text and screenshots.
 
 The Run log page draws them (`RunLogUi.kt`, `RunDetail.kt`). Its share button exports every log
 file as a zip, and a run's page exports just that run (`RunExport` in `Telemetry.kt`). On a debug
@@ -58,7 +70,8 @@ also pulls the folder.
 | `ToolSources.kt` | Where tools come from: the phone (`:mcp-server`, in process) and remote MCP connectors (`ConnectorStore`). |
 | `ContextAssembler.kt` | System prompt (with the `TalkStyle` block the agent page picks; Balanced adds none), device context, stale-screen eviction, tool-output pruning, compaction (summarise the middle, keep the request and the tail verbatim), token budget. |
 | `RunLedger.kt` | The plot of a long run (request, plan, last actions, step and minutes), shown as one message from step 8; only the newest is kept. |
-| `ScreenHistory.kt` | Every screen a task saw (`S3`, diffs `S3.1`), read back by `screens`, `screen`, `screen_diff`; counts distinct screens for stuck detection. |
+| `ScreenHistory.kt` | Every screen a task went through, as a plain timeline `S1, S2, …`. Model reads (`record`) and silent reads (`passed`) share it; a model read of the screen AURA just recorded marks that entry read; a screen equal to an earlier one is linked (`S5 = S2`). Nothing is guessed when saving. Read back by `screens`, `screen`, `screen_diff`; counts the model's distinct screens for stuck detection. |
+| `ScreenWatcher.kt` | Records the screens nobody read: from the turn's first phone call, after any accessibility event it waits for 350 ms of quiet (or 2 s of motion) and takes a `ScreenSnapshot` (`:mcp-server`), a full read that never moves the som_ids `tap` uses. At most 300 per turn. |
 | (context meter) | `AgentEngine.usage`: each chat's last request as the provider counted it (`Usage` in `AgentModels.kt`). Only Koog's Anthropic client reports a cache (`cacheReadInputTokens`, left out of its input count, so added back); the OpenAI-compatible client drops it and the meter shows no cache share. The model sheet shows "Context: 12k of 128k tokens · 64% from cache" with a bar. In memory only. |
 | `CodeBlocks.kt` | ``` fences in a reply (`blocks`) drawn monospace, scrolling sideways, each with its own copy button. |
 | `ReadAloud.kt` | The read-aloud button on each reply: one process-wide `AuraTTSManager` in the voice from Voice settings, warmed when the chat opens. |
@@ -80,7 +93,7 @@ also pulls the folder.
 | `Scheduler.kt` | Scheduled prompts (`schedule_task`), run read-only in the background; heartbeats (`watch_for`): a job bound to the chat that asked, checked every 15 minutes or at once when a notification shares a word with the condition (always-on only), reporting once into that chat and then ending, or giving up after its hours; the morning briefing (`Briefing`), a daily 08:00 job whose existence is its on/off switch on the agent page. |
 | `Ambient.kt` | Notification triage and digests. |
 | `Telemetry.kt` | OpenTelemetry spans (model calls: timing, tokens) in `files/agentcore/traces/`; `recent()` joins them with the journal into `RunLog`s. |
-| `RunJournal.kt` | The readable run log: request, each step in plain words (`StepPhrase`), the screen before each press with the pressed element's box, the answer. Redacted, kept 7 days. |
+| `RunJournal.kt` | The readable run log: request, each step in plain words (`StepPhrase`), every screen the model got by its history id (`seen`), the screen before each press with the pressed element's box, the answer. Redacted, kept 7 days. The AndroidWorld suite copies it per task (`benchmark/suite/device.py`, `efficiency.py`). |
 | (edit and regenerate) | A foreground turn that changed nothing (every call past the gate was a read; `TurnState.changed`) and ended answered or failed leaves `threads.undo`: the context and taint from before it and its first item. The chat then offers Regenerate on the reply and Edit (Try again after a failure) on the message; both take the turn back (`ThreadStore.undo`) and send again. A turn that sent, tapped or saved anything can never be run twice this way. |
 | `ChatTheme.kt` | The chat's colours (Apple system colours, light and dark), Inter type, the glass surface. |
 | `ChatUi.kt` | The chat screen and its ViewModel: greeting with the app marquee, transcript, glass composer with the model picker. No agent logic. |
