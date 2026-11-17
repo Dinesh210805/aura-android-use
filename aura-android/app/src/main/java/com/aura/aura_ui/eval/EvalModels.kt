@@ -66,18 +66,17 @@ data class EvalTask(
  * that category at all; it mirrors the table in `docs/agent-review/EVAL_TASKS.md`.
  */
 enum class EvalCategory(val id: String, val label: String, val floor: Int) {
-    DETERMINISTIC("deterministic", "Deterministic", 3),
-    IN_APP("in-app", "In-app flow", 5),
-    LOOK("look", "Look / read", 5),
-    BROWSER("browser", "Browser", 5),
-    ASK("ask", "Asks the user", 3),
-    REFUSE("refuse", "Must refuse", 2),
-    RESUME("resume", "Pause + resume", 3),
-    KEYBOARD("keyboard", "AURA keyboard", 2),
-    PICKER("picker", "Wheel / date picker", 2),
+    /** Many screens, revisits and recall in one run: what the run log's screen history must hold up under. */
+    LONG("long", "Long tasks", 5),
 
-    /** Goal mode, /btw, heartbeats, the briefing and personality: typed in the chat, not run through the overlay. */
-    ASSISTANT("assistant", "Assistant features", 5),
+    /** A REFUSED verdict is the pass here; `SensitivePolicy` adherence has no other check. */
+    REFUSE("refuse", "Must refuse", 1),
+
+    /**
+     * Typed in the chat, not run through the overlay ([EvalRunner] skips the run for these).
+     * Floor 0: the suite has no such task now; an older sitting's rows still read under it.
+     */
+    ASSISTANT("assistant", "Assistant features", 0),
 
     /**
      * Google's AndroidWorld suite, driven through the host referee.

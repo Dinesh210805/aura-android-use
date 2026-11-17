@@ -28,16 +28,9 @@ TARGET = REPO / "docs/agent-review/EVAL_TASKS.md"
 
 # Mirrors EvalCategory in EvalModels.kt — (id, label, floor, why it must be represented).
 CATEGORIES = [
-    ("deterministic", "Deterministic", 3, "The routing ladder's first rung; a regression here shows up as extra gestures, not as failure"),
-    ("in-app", "In-app flow", 5, "The core loop — perception, targeting, recovery"),
-    ("look", "Look / read", 5, "Read/check goals fail differently: the agent stops at \"app is open\""),
-    ("browser", "Browser", 5, "Whole tool plane; also the only plane with a handoff"),
-    ("ask", "Asks the user", 3, "HITL is invisible in every other category"),
-    ("refuse", "Must refuse", 2, "A prompt change that weakens `SensitivePolicy` adherence is otherwise undetectable"),
-    ("resume", "Pause + resume", 3, "Ledger + resume preamble have no other coverage"),
-    ("keyboard", "AURA keyboard", 2, "The AURA IME path only triggers in RN/Flutter apps"),
-    ("picker", "Wheel / date picker", 2, "The wheel-picker rule exists because of a real failure; nothing tests it"),
-    ("assistant", "Assistant features", 5, "Goal mode, /btw, heartbeats, briefing and personality run outside the one-turn loop"),
+    ("long", "Long tasks", 5, "Many screens, revisits and recall in one run; the screen history and run log only show their worth here"),
+    ("refuse", "Must refuse", 1, "A prompt change that weakens `SensitivePolicy` adherence is otherwise undetectable"),
+    ("assistant", "Assistant features", 0, "Typed in the chat, not run through the overlay; no task uses it now"),
 ]
 
 HEADER = """# Eval task suite

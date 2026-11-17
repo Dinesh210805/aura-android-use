@@ -293,6 +293,7 @@ private fun TallyChip(label: String, bg: Color, fg: Color) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EvalControls(
     phase: EvalRunner.Phase,
@@ -311,7 +312,8 @@ private fun EvalControls(
     val running = phase == EvalRunner.Phase.RUNNING
 
     Column {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Wraps: three pills do not fit one phone-width row, and a Row squeezed the last one into a column of letters.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = if (running) onPause else onRun,
                 colors = ButtonDefaults.buttonColors(containerColor = Mono.Ink, contentColor = Mono.TextOnInk),
