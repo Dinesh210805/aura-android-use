@@ -132,4 +132,18 @@ class ScreenReviewTest {
         assertEquals(listOf("S1"), notes.map { it.detail })
         assertEquals("Home: The feed.", notes.single().text)
     }
+
+    @Test
+    fun `a run recorded before the review existed is passed over without a model call`() = runBlocking {
+        journal.start("old", "a task", "model")
+        journal.seen("old", "S1", "S1 | screen", "SEEN: S1 | screen", frame = frame(insta, Triple("Settings", "*", 900 to 50)))
+        journal.end("old", TurnEnd.ANSWERED, "done")
+        val oldEnd = clock - 1
+        run("new", "S1" to frame(insta, Triple("Settings", "*", 900 to 50)))
+        reply = """{"screens":[{"id":"S1","name":"Home","description":"The feed."}]}"""
+        assertEquals(1, review.review())
+        assertEquals(1, inputs.size)
+        assertEquals(listOf("new"), journal.read().filter { it.type == RunJournal.TYPE_SCREEN_NOTE }.map { it.run })
+        assertTrue(reviewedAt > oldEnd)
+    }
 }

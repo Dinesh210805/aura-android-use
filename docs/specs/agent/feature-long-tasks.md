@@ -463,7 +463,10 @@ in the same commit (AGENTS.md).
       is at most 30 characters and `description` at most 160, both cleaned with
       `neutralizeLabel`'s rules except the length cap. An id that was not in the input is
       ignored. Each kept one is written as a `screen_note` record (`detail` = id, `text` =
-      description), which the Screens tab shows.
+      `<name>: <description>`), which the Screens tab shows.
+    - **Runs from before this step** have no `layout_key` on any screen. They are passed over
+      with no model call, do not count toward the 3 per pass, and still move
+      `screens_reviewed_at` on, so the first pass does not send a week of old runs.
     - **Fails:** open. No FAST model, a bad reply or a refused write skips that app and still
       moves `screens_reviewed_at` on; nothing is retried.
   - **Done when:** `ScreenReviewTest` (new, fake `ask`) passes:
@@ -476,7 +479,8 @@ in the same commit (AGENTS.md).
       names in the test;
     - the model input built from a fixture run holds no email, phone number or `@handle` from it;
     - a browser package, a sensitive package and a `(not recorded)` screen are not in it;
-    - a reply writes one `screen_note` per known id, and an unknown id writes none.
+    - a reply writes one `screen_note` per known id, and an unknown id writes none;
+    - a run with no `layout_key` gets no model call and no note, and the next run is reviewed.
 
 - [x] **8d. Each app gets a map, updated a little after every run.**
   - **What changes:** `agentcore/AppMaps.kt` (new), `ScreenReview.kt` (merges after 8c's call),

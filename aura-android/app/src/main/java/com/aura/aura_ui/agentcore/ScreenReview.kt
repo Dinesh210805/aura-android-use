@@ -21,7 +21,8 @@ import kotlinx.serialization.json.longOrNull
  * from the screen's controls only. The descriptions show in the run page's Screens tab.
  *
  * - Contract: [review] handles at most [PER_PASS] runs that ended after the last pass, oldest
- *   first, one model call per app per run. Only interface words leave the phone: a control's
+ *   first, one model call per app per run. A run with no `layout_key` on any screen (recorded
+ *   before this review existed) is passed over without a call and does not count. Only interface words leave the phone: a control's
  *   label is sent only when [UiWords.keeps] it (else just its role and region), and the agent's
  *   notes are sent through [UiWords.mask]. Screens of AURA itself, browsers, apps
  *   `SensitivePolicy` blocks and screens with no frame (a hidden app) are never sent.
@@ -64,10 +65,19 @@ class ScreenReview(
     suspend fun review(): Int {
         if (!enabled()) return 0
         val records = withContext(Dispatchers.IO) { journal.read() }
-        val ends = records.filter { it.type == RunJournal.TYPE_END && it.atMs > reviewedAt() }.sortedBy { it.atMs }.take(PER_PASS)
         val byRun = records.groupBy { it.run }
-        ends.forEach { end ->
-            val screens = screens(byRun[end.run].orEmpty())
+        val ends = records.filter { it.type == RunJournal.TYPE_END && it.atMs > reviewedAt() }.sortedBy { it.atMs }
+        var reviewed = 0
+        for (end in ends) {
+            if (reviewed == PER_PASS) break
+            val run = byRun[end.run].orEmpty()
+            // Runs recorded before the review existed carry no layout key: passed over, no model call.
+            if (run.none { it.type == RunJournal.TYPE_SEEN && it.args?.contains("\"${RunJournal.LAYOUT_KEY}\"") == true }) {
+                setReviewedAt(end.atMs)
+                continue
+            }
+            reviewed++
+            val screens = screens(run)
             screens.groupBy { it.pkg }.forEach { (pkg, appScreens) ->
                 val names = runCatching { described(ask(SYSTEM, input(pkg, appScreens)), appScreens.map { it.id }.toSet()) }.getOrDefault(emptyMap())
                 runCatching { names.forEach { (id, named) -> journal.screenNote(end.run, id, "${named.first}: ${named.second}") } }
@@ -76,7 +86,7 @@ class ScreenReview(
             }
             setReviewedAt(end.atMs)
         }
-        return ends.size
+        return reviewed
     }
 
     /**
