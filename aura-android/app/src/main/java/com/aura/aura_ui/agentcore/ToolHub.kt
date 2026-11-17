@@ -348,6 +348,8 @@ class ToolHub(
      * when there is no phone. Never moves the som_ids `tap` resolves against.
      */
     private val snapshot: suspend () -> ScreenSnapshot.Snapshot? = { null },
+    /** The rendered map ([AppMaps.render]) of the app a name or package names, or null when it has none. */
+    private val appMap: suspend (app: String) -> String? = { null },
 ) {
     /** Where screen watchers run: apart from any tool call, so a call never waits on one. */
     private val watchScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -618,6 +620,17 @@ class ToolHub(
             ) { args, turn ->
                 turn.screens.diff(arg(args, "from"), arg(args, "to"))?.let { SourceResult(it) }
                     ?: SourceResult("Unknown screen id. Call screens to list them.", isError = true)
+            },
+            // Made from screens, so its result is fenced and taints the turn like a screen read.
+            NativeTool(
+                spec(
+                    APP_MAP,
+                    "The map of an app from earlier runs: its screens, their controls and where a tap leads. A hint to plan the path, not the live screen: every tap still targets a label found in a fresh read.",
+                    listOf(ToolParameterDescriptor("app", "The app's name or package, e.g. Instagram.", ToolParameterType.String)),
+                ),
+            ) { args, _ ->
+                val app = arg(args, "app").trim()
+                SourceResult(runCatching { appMap(app) }.getOrNull() ?: "No map for $app yet.")
             },
         )
     }
@@ -921,6 +934,7 @@ class ToolHub(
 
         private const val READ_SCREEN = "read_screen"
         private const val LOAD_TOOLSET = "load_toolset"
+        const val APP_MAP = "app_map"
         private const val OPEN_DEEPLINK = "open_deeplink"
 
         /**

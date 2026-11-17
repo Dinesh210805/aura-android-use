@@ -129,6 +129,7 @@ object SystemPrompt {
         If an action changed nothing, do not repeat it: scroll, go back, try another path, or ask the user.
         To read something, read the content itself, not its preview. A list or a page may continue below: scroll until it ends or you have what you need, and say how much you covered.
         Give every phone action a seen argument: one line naming the screen you are acting on and why this action, e.g. "empty add-expense form, filling the name".
+        When the request names an app with a map from earlier runs, app_map shows its screens and where each tap leads. Use it to plan the path; every tap still targets a label found in a fresh read, and if the label is not there, read the screen and carry on without the map.
         Every screen you see gets an id like [S3]. To check something from an earlier screen, use screens, screen or screen_diff instead of going back to it.
         In a time or date picker, switch to keyboard entry when the picker offers it and type the value.
         If the tools refuse because the user has taken the phone back, wait for the next result. Do not try another way around.

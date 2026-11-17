@@ -155,6 +155,12 @@ class AgentCore private constructor(private val app: Context) {
         elementLabel = phone::labelAt,
         hiddenApp = phone::hiddenApp,
         snapshot = phone::snapshot,
+        appMap = { name ->
+            withContext(Dispatchers.IO) {
+                val pkg = name.takeIf { appMaps.read(it) != null } ?: ResearchText.matchApp(name, TaskResearch.launcherApps(app))?.packageName
+                pkg?.let(appMaps::render)
+            }
+        },
         onChain = { skill, ok -> skill?.let { withContext(Dispatchers.IO) { skills.noteChain(it, ok) } } },
         toolsetNote = { id ->
             connectors.signedInApps(id).sorted().takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "signed in: ") { slug ->
@@ -513,18 +519,22 @@ class AgentCore private constructor(private val app: Context) {
      * - Fails: returns null on anything.
      */
     private suspend fun preamble(request: String): String? = withContext(Dispatchers.IO) {
+        val target = runCatching { ResearchText.matchApp(request, TaskResearch.launcherApps(app)) }.getOrNull()
         val links = runCatching {
-            ResearchText.matchApp(request, TaskResearch.launcherApps(app))?.let { target ->
+            target?.let {
                 val catalog = app.assets.open(AppDeepLinkBridge.CATALOG_ASSET).bufferedReader().use { it.readText() }
-                AppLinksPreamble.forApp(target.label, AppLinksPreamble.catalogEntries(catalog, target.packageName))
+                AppLinksPreamble.forApp(it.label, AppLinksPreamble.catalogEntries(catalog, it.packageName))
             }
         }.getOrNull()
+        // Only a pointer: the map itself costs nothing until the agent asks for it.
+        val map = target?.takeIf { runCatching { appMaps.render(it.packageName) }.getOrNull() != null }
+            ?.let { "There is a map of ${it.label} from earlier runs: app_map(\"${it.label}\")." }
         val tabs = runCatching { AppBrowserBridge.shared(app).openTabsForPreamble() }.getOrNull().orEmpty()
             .take(MAX_TABS)
             .joinToString("\n") { (_, url, active) -> "- " + url.take(MAX_URL).replace(Regex("[<>\\s]"), "") + if (active) " (in front)" else "" }
             .takeIf { it.isNotBlank() }
             ?.let { "Pages already open in AURA's browser. Use one of these instead of opening it again:\n$it" }
-        listOfNotNull(links, tabs).joinToString("\n\n").takeIf { it.isNotBlank() }
+        listOfNotNull(links, map, tabs).joinToString("\n\n").takeIf { it.isNotBlank() }
     }
 
     /** A digest becomes a chat holding one card, and a notification that opens it. */

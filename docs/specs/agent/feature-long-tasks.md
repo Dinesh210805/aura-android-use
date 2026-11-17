@@ -523,7 +523,8 @@ in the same commit (AGENTS.md).
     - a changed `versionCode` puts the "recorded on version" line in the rendering;
     - a control missing from 2 runs of its screen is gone.
 
-- [ ] **8e. The agent can read an app's map as a hint.**
+- [ ] **8e. The agent can read an app's map as a hint.** (Built; `ToolHubAppMapTest` passes. The
+  phone check below is pending.)
   - **What changes:** `ToolHub.kt` (tool `app_map(app)` (new), `ToolRisk.READ`, in the `screen`
     toolset), `AgentCore.preamble` (one line when a map exists), `SystemPrompt.SCREEN_GUIDE` in
     `ContextAssembler.kt`, `StepPhrase` ("Read the app map for Instagram"),

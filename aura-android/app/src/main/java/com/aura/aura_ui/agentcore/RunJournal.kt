@@ -523,7 +523,7 @@ object StepPhrase {
         "web_search", "find_files", "resolve_contact", "lookup_app", "list_app_deeplinks", "resolve_deeplink", "wait_for",
         "verify_action", "watch_device_events", "browser_read", "browser_find", "browser_extract", "browser_tabs",
         "browser_screenshot", "search_history", "skill_view", "list_schedules", "load_toolset", "update_plan",
-        "screens", "screen", "screen_diff",
+        "screens", "screen", "screen_diff", ToolHub.APP_MAP,
     )
 
     private const val MAX_QUOTE = 60
@@ -568,6 +568,7 @@ object StepPhrase {
             "search_history" -> "Searched past chats"
             "screens" -> arg("query")?.let { "Searched past screens for $it" } ?: "Listed past screens"
             "screen" -> "Looked back at ${args["id"]?.jsonPrimitive?.contentOrNull ?: "a screen"}"
+            ToolHub.APP_MAP -> "Read the app map for ${arg("app") ?: "an app"}"
             "screen_diff" -> "Compared ${args["from"]?.jsonPrimitive?.contentOrNull ?: "a screen"} with ${args["to"]?.jsonPrimitive?.contentOrNull ?: "another"}"
             "skill_view" -> "Read the skill ${arg("name").orEmpty()}".trim()
             "skill_save" -> "Saved a skill"
