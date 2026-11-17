@@ -278,6 +278,8 @@ data class LogStep(
     val details: List<Pair<String, String>> = emptyList(),
     /** Drawn dimmer: a screen the run passed through that the model was never shown. */
     val dim: Boolean = false,
+    /** An action's `seen` argument: the model's own line about the screen it acted on. */
+    val note: String? = null,
 )
 
 /** One turn in the log, oldest step first. */
@@ -446,6 +448,7 @@ object RunLogBuilder {
                     record.args?.takeIf { it.length > 2 }?.let { "sent" to it },
                     record.result?.takeIf { it.isNotBlank() }?.let { (if (record.ok) "got back" else "error") to it },
                 ),
+                note = argsOf(record)?.get(PhoneToolSource.SEEN_PARAM)?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank),
             )
         }
         RunJournal.TYPE_SAY -> LogStep(record.atMs, LogKind.SAY, record.text.orEmpty())

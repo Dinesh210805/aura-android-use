@@ -757,7 +757,19 @@ class ToolHub(
             return outcome
         }
 
-        suspend fun gated(args: JsonObject): ToolOutcome {
+        /**
+         * The gate, then the source. [raw]'s `seen` note is taken off first and put on the newest
+         * screen, so a note never changes a safety decision, reaches the phone server, or makes a
+         * repeated failing call look new. `run` still journals [raw], note included.
+         */
+        suspend fun gated(raw: JsonObject): ToolOutcome {
+            val args = if (spec.origin == ToolOrigin.PHONE && PhoneToolSource.SEEN_PARAM in raw) {
+                raw[PhoneToolSource.SEEN_PARAM]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
+                    ?.let { turn.screens.annotate(it.take(MAX_NOTE_CHARS)) }
+                JsonObject(raw - PhoneToolSource.SEEN_PARAM)
+            } else {
+                raw
+            }
             val wantsScreen = spec.toolset == SCREEN ||
                 (spec.name == LOAD_TOOLSET && args["name"]?.jsonPrimitive?.contentOrNull == SCREEN)
             if (turn.handsOffScreen && wantsScreen) {
@@ -825,6 +837,7 @@ class ToolHub(
         }
 
         private suspend fun dispatch(args: JsonObject): ToolOutcome {
+            if (spec.origin == ToolOrigin.PHONE) startWatching(turn)
             val result = try {
                 source.call(spec.name, args, turn)
             } catch (e: CancellationException) {
@@ -838,7 +851,6 @@ class ToolHub(
             if (!result.isError && turn.mode == RunMode.FOREGROUND) {
                 ChatCard.fromToolResult(spec.name, result.text)?.let { turn.emit(AgentEvent.Card(it)) }
             }
-            if (spec.origin == ToolOrigin.PHONE) startWatching(turn)
             if (!result.isError && spec.risk != ToolRisk.READ && spec.origin == ToolOrigin.PHONE) turn.noteAction()
             val repeat = if (result.isError) turn.noteFailure(callKey(args)) else 0
             val hint = if (repeat >= WARN_AFTER_FAILURES) "\nThis exact call has now failed $repeat times. Do not repeat it." else ""
@@ -1038,7 +1050,13 @@ class ToolHub(
         private const val MAX_OPTIONS = 4
         private const val WARN_AFTER_FAILURES = 2
         private const val BLOCK_AFTER_FAILURES = 4
+
+        /** A `seen` note is one line; anything longer is cut before it reaches the screen history. */
+        private const val MAX_NOTE_CHARS = 200
         private val json = Json { ignoreUnknownKeys = true }
+
+        /** Screen tools that read the phone itself; a silent snapshot is taken with each. */
+        private val PHONE_LOOKS = setOf("read_screen", "perceive_screen", "get_screenshot")
 
         /** The run log's one-line title for a gate verdict that was not a plain allow. */
         internal fun gateTitle(verdict: Verdict): String = when (verdict) {
@@ -1054,9 +1072,6 @@ class ToolHub(
             appendLine("origin: ${request.origin}")
             appendLine("sends data out: ${request.egress}")
             request.targetLabel?.let { appendLine("pressed label: $it") }
-        /** Screen tools that read the phone itself; a silent snapshot is taken with each. */
-        private val PHONE_LOOKS = setOf("read_screen", "perceive_screen", "get_screenshot")
-
             appendLine("private or untrusted content this turn: ${taint.joinToString().ifEmpty { "none" }}")
             appendLine(
                 when (verdict) {

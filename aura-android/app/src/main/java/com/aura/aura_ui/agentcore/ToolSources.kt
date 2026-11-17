@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import ai.koog.agents.core.tools.ToolDescriptor
+import ai.koog.agents.core.tools.ToolParameterDescriptor
+import ai.koog.agents.core.tools.ToolParameterType
 import android.util.Base64
 import com.aura.aura_ui.agent.mcpbridge.McpToolSchemaParser
 import com.aura.aura_ui.data.deeplink.DeepLinkManager
@@ -106,9 +109,10 @@ class PhoneToolSource(context: Context) : ToolSource {
 
     override suspend fun list(): List<ToolSpec> =
         connected().listTools()?.tools.orEmpty().filterNot { it.name in HIDDEN }.map { tool ->
+            val risk = riskOf(tool.name)
             ToolSpec(
-                descriptor = McpToolSchemaParser.parse(tool),
-                risk = riskOf(tool.name),
+                descriptor = McpToolSchemaParser.parse(tool).let { if (risk != ToolRisk.READ) withSeen(it) else it },
+                risk = risk,
                 origin = ToolOrigin.PHONE,
                 toolset = toolsetOf(tool.name),
                 resultOrigin = resultOriginOf(tool.name),
@@ -275,6 +279,23 @@ class PhoneToolSource(context: Context) : ToolSource {
 
         /** Results the harness or the OS wrote; everything else from the phone is private content. */
         internal val TRUSTED_RESULTS = setOf("get_device_status", "volume", "request_screen_capture_permission")
+
+        /** The optional note every phone action carries; `ToolHub` strips it before the gate and the server. */
+        const val SEEN_PARAM = "seen"
+
+        /**
+         * [descriptor] with an optional [SEEN_PARAM] string added, unless it has one already.
+         * - Why optional: a call without the note must still run; the run log shows how often it is missing.
+         */
+        internal fun withSeen(descriptor: ToolDescriptor): ToolDescriptor =
+            if ((descriptor.requiredParameters + descriptor.optionalParameters).any { it.name == SEEN_PARAM }) {
+                descriptor
+            } else {
+                descriptor.copy(
+                    optionalParameters = descriptor.optionalParameters +
+                        ToolParameterDescriptor(SEEN_PARAM, "One line: the screen you are acting on and why this action.", ToolParameterType.String),
+                )
+            }
 
         internal fun riskOf(tool: String): ToolRisk = when {
             tool in COMMIT_TOOLS -> ToolRisk.COMMIT

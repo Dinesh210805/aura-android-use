@@ -278,6 +278,7 @@ private fun StepCard(number: Int, step: LogStep, runStartMs: Long) {
             )
         }
         Text(emphasise(step.title), style = if (step.kind == LogKind.SAY) AuraType.body else AuraType.callout, color = tint)
+        step.note?.let { Text("Seen: $it", style = AuraType.footnote, color = aura.secondary) }
         if (!step.ok) {
             Text(
                 "Did not work" + (step.detail("error")?.let { ": " + it.lineSequence().first().take(140) } ?: ""),

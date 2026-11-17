@@ -36,6 +36,8 @@ class ScreenHistory {
         val blind: Boolean = false,
         /** The earlier entry with the same content: the run came back to that screen. */
         val sameAs: String? = null,
+        /** The model's own line about this screen, from the `seen` argument of the action it took on it. */
+        val note: String? = null,
     )
 
     /** Where a model read went: its id, whether it added an entry (false: one was marked read), and the entry. */
@@ -80,6 +82,16 @@ class ScreenHistory {
         return append(captionOf(snap.text).orEmpty(), snap.text, byModel = false, snap)
     }
 
+    /**
+     * Put the model's [note] on the newest screen: the one it decided its action on. A later note
+     * on the same screen replaces the earlier one. Does nothing before any screen.
+     */
+    @Synchronized
+    fun annotate(note: String) {
+        val newest = entries.lastOrNull() ?: return
+        entries[entries.lastIndex] = newest.copy(note = note)
+    }
+
     private fun append(caption: String, text: String, byModel: Boolean, snap: ScreenSnapshot.Snapshot?): Entry {
         val earlier = snap?.takeIf { !it.blind }?.let { s -> entries.lastOrNull { !it.blind && it.pkg == s.pkg && it.contentKey == s.contentKey } }
         val entry = Entry(
@@ -104,7 +116,8 @@ class ScreenHistory {
         val hits = entries.filter { q == null || q in it.caption.lowercase() || q in (it.full ?: it.text).lowercase() }
         if (hits.isEmpty()) return if (q == null) "No screens yet." else "No screen mentions \"$query\"."
         return hits.takeLast(MAX_LOG).joinToString("\n") {
-            it.id + (it.sameAs?.let { s -> " = $s" } ?: "") + (if (it.byModel) "" else " (passed, not read)") + "  " + it.caption
+            it.id + (it.sameAs?.let { s -> " = $s" } ?: "") + (if (it.byModel) "" else " (passed, not read)") + "  " + it.caption +
+                it.note?.let { n -> " · note: $n" }.orEmpty()
         }
     }
 

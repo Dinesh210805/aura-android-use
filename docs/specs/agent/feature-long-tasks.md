@@ -330,7 +330,7 @@ in the same commit (AGENTS.md).
 
 ### Part B: give the agent a note, a better memory of screens, and app maps
 
-- [ ] **6. The agent writes one line about the screen with each action.**
+- [x] **6. The agent writes one line about the screen with each action.**
   - **What changes:** `ToolSources.kt` (`PhoneToolSource.withSeen(descriptor)` (new), a pure
     helper that `PhoneToolSource.list` applies),
     `ToolHub.kt` (`HubTool.gated`), `ScreenHistory.kt` (`Entry.note`, `annotate` (new)),
