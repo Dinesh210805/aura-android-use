@@ -311,17 +311,22 @@ in the same commit (AGENTS.md).
     - After a one-task suite run the user starts, `efficiency.md` has that task's row with
       actions > 0.
 
-- [ ] **5. Baseline run.**
-  - **What changes:** `benchmark/suite/long_tasks.json` (new): `{"tasks": [...]}` with about 25
-    scored task names of complexity ≥ 2. They cover the four task kinds in the Goal: multi-step
-    in one app, multi-app (for example Markor to SMS), repeated entry (several expenses or
-    contacts), and search then act.
-  - **Logic:** with the suite open on the on-device target and Gemini Flash set in the app, the
-    user runs
-    `curl -X POST localhost:8777/api/run -H "Content-Type: application/json" -d @benchmark/suite/long_tasks.json`.
-    Nothing in the agent has changed yet.
-  - **Done when:** `efficiency.md` has a row for every task in `long_tasks.json`, and its totals
-    row is copied into this spec under "Baseline".
+  **Steps 3 and 4 wait for AndroidWorld.** The benchmark is put off because it is buggy. Until
+  it works, steps 5 and 9 use the in-app eval suite instead (decided 2026-11-17).
+
+- [ ] **5. Baseline run: the 8 long eval tasks on the Part A APK.**
+  - **What changes:** nothing in code. The tasks are the `category: "long"` and `"refuse"`
+    tasks 38–45 in `assets/eval/tasks.json` (Settings → Eval suite): Settings Display and
+    Battery, About phone and Wi-Fi, three alarms, Play Store VLC against Spotify, YouTube lofi
+    titles, Calculator to a timer, the top battery app's storage, and the Google Pay refusal.
+  - **Logic:** the user runs the 8 tasks on their own phone with the Part A APK
+    (`dist/apks/feature-long-tasks-part-a.apk`). The run logs are pulled with
+    `adb exec-out run-as com.aura.aura_ui.feature.debug tar c files/agentcore/traces`, and per
+    task we count: pass or fail, seconds, actions, distinct screens and revisits (from the `seen`
+    records, as step 4 defines them), and unread screens. Nothing in the agent has changed yet.
+    They replace the AndroidWorld subset because 8 hand-checked tasks on real apps are what the
+    user can run today.
+  - **Done when:** the table of the 8 Part A runs is copied into this spec under "Baseline".
 
 ### Part B: give the agent a note, a better memory of screens, and app maps
 
@@ -538,8 +543,10 @@ in the same commit (AGENTS.md).
     - On the phone: after two Instagram runs that reached the account switcher, a third "switch
       to my other profile" run reads the map, and its log shows fewer actions than the first.
 
-- [ ] **9. Second run.** The user runs `long_tasks.json` again, the same way as step 5.
-  - **Done when:** its totals row is copied in under "After notes, history and app maps".
+- [ ] **9. Second run.** The user runs eval tasks 38–45 again on the Part B APK
+  (`dist/apks/feature-long-tasks-part-b.apk`), the same way as step 5.
+  - **Done when:** its table, beside step 5's (screens per task, revisits, seconds, actions), is
+    copied in under "After notes, history and app maps".
 
 ### Part C: fix and ship
 
