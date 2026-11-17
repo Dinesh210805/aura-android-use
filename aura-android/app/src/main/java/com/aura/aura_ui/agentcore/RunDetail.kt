@@ -388,6 +388,7 @@ private fun ScreenFileCard(file: ScreenFile, runStartMs: Long, onOpen: (String) 
         ) {
             Column(Modifier.weight(1f)) {
                 Text("${file.id} · ${file.caption}", style = AuraType.callout, color = aura.label, maxLines = 2)
+                file.versions.firstNotNullOfOrNull { it.description }?.let { Text(it, style = AuraType.footnote, color = aura.secondary) }
                 val count = file.versions.size
                 Text(
                     (if (count == 1) "1 version" else "$count versions") + if (unread) " · not shown to the model" else "",

@@ -100,6 +100,21 @@ class AgentCore private constructor(private val app: Context) {
     /** What the user attached, read for the model ([AttachmentReader]). */
     private val files = AttachmentReader(app)
     val telemetry = AgentTelemetry(File(root, "traces"), BuildConfig.VERSION_NAME, keepDays = { LogKeep.days(app) })
+
+    /** The after-run screen review; see [ScreenReview]. */
+    private val screenReview by lazy {
+        ScreenReview(
+            journal = telemetry.journal,
+            ask = { system, input -> models.resolve(ModelRole.FAST)?.ask(system, input) },
+            words = UiWords.load(app),
+            isBrowser = { it in browserPackages() },
+            appNames = { TaskResearch.launcherApps(app).map { it.label.trim() }.toSet() },
+            ownPackage = app.packageName,
+            enabled = { ScreenReview.isOn(app) },
+            reviewedAt = { ScreenReview.reviewedAt(app) },
+            setReviewedAt = { ScreenReview.setReviewedAt(app, it) },
+        )
+    }
     val broker = UserBroker { turn, question, options ->
         if (turn.threadId !in surfaceThreads) {
             null
@@ -154,10 +169,13 @@ class AgentCore private constructor(private val app: Context) {
         val view = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
         val handler = pm.resolveActivity(view, 0)?.activityInfo?.packageName ?: return false
         if (handler == "android") return false // the chooser: more than one app, nothing decided
-        val browsers = pm.queryIntentActivities(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com")), 0)
-            .map { it.activityInfo.packageName }.toSet()
-        return handler !in browsers
+        return handler !in browserPackages()
     }
+
+    /** Every installed app that opens a plain https page: the browsers. */
+    private fun browserPackages(): Set<String> =
+        app.packageManager.queryIntentActivities(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com")), 0)
+            .map { it.activityInfo.packageName }.toSet()
 
     /** Apps AURA must never open or act in, as the user typed them. Enforced by [SafetyGate.blocked]. */
     var deniedApps: Set<String>
@@ -524,7 +542,10 @@ class AgentCore private constructor(private val app: Context) {
         jobRunner.runDue()
         if (alwaysOn) ambient.flush()
         withContext(Dispatchers.IO) { runCatching { skills.curate() } }
-        if (engine.isIdle() && batteryAllowsReview()) runCatching { learning.review() }
+        if (engine.isIdle() && batteryAllowsReview()) {
+            runCatching { learning.review() }
+            runCatching { screenReview.review() }
+        }
     }
 
     /**

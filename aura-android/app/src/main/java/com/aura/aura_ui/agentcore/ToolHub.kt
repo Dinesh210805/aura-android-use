@@ -360,7 +360,7 @@ class ToolHub(
                 onScreen = { snap ->
                     val hide = hidden()
                     val entry = turn.screens.passed(snap, hide)
-                    entry?.let { journal?.seen(turn.runId, it.id, it.caption, snap.text.takeUnless { hide }, RunJournal.BY_AURA, it.sameAs, snap.frame) }
+                    entry?.let { journal?.seen(turn.runId, it.id, it.caption, snap.text.takeUnless { hide }, RunJournal.BY_AURA, it.sameAs, snap.frame, snap.layoutKey) }
                     entry != null
                 },
                 onLimit = { journal?.note(turn.runId, "Stopped recording passed screens at ${ScreenWatcher.MAX_PASSED}") },
@@ -869,7 +869,7 @@ class ToolHub(
                 val snap = if (spec.name in PHONE_LOOKS) runCatching { snapshot() }.getOrNull() else null
                 val hide = hidden()
                 turn.screens.record(result.text, snap, hide)?.also { r ->
-                    journal?.seen(turn.runId, r.id, r.entry.caption, (snap?.text ?: result.text).takeUnless { hide }, sameAs = r.entry.sameAs, frame = snap?.frame)
+                    journal?.seen(turn.runId, r.id, r.entry.caption, (snap?.text ?: result.text).takeUnless { hide }, sameAs = r.entry.sameAs, frame = snap?.frame, layoutKey = snap?.layoutKey)
                 }
             } else {
                 null

@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.TextButton
 import com.aura.aura_ui.presentation.components.AuraRow
@@ -173,6 +174,14 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
 
     val keepDays = MutableStateFlow(LogKeep.days(app))
 
+    /** The after-run screen review ([ScreenReview]): true is "Cloud". */
+    val screenReview = MutableStateFlow(ScreenReview.isOn(app))
+
+    fun setScreenReview(on: Boolean) {
+        ScreenReview.setOn(getApplication(), on)
+        screenReview.value = on
+    }
+
     /** Saves the retention setting and prunes at once, so a shorter setting frees space now. */
     fun setKeepDays(days: Long) = viewModelScope.launch {
         LogKeep.set(getApplication(), days)
@@ -317,6 +326,7 @@ internal fun groupByDay(threads: List<ThreadRow>): List<Pair<String, List<Thread
 fun RunLogsPage(onOpen: (String) -> Unit, onKeep: () -> Unit, vm: AgentPagesViewModel = viewModel()) {
     val runs by vm.log.collectAsState()
     val keep by vm.keepDays.collectAsState()
+    val screenReview by vm.screenReview.collectAsState()
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     var selected by remember { mutableStateOf(emptySet<String>()) }
@@ -342,8 +352,16 @@ fun RunLogsPage(onOpen: (String) -> Unit, onKeep: () -> Unit, vm: AgentPagesView
                 contentPadding = padding,
             ) {
                 item(key = "keep") {
-                    Box(Modifier.fillMaxWidth().auraCard()) {
+                    Column(Modifier.fillMaxWidth().auraCard()) {
                         AuraRow("Keep logs", icon = Icons.Outlined.History, value = LogKeep.label(keep), onClick = onKeep)
+                        AuraDivider(16.dp)
+                        // After a run, the FAST model names each app screen from its interface words only.
+                        AuraRow(
+                            "Screen review",
+                            icon = Icons.Outlined.Visibility,
+                            value = if (screenReview) "Cloud" else "Off",
+                            onClick = { vm.setScreenReview(!screenReview) },
+                        )
                     }
                 }
                 if (runs != null && all.isEmpty()) {

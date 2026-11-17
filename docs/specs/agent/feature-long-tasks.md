@@ -115,8 +115,7 @@ in the same commit (AGENTS.md).
 
   **2b. Screens nobody read: AURA records every screen change**
   - **What changes:**
-    - `:mcp-server`: `tools/ScreenSnapshot.kt` (new; built, `ScreenSnapshotTest` passes; 8c adds
-      `controls`), public `object ScreenSnapshot` with
+    - `:mcp-server`: `tools/ScreenSnapshot.kt` (new; built, `ScreenSnapshotTest` passes), public `object ScreenSnapshot` with
       `suspend fun read(bridge: UiTreeBridge): Snapshot?` and public
       `data class Snapshot(val pkg: String, val text: String, val contentKey: Long, val layoutKey: Long, val blind: Boolean)`.
       Plain `Long`s, because `ScreenSignature` is `internal` and `:app` cannot name it.
@@ -404,12 +403,14 @@ in the same commit (AGENTS.md).
     - A hit from an earlier task carries `(earlier task)`.
     - A hidden screen never matches.
 
-- [ ] **8c. After a run, a cheap model describes each screen of each app.**
-  - **What changes:** `agentcore/ScreenReview.kt` (new); in `:mcp-server`,
-    `ScreenSnapshot.Snapshot.controls` (new) with
-    `data class Control(val label: String, val role: String, val region: String)`;
-    `RunJournal.kt` (`seen` gets a parameter `args: String?` written to the record's `args`: the
-    controls and `layoutKey` as JSON; `TYPE_SCREEN_NOTE = "screen_note"` (new)); `UiWords.kt`
+- [x] **8c. After a run, a cheap model describes each screen of each app.**
+  - **What changes:** `agentcore/ScreenReview.kt` (new), with
+    `data class Control(val label: String?, val role: String, val region: String)` and the pure
+    `ScreenReview.controls(frame)` (new);
+    `RunJournal.kt` (`seen` gets `layoutKey: Long?`, written as `layout_key` into the same `args`
+    object that already holds `same_as` and `frame`; `ToolHub` passes `snap.layoutKey` at its two
+    `seen` calls; `TYPE_SCREEN_NOTE = "screen_note"` and `screenNote(run, id, text)` (new);
+    `ScreenVersion.description` (new), from the run's `screen_note` records); `UiWords.kt`
     (new) with `assets/ui_words.txt` (new, the UI vocabulary below); `AgentCore.kt` (the idle
     pass that calls `learning.review()` also calls `screenReview.review()`; the existing browser
     query becomes `browserPackages()`); the Run logs page in
@@ -417,11 +418,13 @@ in the same commit (AGENTS.md).
     `agentcore/README.md`. `ScreenReview` takes `isBrowser: (String) -> Boolean` and
     `appNames: () -> Set<String>` as constructor lambdas, so the test needs no `PackageManager`.
   - **Logic:**
-    - **Controls, not content.** `ScreenSnapshot` also returns the screen's clickable elements:
-      label, role (button, tab, field, switch, item) and region (one of nine, top-left to
-      bottom-right). Text that is not a control (messages, captions, names in a feed) is not in
-      the list. The journal keeps the list on the `seen` record, so the review never parses the
-      grid.
+    - **Controls, not content.** A screen's controls are the elements of the `frame` its `seen`
+      record already keeps (step 2c) that are flagged clickable (`*`), editable (`e`) or
+      checkable (`c`/`o`): label, role (`field` when editable, `switch` when checkable, `tab` or
+      `button` when the element's class names one, else `item`) and region (one of nine by the
+      box's centre, `top-left` to `bottom-right`). Text that is not a control (messages,
+      captions, names in a feed) is not in the list. So nothing changes in `:mcp-server`, and
+      the review never parses the grid. The frame's `pkg` names the app.
     - **Which runs.** Runs that ended since the last pass (prefs `agentcore_logs`, key
       `screens_reviewed_at` (new)), at most 3 per pass, under the same idle and battery rule as
       `Learning`. Nothing runs when the choice is Off; it defaults to Cloud.
@@ -450,7 +453,8 @@ in the same commit (AGENTS.md).
         then the same allowlist word by word: any word that is not a UI word or an app name
         becomes `[name]`. A note loses some detail ("messaging [name] about [name]"); the intent
         survives, and a name never leaves the phone.
-      - Runs recorded before this step have no controls and are skipped.
+      - A screen with no frame (a hidden app, a browser tool's page) has no controls and is
+        skipped. The labels of the taps that left a screen go through the same allowlist.
     - **Input:** one call per app per run to the FAST role, through the same `ask` that
       `Learning` gets. For each screen file of that app: its id, its masked controls, the
       agent's notes on it (the `seen` argument from step 6) and the taps that left it

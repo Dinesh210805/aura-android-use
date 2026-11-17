@@ -102,22 +102,35 @@ class RunJournal(
      *   holds [NOT_RECORDED] and no screen text. [caption] is the `SEEN:` line.
      */
     /** One screen in the run's history ([ScreenHistory]); [text] null means a hidden app's screen. */
-    fun seen(run: String, id: String, caption: String, text: String?, by: String = BY_MODEL, sameAs: String? = null, frame: String? = null) = write(
+    fun seen(
+        run: String,
+        id: String,
+        caption: String,
+        text: String?,
+        by: String = BY_MODEL,
+        sameAs: String? = null,
+        frame: String? = null,
+        layoutKey: Long? = null,
+    ) = write(
         StepRecord(
             run, now(), TYPE_SEEN, text = caption, detail = id, result = text ?: NOT_RECORDED, by = by,
-            args = seenArgs(sameAs, frame.takeIf { text != null }),
+            args = seenArgs(sameAs, frame.takeIf { text != null }, layoutKey.takeIf { text != null }),
         ),
     )
 
-    /** A seen record's `args`: the revisit link and the screen's frame for drawing; null when neither. */
-    private fun seenArgs(sameAs: String?, frame: String?): String? {
+    /** A seen record's `args`: the revisit link, the screen's frame for drawing and its layout key; null when none. */
+    private fun seenArgs(sameAs: String?, frame: String?, layoutKey: Long?): String? {
         val element = frame?.takeIf { it.isNotBlank() }?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
-        if (sameAs == null && element == null) return null
+        if (sameAs == null && element == null && layoutKey == null) return null
         return buildJsonObject {
             sameAs?.let { put(SAME_AS, it) }
             element?.let { put(FRAME, it) }
+            layoutKey?.let { put(LAYOUT_KEY, it) }
         }.toString()
     }
+
+    /** The screen review's one-line description of screen [id] ([ScreenReview]), shown in the Screens tab. */
+    fun screenNote(run: String, id: String, text: String) = write(StepRecord(run, now(), TYPE_SCREEN_NOTE, text = text, detail = id))
 
     fun tool(run: String, tool: String, args: String, result: String, ok: Boolean, durationMs: Long, shot: StepShot?) {
         val at = now() - durationMs
@@ -234,6 +247,12 @@ class RunJournal(
 
         /** Seen: the `args` key holding the screen's `ScreenFrame` (element boxes), drawn by the Screens view. */
         const val FRAME = "frame"
+
+        /** Seen: the `args` key holding the screen's layout key; the app maps match screens by it. */
+        const val LAYOUT_KEY = "layout_key"
+
+        /** A screen's description from the after-run review: `detail` is the id, `text` the description. */
+        const val TYPE_SCREEN_NOTE = "screen_note"
         private const val MS_PER_DAY = 86_400_000L
     }
 }
@@ -402,6 +421,7 @@ object RunLogBuilder {
     /** A run's `seen` records as one version per id, in time order; read by the model if any record says so. */
     private fun screenVersions(group: List<StepRecord>): List<ScreenVersion> {
         val seen = group.filter { it.type == RunJournal.TYPE_SEEN && !it.detail.isNullOrBlank() }
+        val described = group.filter { it.type == RunJournal.TYPE_SCREEN_NOTE }.associate { it.detail.orEmpty() to it.text.orEmpty() }
         return seen.groupBy { it.detail.orEmpty() }.values.map { records ->
             val first = records.first()
             ScreenVersion(
@@ -412,6 +432,7 @@ object RunLogBuilder {
                 text = first.result?.takeIf { it != RunJournal.NOT_RECORDED },
                 sameAs = argsOf(first)?.get(RunJournal.SAME_AS)?.jsonPrimitive?.contentOrNull,
                 frame = records.firstNotNullOfOrNull { r -> argsOf(r)?.get(RunJournal.FRAME)?.takeIf { it is JsonObject }?.toString() },
+                description = described[first.detail],
             )
         }.sortedBy { it.atMs }
     }
@@ -578,6 +599,8 @@ data class ScreenVersion(
     val sameAs: String? = null,
     /** The screen's `ScreenFrame` JSON (element boxes and labels) for drawing it; null when not recorded. */
     val frame: String? = null,
+    /** What the after-run review said this screen is ([ScreenReview]); null until it has run. */
+    val description: String? = null,
 )
 
 /** Screens a person would call "the same screen", oldest version first; named by its first id. */
