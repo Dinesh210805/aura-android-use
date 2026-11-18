@@ -1,6 +1,6 @@
 # Spec: approvals that reach the user, and a simpler safety layer
 
-> **Status:** planned. **Written:** 2026-11-18. **Branch:** `feat/agentcore`.
+> **Status:** in progress. **Written:** 2026-11-18. **Branch:** `feat/agentcore`.
 
 ## Goal
 
@@ -148,10 +148,11 @@ this spec's hunks there.
     - `ToolHubAskTest` passes. It drives a commit `tap` through `ToolHub.registry` with a fake
       source, the same way `ToolHubSeenTest` does. With a broker that answers `null`, the result
       is `NO_ANSWER` and the source was not called. With "Deny", the result is `DECLINED`.
-    - On the phone: in a run that asks while the About-device page is in front, the card shows
-      on top of it, and `dumpsys window` lists it as `ty=ACCESSIBILITY_OVERLAY`, `isOnScreen=true`.
-      Left unanswered, the notification shows Allow and Deny after 10 s. Tapping Allow lets the
-      step run, and the run log shows "You allowed".
+    - On the phone, task "Open About device in Settings, then ask me whether to open Wi-Fi or
+      Bluetooth next, and open the one I pick": the card shows on top of the About-device page,
+      and `dumpsys window` lists it as `ty=ACCESSIBILITY_OVERLAY`, `isOnScreen=true`. Left
+      unanswered, the notification shows the two options after 10 s; tapping one opens that page.
+      (The gate card's Allow path is the same broker and card, and `ToolHubAskTest` covers it.)
   - **Changed while building:** the spoken fallback was dropped. `VoiceLoop.reply` is a no-op
     without an open voice conversation, and an accessibility-overlay card can fail only when the
     accessibility service is off, when AURA cannot act at all.

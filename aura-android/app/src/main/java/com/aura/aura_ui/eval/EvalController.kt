@@ -75,16 +75,18 @@ object EvalController {
                 referee = EvalHostReferee(),
             ).also { r ->
                 scope.launch {
-                    var wasGated = false
+                    var wasRunning = false
                     r.state.collect { st ->
                         _state.value = st
-                        // The moment the runner starts waiting for a verdict, put the cockpit in
-                        // front of the user. It is buried behind whatever app the agent was just
-                        // driving, so otherwise the "score me" state is invisible and the sweep
-                        // looks like it silently stopped. Edge-triggered: re-launching the activity
-                        // on every state emission would fight the user trying to leave it.
-                        if (st.haltedForScoring && !wasGated) bringCockpitToFront(app)
-                        wasGated = st.haltedForScoring
+                        // The moment the runner stops running (a single task done, a sweep paused
+                        // for a verdict or a quota, a sweep finished), put the cockpit in front of
+                        // the user. It is buried behind whatever app the agent was just driving,
+                        // and the overlay shows no report for eval runs, so otherwise the result is
+                        // invisible. Edge-triggered: re-launching the activity on every state
+                        // emission would fight the user trying to leave it.
+                        val running = st.phase == EvalRunner.Phase.RUNNING
+                        if (wasRunning && !running) bringCockpitToFront(app)
+                        wasRunning = running
                     }
                 }
             }
