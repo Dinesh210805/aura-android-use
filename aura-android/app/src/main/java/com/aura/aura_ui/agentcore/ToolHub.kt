@@ -1061,8 +1061,13 @@ class ToolHub(
             "text", "q", "query", "phone", "body", "message", "msg", "subject", "search", "term", "to", "destination", "daddr",
         )
 
-        /** A URL or intent link inside JSON text: up to the next quote, backslash or space. */
-        private val URL = Regex("""(?i)(?:[a-z][a-z0-9+.\-]*://|intent:)[^\s"\\]+""")
+        /**
+         * Any `scheme:` link inside JSON text (`https://…`, `mailto:…`, `sms:…`, `intent:…`), up to
+         * the next quote, backslash or space. Why every scheme: `mailto:x?body=…` carries data
+         * without `//`. An Android action or a package has no colon, so it never matches; other
+         * text with a colon fails closed as a send-out.
+         */
+        private val URL = Regex("""(?i)(?<![a-z0-9+.\-])[a-z][a-z0-9+.\-]*:[^\s"\\]+""")
 
         private const val MAX_SAID_IN_QUESTION = 400
         /** Reads that still run one at a time: they wait on the user or change the turn's tools. */

