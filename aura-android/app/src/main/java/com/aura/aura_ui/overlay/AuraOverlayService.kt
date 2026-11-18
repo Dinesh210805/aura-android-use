@@ -802,7 +802,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             failedActions = failedPhoneActions,
             trail = com.aura.aura_ui.services.StepPill.trail(),
         )
-        finishRun(reply, card, showCard = source != "external")
+        finishRun(reply, card)
     }
 
     /**
@@ -811,13 +811,15 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
      * - Contract: the prompt box comes back; a run that drove the phone shows its report card on
      *   it, and the mic closes. An answer alone gets a short follow-up window. Typed work is never
      *   spoken.
-     * - Why not for `external` runs: the app's chat handed them off and shows its own card;
-     *   benchmark tasks want no card in their screenshots.
+     * - Why `external` runs too (the chat's hand-off, the eval cockpit, the voice companion): each
+     *   leaves the user on whatever screen the agent stopped at, where the overlay is the only
+     *   place the answer can be read. The eval cockpit hides the overlay when it comes forward,
+     *   and screenshots already hide AURA's windows (`OverlayCaptureGate`).
      */
-    private fun finishRun(reply: String, card: com.aura.aura_ui.services.RemoteRun.Report?, showCard: Boolean) {
+    private fun finishRun(reply: String, card: com.aura.aura_ui.services.RemoteRun.Report?) {
         agentDriving = false
         hitlAwaitingInput = false
-        if (card != null && showCard) com.aura.aura_ui.services.RemoteRun.shared.showOnDeviceReport(card)
+        card?.let(com.aura.aura_ui.services.RemoteRun.shared::showOnDeviceReport)
         if (_isMinimized.value) {
             restoreOverlay()
         } else {
@@ -939,7 +941,7 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         }
         conversationViewModel.addAssistantMessage(reply)
         // resumeRun shows its own report card.
-        finishRun(reply, card = null, showCard = false)
+        finishRun(reply, card = null)
     }
 
     /**
