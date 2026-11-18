@@ -422,6 +422,10 @@ object SafetyGate {
         "The user declined this step. Nothing was sent or changed. Do not retry it or reach the same " +
             "result another way; ask the user what they want changed."
 
+    /** What the model is told when a card got no answer: silence is not a no, and not a yes. */
+    const val NO_ANSWER =
+        "The user did not answer. Nothing was sent or changed. Ask again later or tell the user what you need."
+
     private const val MAX_ARGS_IN_QUESTION = 200
     private const val MAX_TEXT_IN_QUESTION = 120
 

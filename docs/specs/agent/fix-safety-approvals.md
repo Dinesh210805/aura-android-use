@@ -114,29 +114,33 @@ this spec's hunks there.
     number is refused.
 
 - [ ] **2. Every question reaches the user, and silence is not a no.**
+  - **Root cause (reproduced 2026-11-18, eval task 39 on the Part A APK, "About device" page in
+    front):** the card's window was added and drawn, but `dumpsys window` showed it with
+    `mForceHideNonSystemOverlayWindow=true`, `mPolicyVisibility=false`, `isOnScreen=false`.
+    Sensitive Settings pages hide every `TYPE_APPLICATION_OVERLAY` window, which is what the card
+    was. AURA's status strip stayed visible because it is a `TYPE_ACCESSIBILITY_OVERLAY` hosted by
+    `AuraAccessibilityService`, and those are not hidden.
   - **What changes:**
-    - `presentation/overlay/QuestionCardOverlay.kt`: `show` returns whether the window was added.
-    - `overlay/AuraOverlayService.kt`: `startHitlObserver`, and `speakQuestion` (its `voiceOn`
-      guard is skipped when the card was not added).
-    - `agent/hitl/QuestionNotification.kt` (new): one notification per pending question.
-    - `ToolHub.kt`: the confirm in `HubTool.gated` and the connector card both call
-      `broker.ask` and treat `null` as no answer.
+    - `presentation/overlay/QuestionCardOverlay.kt`: `show` hosts the window on
+      `AuraAccessibilityService.instance` as `TYPE_ACCESSIBILITY_OVERLAY` when the service is
+      bound, as `AgentStatusOverlay` and `EdgeGlow` already do; else `TYPE_APPLICATION_OVERLAY`.
+    - `overlay/QuestionNotification.kt` (new): the notification for a pending question.
+    - `overlay/AuraOverlayService.kt`: `startHitlObserver` posts and removes it;
+      `onStartCommand` handles `ACTION_ANSWER_QUESTION` (new) from its buttons.
+    - `ToolHub.kt`: the gate card in `HubTool.gated` (phone and connector) calls `broker.ask`
+      and treats `null` as no answer.
     - `SafetyGate.NO_ANSWER` (new): the model's message.
     - `ToolHubAskTest` (new), `agentcore/README.md`.
-    - `UserBroker.confirm` keeps its `Boolean` for `memoryTools` and `skillTools`
-      (`AgentCore.kt:141`), where silence still means no.
+    - `UserBroker.confirm` keeps its `Boolean` for `memoryTools` and `skillTools`, where silence
+      still means no.
   - **Logic:**
-    - **Reproduce first.** On the phone, with Settings in front, start a run that asks
-      (`propose_action` on a test message). Read `adb logcat -s QuestionCardOverlay` and
-      `adb shell dumpsys window windows | grep -i aura`. Write the root cause into this step and
-      fix it before going on.
-    - **The notification.** While `AskUserBroker.pending` holds a question, a high-priority
-      notification shows it, with up to 3 of its options as action buttons (Allow / Deny for a
-      confirm). A button calls `AskUserBroker.answer`. Tapping the notification opens the
-      overlay's prompt. It is removed when the question is answered or times out. This is the
-      fallback, whatever made the card fail.
-    - **The voice.** When `questionCard.show` reports that the window was not added, the
-      question is spoken even outside a voice conversation.
+    - **The card** is an accessibility overlay, so a page that hides app overlays does not hide it.
+    - **The notification.** If a question is still unanswered 10 s after it appeared, a
+      high-priority notification shows it, with up to 3 of its options as action buttons
+      (Allow / Deny for a gate card). A button sends `ACTION_ANSWER_QUESTION` to
+      `AuraOverlayService`, which calls `AskUserBroker.answer`. It is removed when the question
+      is answered or times out. Why 10 s: a heads-up notification would cover the card for a
+      quick answer; the notification is the fallback for a card the user cannot see.
     - **Silence.** A gate card with no answer after 120 s writes the note "You did not answer
       within 2 minutes". The model gets `NO_ANSWER`: "The user did not answer. Nothing was sent
       or changed. Ask again later or tell the user what you need". It does not get `DECLINED`.
@@ -144,8 +148,13 @@ this spec's hunks there.
     - `ToolHubAskTest` passes. It drives a commit `tap` through `ToolHub.registry` with a fake
       source, the same way `ToolHubSeenTest` does. With a broker that answers `null`, the result
       is `NO_ANSWER` and the source was not called. With "Deny", the result is `DECLINED`.
-    - On the phone: in a run that asks while Settings is in front, the notification shows Allow
-      and Deny. Tapping Allow lets the step run, and the run log shows "You allowed".
+    - On the phone: in a run that asks while the About-device page is in front, the card shows
+      on top of it, and `dumpsys window` lists it as `ty=ACCESSIBILITY_OVERLAY`, `isOnScreen=true`.
+      Left unanswered, the notification shows Allow and Deny after 10 s. Tapping Allow lets the
+      step run, and the run log shows "You allowed".
+  - **Changed while building:** the spoken fallback was dropped. `VoiceLoop.reply` is a no-op
+    without an open voice conversation, and an accessibility-overlay card can fail only when the
+    accessibility service is off, when AURA cannot act at all.
 
 - [ ] **3. The run log shows clock times and waits.**
   - **What changes:** `RunJournal.kt` (`RunLogBuilder`: each `ask` record becomes a `LogKind.WAIT`

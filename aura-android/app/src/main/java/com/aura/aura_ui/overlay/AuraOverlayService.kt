@@ -226,6 +226,14 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         const val ACTION_RUN_TASK = "com.aura.RUN_TASK"
         const val EXTRA_TASK_TEXT = "task_text"
 
+        /** A button on [QuestionNotification]: answers [EXTRA_QUESTION_ID] with [EXTRA_ANSWER]. */
+        const val ACTION_ANSWER_QUESTION = "com.aura.ANSWER_QUESTION"
+        const val EXTRA_QUESTION_ID = "question_id"
+        const val EXTRA_ANSWER = "answer"
+
+        /** How long a question waits on the card before [QuestionNotification] also shows it. */
+        private const val QUESTION_NOTIFY_DELAY_MS = 10_000L
+
         private var instance: AuraOverlayService? = null
 
         /**
@@ -1365,6 +1373,14 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 }
             }
             ACTION_ATTACH_RUN_SURFACE -> Unit
+            ACTION_ANSWER_QUESTION -> {
+                val id = intent.getStringExtra(EXTRA_QUESTION_ID)
+                val answer = intent.getStringExtra(EXTRA_ANSWER)
+                if (id != null && answer != null && !AskUserBroker.shared.answer(id, answer)) {
+                    Log.i(TAG, "Notification answer for $id came after the question ended")
+                }
+                QuestionNotification.cancel(this)
+            }
             ACTION_CANCEL_TASK -> {
                 val remoteRun = com.aura.aura_ui.services.RemoteRun.shared
                 if (remoteRun.active.value) {
@@ -2348,10 +2364,13 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         hitlObserverJob?.cancel()
         hitlObserverJob = serviceScope.launch {
             var shownFor: String? = null
+            var notifyJob: Job? = null
             AskUserBroker.shared.pending.collect { pending ->
                 if (pending == null) {
                     shownFor = null
                     hitlAwaitingInput = false
+                    notifyJob?.cancel()
+                    QuestionNotification.cancel(this@AuraOverlayService)
                     questionCard.hide()
                     renderStatusStrip(
                         runActive = com.aura.aura_ui.services.ControlLockStore.shared.localRunning.value ||
@@ -2368,6 +2387,14 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 statusStrip.setEnabled(false)
                 questionCard.show(pending)
                 speakQuestion(pending)
+                // The fallback for a card the user cannot see; later, so it does not cover a quick answer.
+                notifyJob?.cancel()
+                notifyJob = launch {
+                    delay(QUESTION_NOTIFY_DELAY_MS)
+                    if (AskUserBroker.shared.pending.value?.id == pending.id) {
+                        QuestionNotification.show(this@AuraOverlayService, pending)
+                    }
+                }
             }
         }
     }

@@ -835,10 +835,17 @@ class ToolHub(
                         ?.let { "\n\n" + SecretPatterns.redact(it).take(MAX_SAID_IN_QUESTION) }.orEmpty()
                     val card = verdict.question + said
                     journal?.ask(turn.runId, card)
-                    val allowed = broker.confirm(turn, card)
-                    journal?.note(turn.runId, if (allowed) "You allowed ${spec.name}" else "You declined ${spec.name}, or did not answer", ok = allowed)
+                    // Null is silence (timeout, cancel), not a no: the model must not take it as a decline.
+                    val answer = broker.ask(turn, card, listOf(UserBroker.ALLOW, UserBroker.DENY))?.trim()
+                    val allowed = answer?.let(UserBroker.YES::matches) == true
+                    val note = when {
+                        allowed -> "You allowed ${spec.name}"
+                        answer == null -> "You did not answer within 2 minutes"
+                        else -> "You declined ${spec.name}"
+                    }
+                    journal?.note(turn.runId, note, ok = allowed)
                     if (!allowed) {
-                        ToolOutcome(SafetyGate.DECLINED, isError = true)
+                        ToolOutcome(if (answer == null) SafetyGate.NO_ANSWER else SafetyGate.DECLINED, isError = true)
                     } else {
                         if (verdict.unlocksEgress) turn.taint.allowEgress()
                         dispatch(args)

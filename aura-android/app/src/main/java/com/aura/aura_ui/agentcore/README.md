@@ -189,7 +189,11 @@ There is one agent and no sub-agents: the phone has one screen, so two agents ca
 
 The mode (`ApprovalMode`: Ask often, Confirm sends, Hands-free) is picked on the agent page and
 stored in `AgentCore.approvalMode`; Confirm sends is the default. A declined card tells the model
-to ask the user what to change, not to find another route.
+to ask the user what to change, not to find another route. A card nobody answered within 2
+minutes is not a decline: the model gets `SafetyGate.NO_ANSWER` and the run log says "You did not
+answer within 2 minutes". The card is an accessibility overlay so Settings pages that hide app
+overlays do not hide it, and after 10 s a notification with its options as buttons backs it up
+(`overlay/QuestionNotification.kt`).
 
 No model is consulted for any of this, so nothing on a screen or a web page can argue its way
 past it. The phone server's own `SensitivePolicy` and `ActionGuard` still run after the gate.

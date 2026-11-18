@@ -58,6 +58,10 @@ import com.aura.aura_ui.ui.theme.Mono
  *   card exists to be touched. The agent is blocked on the answer, so nothing is driven under it.
  * - Why not focusable: typing happens in the overlay's prompt box ([onType]), the one window that
  *   flips focusable for the keyboard.
+ * - Why an accessibility overlay: sensitive Settings pages ("About device") hide every
+ *   `TYPE_APPLICATION_OVERLAY` window, so the card was added but never on screen. Hosted by
+ *   `AuraAccessibilityService` as `TYPE_ACCESSIBILITY_OVERLAY` it is not hidden, like the status
+ *   strip. Falls back to an app overlay when the service is not bound.
  * - Change together: `AuraOverlayService` (shows it from `AskUserBroker.pending`, hides it for
  *   screenshots, and keeps the status strip off while it is up).
  */
@@ -68,28 +72,32 @@ class QuestionCardOverlay(
     private val onType: () -> Unit,
     private val onSpeak: () -> Unit,
 ) {
-    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private var windowManager: WindowManager? = null
     private var view: ComposeView? = null
 
     fun show(question: PendingQuestion) {
         hide()
-        if (!Settings.canDrawOverlays(context)) {
-            Log.e(TAG, "Cannot show the question — overlay permission missing")
+        val a11y = com.aura.aura_ui.accessibility.AuraAccessibilityService.instance
+        if (a11y == null && !Settings.canDrawOverlays(context)) {
+            Log.e(TAG, "Cannot show the question — no accessibility service and no overlay permission")
             return
         }
-        val compose = ComposeView(context).apply {
+        val host: Context = a11y ?: context
+        val wm = host.getSystemService(WindowManager::class.java) ?: return
+        val compose = ComposeView(host).apply {
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(savedStateOwner)
             setContent { QuestionCard(question, onType, onSpeak) }
         }
-        runCatching { windowManager.addView(compose, layoutParams()) }
-            .onSuccess { view = compose }
+        runCatching { wm.addView(compose, layoutParams(trusted = a11y != null)) }
+            .onSuccess { view = compose; windowManager = wm }
             .onFailure { Log.e(TAG, "Question card rejected by WindowManager: ${it.message}") }
     }
 
     fun hide() {
-        view?.let { runCatching { windowManager.removeView(it) } }
+        view?.let { v -> runCatching { windowManager?.removeView(v) } }
         view = null
+        windowManager = null
     }
 
     /** Off the glass while AURA screenshots, like the strip and the controls. */
@@ -97,12 +105,12 @@ class QuestionCardOverlay(
         view?.visibility = if (hidden) View.INVISIBLE else View.VISIBLE
     }
 
-    private fun layoutParams(): WindowManager.LayoutParams {
+    private fun layoutParams(trusted: Boolean): WindowManager.LayoutParams {
         val density = context.resources.displayMetrics.density
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            if (trusted) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
         ).apply {
