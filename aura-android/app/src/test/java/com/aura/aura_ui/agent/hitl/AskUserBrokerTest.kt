@@ -38,6 +38,18 @@ class AskUserBrokerTest {
         assertNull(broker.pending.value)
     }
 
+    @Test fun `a locked phone cannot answer, and the question waits for the unlock`() = runTest {
+        var locked = true
+        broker.isLocked = { locked }
+        val job = async { broker.ask("Send it?", listOf("Allow", "Deny"), timeoutMs = 5_000) }
+        kotlinx.coroutines.yield()
+        val id = broker.pending.value!!.id
+        assertFalse(broker.answer(id, "Allow"))
+        locked = false
+        assertTrue(broker.answer(id, "Allow"))
+        assertEquals(AskUserAnswer.Answered("Allow"), job.await())
+    }
+
     @Test fun `answer with a stale id is rejected`() = runTest {
         val job = async { broker.ask("Color?", emptyList(), timeoutMs = 5_000) }
         kotlinx.coroutines.yield()

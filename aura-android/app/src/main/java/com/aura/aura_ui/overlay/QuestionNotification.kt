@@ -18,6 +18,8 @@ import com.aura.aura_ui.agent.hitl.PendingQuestion
  * - Why: the fallback for a question card the user cannot see. A notification is never hidden by
  *   the app in front, and it reaches a locked or covered screen.
  * - Fails: silently without the notification permission; the card and the 120 s timeout remain.
+ * - Security: `AskUserBroker.answer` refuses while the phone is locked, so nobody holding a locked
+ *   phone can approve a step from a button; the lock screen shows no question text.
  * - Change together: `AuraOverlayService.startHitlObserver` (posts it after a delay) and its
  *   `onStartCommand` (handles the buttons).
  */
@@ -42,6 +44,14 @@ internal object QuestionNotification {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)
+            // The question can name a person or a message: only "AURA is waiting" on the lock screen.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle("AURA is waiting for you")
+                    .build(),
+            )
         question.options.take(MAX_BUTTONS).forEachIndexed { i, option ->
             builder.addAction(0, option, answerIntent(context, question.id, option, requestCode = i))
         }

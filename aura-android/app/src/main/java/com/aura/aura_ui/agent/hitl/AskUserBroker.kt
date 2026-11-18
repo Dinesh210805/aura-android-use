@@ -47,6 +47,15 @@ class AskUserBroker {
     val pending: StateFlow<PendingQuestion?> = _pending.asStateFlow()
 
     private var deferred: CompletableDeferred<AskUserAnswer>? = null
+
+    /**
+     * True while the phone is locked; set by `AuraOverlayService`. [answer] refuses then.
+     * - Why: the card is an accessibility overlay and the notification has buttons, and both can
+     *   show over the lock screen. Whoever holds a locked phone is not known to be the user, so
+     *   no chip, button or spoken word may approve a step until it is unlocked.
+     */
+    @Volatile
+    var isLocked: () -> Boolean = { false }
     private val seq = AtomicLong(0)
 
     suspend fun ask(question: String, options: List<String>, timeoutMs: Long): AskUserAnswer {
@@ -69,8 +78,9 @@ class AskUserBroker {
         }
     }
 
-    /** UI answer path. False when [id] is stale (question already resolved/replaced). */
+    /** UI answer path. False when [id] is stale (question already resolved/replaced) or the phone is locked. */
     fun answer(id: String, text: String): Boolean = synchronized(this) {
+        if (isLocked()) return false
         val q = _pending.value ?: return false
         if (q.id != id) return false
         deferred?.complete(AskUserAnswer.Answered(text)) ?: return false

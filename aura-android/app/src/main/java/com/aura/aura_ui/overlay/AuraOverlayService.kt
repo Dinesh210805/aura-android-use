@@ -1252,6 +1252,8 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             com.aura.aura_ui.services.AgentStatusRegistry.speech.collect { statusStrip.setSpeech(it) }
         }
         // Questions from any driver, for the service's whole life (remote runs never open the panel).
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        AskUserBroker.shared.isLocked = { keyguard?.isDeviceLocked == true }
         startHitlObserver()
         serviceScope.launch {
             // A run that ended with this service down, such as one cancelled by closing AURA, is
@@ -1376,10 +1378,12 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             ACTION_ANSWER_QUESTION -> {
                 val id = intent.getStringExtra(EXTRA_QUESTION_ID)
                 val answer = intent.getStringExtra(EXTRA_ANSWER)
-                if (id != null && answer != null && !AskUserBroker.shared.answer(id, answer)) {
-                    Log.i(TAG, "Notification answer for $id came after the question ended")
+                // Refused while the phone is locked (AskUserBroker.isLocked); the notification stays.
+                if (id != null && answer != null && AskUserBroker.shared.answer(id, answer)) {
+                    QuestionNotification.cancel(this)
+                } else {
+                    Log.i(TAG, "Notification answer for $id not taken: the phone is locked or the question ended")
                 }
-                QuestionNotification.cancel(this)
             }
             ACTION_CANCEL_TASK -> {
                 val remoteRun = com.aura.aura_ui.services.RemoteRun.shared
