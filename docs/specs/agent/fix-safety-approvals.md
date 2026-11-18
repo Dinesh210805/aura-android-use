@@ -66,7 +66,7 @@ Every step that changes `agentcore/` updates `agentcore/README.md` in the same c
 session has uncommitted edits in `SafetyGate.kt`, `ToolHub.kt` and `ToolSources.kt`. Stage only
 this spec's hunks there.
 
-- [ ] **1. Opening something on the phone is never a send-out.**
+- [x] **1. Opening something on the phone is never a send-out.**
   - **What changes:**
     - `ToolHub.kt`: `sendOut(...)` (new): an `internal` pure function in the companion that
       `HubTool.sendsOut` calls; `OPENS_LOCALLY` is removed. The constructor parameter

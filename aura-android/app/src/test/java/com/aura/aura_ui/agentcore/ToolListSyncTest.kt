@@ -20,7 +20,6 @@ class ToolListSyncTest {
         val lists = mapOf(
             "CORE_TOOLS" to PhoneToolSource.CORE_TOOLS,
             "SCREEN_TOOLS" to PhoneToolSource.SCREEN_TOOLS,
-            "EGRESS_TOOLS" to PhoneToolSource.EGRESS_TOOLS,
             "COMMIT_TOOLS" to PhoneToolSource.COMMIT_TOOLS,
             "TRUSTED_RESULTS" to PhoneToolSource.TRUSTED_RESULTS,
             "PRESS_TOOLS" to PhoneToolSource.PRESS_TOOLS,

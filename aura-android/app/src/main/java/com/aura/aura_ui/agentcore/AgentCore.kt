@@ -29,6 +29,7 @@ import com.aura.aura_ui.agent.hitl.AskUserBroker
 import com.aura.aura_ui.agent.llm.ToolCallDebris
 import com.aura.aura_ui.agent.memory.profileBlockOrEmpty
 import com.aura.aura_ui.agent.readDeviceFacts
+import com.aura.aura_ui.agent.research.InstalledApp
 import com.aura.aura_ui.agent.research.ResearchText
 import com.aura.aura_ui.agent.research.TaskResearch
 import com.aura.aura_ui.agent.research.WebResearch
@@ -150,7 +151,7 @@ class AgentCore private constructor(private val app: Context) {
         journal = telemetry.journal,
         settings = { SafetySettings(approvalMode, deniedApps, deniedContacts) },
         appLabel = { AppDeviceBridge(app).run { foregroundPackage()?.takeIf { it != app.packageName }?.let(::appLabelFor) } },
-        opensInstalledApp = ::opensInstalledApp,
+        appFor = ::appFor,
         findTarget = phone::idsFor,
         elementLabel = phone::labelAt,
         hiddenApp = phone::hiddenApp,
@@ -170,19 +171,21 @@ class AgentCore private constructor(private val app: Context) {
     )
 
     /**
-     * Whether [url] resolves to an installed app that is not a browser. A browser also claims
-     * https links, so "some app handles it" is not enough; the handler must not handle a plain
-     * https page as well.
+     * The installed app [url] opens, when that app is not a browser; null otherwise. The one link
+     * resolver: the send-out check, the money-app check and grants all use it.
+     * - Why not "some app handles it": a browser also claims https links, so the handler must not
+     *   handle a plain https page as well.
+     * - Fails: closed. Null for an `intent:` link (it names its own target), the chooser, or no handler.
      */
-    private fun opensInstalledApp(url: String): Boolean {
-        // An intent: link can name its own package, selector and extras, so where it resolves says
-        // nothing about where its data goes. It always counts as sending out.
-        if (url.startsWith("intent:", ignoreCase = true)) return false
+    private fun appFor(url: String): InstalledApp? {
+        if (url.startsWith("intent:", ignoreCase = true)) return null
         val pm = app.packageManager
         val view = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-        val handler = pm.resolveActivity(view, 0)?.activityInfo?.packageName ?: return false
-        if (handler == "android") return false // the chooser: more than one app, nothing decided
-        return handler !in browserPackages()
+        val handler = pm.resolveActivity(view, 0)?.activityInfo ?: return null
+        // "android" is the chooser: more than one app, nothing decided.
+        if (handler.packageName == "android" || handler.packageName in browserPackages()) return null
+        val label = handler.applicationInfo.loadLabel(pm).toString()
+        return InstalledApp(label, handler.packageName, version = null)
     }
 
     /** Every installed app that opens a plain https page: the browsers. */

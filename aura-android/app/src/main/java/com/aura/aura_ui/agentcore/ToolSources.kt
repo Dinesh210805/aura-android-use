@@ -116,7 +116,7 @@ class PhoneToolSource(context: Context) : ToolSource {
                 origin = ToolOrigin.PHONE,
                 toolset = toolsetOf(tool.name),
                 resultOrigin = resultOriginOf(tool.name),
-                egress = tool.name in EGRESS_TOOLS || tool.name.startsWith("browser_"),
+                egress = tool.name == "web_search" || tool.name.startsWith("browser_"),
             )
         }
 
@@ -269,10 +269,6 @@ class PhoneToolSource(context: Context) : ToolSource {
             "wait_for", "verify_action", "watch_device_events",
         )
 
-        /** Take a URL, an intent or outgoing text, so their arguments can leave the phone. */
-        internal val EGRESS_TOOLS = setOf(
-            "web_search", "open_deeplink", "resolve_deeplink", "system_intent", "open_file", "notification_action",
-        )
 
         /** Acts on the world the moment it is called, with no screen the user confirms on. */
         internal val COMMIT_TOOLS = setOf("notification_action")

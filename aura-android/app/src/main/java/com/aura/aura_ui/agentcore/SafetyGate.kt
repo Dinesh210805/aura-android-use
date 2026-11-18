@@ -182,8 +182,9 @@ object SafetyGate {
 
     /**
      * Why the user's own deny lists forbid [call], or null. An app counts when it is in front for an
-     * action or named by an opener; a person counts when named in what is sent or, for a commit tap,
-     * on the screen being committed. Word-bounded, so "Ram" does not match "Ramesh".
+     * action or named by an opener; a person counts when named in any non-read call's arguments
+     * (a link, an intent, typed text) or, for a commit tap, on the screen being committed.
+     * Word-bounded, so "Ram" does not match "Ramesh".
      */
     internal fun blocked(call: ToolCallRequest, settings: SafetySettings): String? {
         if (call.risk == ToolRisk.READ && call.tool != PROPOSE_ACTION) return null
@@ -191,9 +192,6 @@ object SafetyGate {
         settings.deniedApps.firstOrNull { app ->
             mentions(call.appLabel, app) || (opener && mentions(call.argsText, app))
         }?.let { return "policy_blocked: the user does not let AURA use $it. Tell them you cannot do this there." }
-        val sends = call.egress || call.tool == PROPOSE_ACTION || call.origin == ToolOrigin.CONNECTOR ||
-            CommitLabels.isCommit(call.targetLabel)
-        if (!sends) return null
         settings.deniedContacts.firstOrNull { who ->
             mentions(call.argsText, who) || (CommitLabels.isCommit(call.targetLabel) && mentions(call.screenTitle, who))
         }?.let { return "policy_blocked: the user does not let AURA message $it. Tell them you cannot send this." }

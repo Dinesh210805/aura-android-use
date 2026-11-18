@@ -248,4 +248,11 @@ class SafetyGateTest {
         val toNumber = ToolCallRequest(SafetyGate.PROPOSE_ACTION, ToolRisk.READ, ToolOrigin.NATIVE, "{\"to\":\"+91 98765-43210\"}")
         assertTrue(SafetyGate.blocked(toNumber, s) != null)
     }
+
+    @Test
+    fun `an SMS intent to a denied number is refused though it is not a send-out`() {
+        val s = SafetySettings(deniedContacts = setOf("98765 43210"))
+        val sms = ToolCallRequest("system_intent", ToolRisk.ACT, ToolOrigin.PHONE, """{"action":"sendto","data":"smsto:+919876543210"}""")
+        assertTrue(SafetyGate.evaluate(sms, RunMode.FOREGROUND, TurnTaint(), s) is Verdict.Deny)
+    }
 }

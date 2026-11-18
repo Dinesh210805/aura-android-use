@@ -1,6 +1,6 @@
 # agentcore
 
-> **Last reviewed:** 2026-11-17.
+> **Last reviewed:** 2026-11-18.
 >
 > **Keep this file and the KDoc current.** If you change a file listed here, update its header
 > comment and this README in the same commit.
@@ -170,9 +170,14 @@ There is one agent and no sub-agents: the phone has one screen, so two agents ca
    commits in a turn that read a notification or web page ask.
 5. A connector write asks the user, except in Hands-free mode on a turn that read nothing private.
 6. After the turn has read private content (screen, notification, file, connector), the first call
-   that sends data off the phone asks once per turn, in every mode. A link or intent that lands in
-   an installed app (`https://wa.me/…` into WhatsApp, `system_intent`) is not a send-out: that
-   app's own Send is the commit.
+   that sends data off the phone asks once per turn, in every mode. A send-out (`ToolHub.sendOut`)
+   is a tool that fetches the web itself (`web_search`, `browser_*`, `web_extract`), or a call
+   carrying a URL that does not open in an installed, non-browser app with only the user's own
+   words in it (`AgentCore.appFor`, `ToolHub.dictatedOnly`); an `intent:` link always counts. An
+   Android action (`android.settings.WIFI_SETTINGS`), a package or a file is not a URL, and a link
+   into WhatsApp with the user's words is not a send-out: that app's own Send is the commit. A
+   connector call is not a send-out either: it goes to an account the user signed in to, and its
+   writes get the card in rule 5. A denied contact is refused on every call that is not a read.
 7. In Ask often mode, opening an app, link, intent or file also asks.
 8. `propose_action(app, to, message)` shows one card with the exact text before a send. A yes is a
    `Grant` on the chat (in memory, 10 minutes): it covers a link or connector call carrying that

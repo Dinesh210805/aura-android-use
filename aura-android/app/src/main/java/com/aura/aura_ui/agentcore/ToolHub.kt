@@ -1,5 +1,6 @@
 package com.aura.aura_ui.agentcore
 
+import com.aura.aura_ui.agent.research.InstalledApp
 import ai.koog.agents.core.annotation.InternalAgentsApi
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
@@ -328,11 +329,11 @@ class ToolHub(
     /** The app in front, by its label, for the verification card's title. Null when unknown. */
     private val appLabel: suspend () -> String? = { null },
     /**
-     * True when [url] opens in an installed app other than a browser (`https://wa.me/…` → WhatsApp).
-     * Such a link hands text to an app on this phone, which still needs its own Send, so it is not
-     * a send-out. Fails closed: false when unsure.
+     * The non-browser app [url] opens (`https://wa.me/…` → WhatsApp), or null. Such a link hands
+     * text to an app on this phone, which still needs its own Send, so it is not a send-out.
+     * Fails closed: null when unsure.
      */
-    private val opensInstalledApp: (url: String) -> Boolean = { false },
+    private val appFor: (url: String) -> InstalledApp? = { null },
     /** The som_ids carrying a label on the latest screen read, for `do_steps`. */
     private val findTarget: (label: String) -> List<Int> = { emptyList() },
     /** Any element's label on the latest screen read, for the run's trace. */
@@ -796,7 +797,7 @@ class ToolHub(
             val traceLabel = label ?: (args["som_id"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()?.let(elementLabel)
             val argsText = args.toString()
             val request = ToolCallRequest(
-                spec.name, spec.riskFor?.invoke(args) ?: spec.risk, spec.origin, argsText, sendsOut(argsText), label,
+                spec.name, spec.riskFor?.invoke(args) ?: spec.risk, spec.origin, argsText, sendOut(spec.egress, argsText, turn.request, turn.contactNumbers.toSet(), appFor), label,
                 appLabel = if ((label != null && CommitLabels.isCommit(label)) || (spec.risk != ToolRisk.READ && settings().deniedApps.isNotEmpty())) {
                     runCatching { appLabel() }.getOrNull()
                 } else {
@@ -895,26 +896,6 @@ class ToolHub(
 
         private fun callKey(args: JsonObject): String = spec.name + args.toString()
 
-        /**
-         * Whether this call's arguments can leave the phone. Any URL can, whatever the tool is
-         * classified as, except a link or intent that lands in an installed app: that app's own
-         * Send is the commit, and it is gated there.
-         */
-        private fun sendsOut(argsText: String): Boolean {
-            // Found in the serialised arguments, so a URL nested in an object or array counts too.
-            val urls = URL.findAll(argsText).map { it.value }.toList()
-            // No URL: an intent or file opened on this phone hands its text to an app that still
-            // needs its own Send. A URL anywhere must land in an installed, non-browser app, or a
-            // browser could carry private text off the phone in the address.
-            if (urls.isEmpty()) return if (spec.name in OPENS_LOCALLY) false else spec.egress || "://" in argsText
-            // An app can report the link it was opened with to its own servers, so a link counts
-            // as staying on the phone only when its query and fragment hold nothing but the
-            // user's own words: "send hi to Amma" may open wa.me/<number>?text=hi; text read off a
-            // screen or notification may not ride along unchecked.
-            val local = spec.name == OPEN_DEEPLINK || spec.name in OPENS_LOCALLY
-            return !(local && urls.all { url -> dictatedOnly(url, turn.request, turn.contactNumbers.toSet()) && runCatching { opensInstalledApp(url) }.getOrDefault(false) })
-        }
-
         override fun decodeResult(rawResult: JSONElement, serializer: JSONSerializer): ToolOutcome =
             json.decodeFromJsonElement(ToolOutcome.serializer(), rawResult.toKotlinxJsonElement())
 
@@ -935,7 +916,32 @@ class ToolHub(
         private const val READ_SCREEN = "read_screen"
         private const val LOAD_TOOLSET = "load_toolset"
         const val APP_MAP = "app_map"
-        private const val OPEN_DEEPLINK = "open_deeplink"
+
+        /**
+         * Whether a call's arguments can leave the phone: the tool fetches the web itself
+         * ([egress]: `web_search`, `browser_*`, `web_extract`, connectors), or a string argument is
+         * a URL that does not land in an installed app.
+         * - An `intent:` link always counts: it can name its own target and extras.
+         * - Any other URL stays on the phone only when [appFor] names a non-browser app for it and
+         *   it passes [dictatedOnly]: an app can report the link it was opened with to its own
+         *   servers, so only the user's own words may ride along.
+         * - An Android action (`android.settings.WIFI_SETTINGS`), a package, a file or a share
+         *   intent is not a URL, so it never counts: the app it opens needs its own Send, which is
+         *   a commit and gated there.
+         * - Found in the serialised arguments, so a URL nested in an object or array counts too.
+         * - Fails: closed. A throwing [appFor] counts as no app.
+         */
+        internal fun sendOut(
+            egress: Boolean,
+            argsText: String,
+            request: String,
+            numbers: Set<String>,
+            appFor: (url: String) -> InstalledApp?,
+        ): Boolean = egress || URL.findAll(argsText).any { m ->
+            val url = m.value
+            url.startsWith("intent:", ignoreCase = true) || !dictatedOnly(url, request, numbers) ||
+                runCatching { appFor(url) }.getOrNull() == null
+        }
 
         /**
          * True when [url] carries nothing but routing and the user's own words, so handing it to an
@@ -1058,8 +1064,6 @@ class ToolHub(
         /** A URL or intent link inside JSON text: up to the next quote, backslash or space. */
         private val URL = Regex("""(?i)(?:[a-z][a-z0-9+.\-]*://|intent:)[^\s"\\]+""")
 
-        /** Open something on this phone; their text reaches an app that still needs its own Send. */
-        private val OPENS_LOCALLY = setOf("system_intent", "open_file", "launch_app")
         private const val MAX_SAID_IN_QUESTION = 400
         /** Reads that still run one at a time: they wait on the user or change the turn's tools. */
         private val SEQUENTIAL = setOf("ask_user", "load_toolset", "update_plan")
