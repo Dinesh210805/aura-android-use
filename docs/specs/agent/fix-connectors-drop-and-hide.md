@@ -44,7 +44,7 @@ docs, chat, notes, tasks, issues) over driving that app's screen.
   - **Done when:** `ComposioAppsTest` passes, including "a link elsewhere in the reply does not
     make a connected app a sign-in", "the summary decides a one-app reply", "a logo is never
     taken for a sign-in link" (all three failed before the fix).
-- [ ] **2. Only the user's switch turns an app off.**
+- [x] **2. Only the user's switch turns an app off.** (2026-11-19: on the phone, the app stayed on after closing AURA from recents and reopening Connectors.)
   - **What changes:** `ComposioAccounts.check` (adds on Active only), `AgentPagesViewModel.recheck`,
     `AppState.Waiting.again` (new), `ConnectorsUi.AppRow` wording.
   - **Done when:** on the phone, turn Gmail on, close AURA from recents, open Connectors again:
