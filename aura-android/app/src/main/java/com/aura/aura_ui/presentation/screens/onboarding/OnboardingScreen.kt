@@ -148,7 +148,13 @@ import com.aura.aura_ui.presentation.components.rememberMonoScheme
 import com.aura.aura_ui.presentation.permissions.AuraPermission
 import com.aura.aura_ui.presentation.permissions.PermissionRegistry
 import com.aura.aura_ui.presentation.permissions.openPermissionSystemPage
+import androidx.compose.ui.text.style.TextOverflow
+import com.aura.aura_ui.ui.theme.AuraShape
+import com.aura.aura_ui.ui.theme.AuraType
+import com.aura.aura_ui.ui.theme.LocalAura
 import com.aura.aura_ui.ui.theme.Mono
+import com.aura.aura_ui.ui.theme.auraBackground
+import com.aura.aura_ui.ui.theme.auraCardStrong
 import com.aura.aura_ui.utils.AppInventoryScanner
 import com.aura.aura_ui.utils.isLaunchable
 import com.aura.aura_ui.presentation.utils.HapticUtils
@@ -230,15 +236,15 @@ fun OnboardingScreen(
         (step != 2 || isSignedIn || signInSkippable) &&
         (step != 8 || keyVerified)
 
-    // Standard Ink / TextOnInk button colors matching AURA
-    val buttonBg = if (scheme.isDark) Color.White else Mono.Ink
-    val buttonFg = if (scheme.isDark) Mono.Ink else Mono.TextOnInk
-    val onboardingCanvas = Color(0xFFFCF4E6) // Signature Cream White
+    // The chat's colours: the main button is the accent, as the chat's Send button.
+    val aura = LocalAura.current
+    val pillBg = if (canProceed) aura.accent else aura.well
+    val pillFg = if (canProceed) aura.onAccent else aura.tertiary
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(onboardingCanvas)
+            .auraBackground()
             .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
             .padding(horizontal = if (step == 0) 0.dp else 20.dp),
     ) {
@@ -256,23 +262,24 @@ fun OnboardingScreen(
                 if (isPermissionStep) {
                     Surface(
                         shape = CircleShape,
-                        color = Color(0xFFEFE8DA),
+                        color = aura.surfaceStrong,
+                        border = BorderStroke(1.dp, aura.hairline),
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .clickable { step-- },
+                            .clickable(onClickLabel = "Back") { step-- },
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color(0xFF141110),
-                                modifier = Modifier.size(15.dp),
+                                tint = aura.label,
+                                modifier = Modifier.size(18.dp),
                             )
                         }
                     }
                 } else {
-                    Spacer(modifier = Modifier.size(32.dp))
+                    Spacer(modifier = Modifier.size(40.dp))
                 }
 
                 // Step pager pills (Monochrome style)
@@ -286,7 +293,7 @@ fun OnboardingScreen(
                             label = "step_width",
                         )
                         val color by androidx.compose.animation.animateColorAsState(
-                            targetValue = if (i == step) buttonBg else scheme.outline.copy(alpha = 0.5f),
+                            targetValue = if (i == step) aura.onSky else aura.onSkyMuted.copy(alpha = 0.35f),
                             label = "step_color",
                         )
                         Surface(
@@ -299,7 +306,7 @@ fun OnboardingScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.size(32.dp))
+                Spacer(modifier = Modifier.size(40.dp))
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -389,8 +396,8 @@ fun OnboardingScreen(
             // Unified Rounded Pill Navbar (Exact size as inside app settings, clean text only, no arrow marks)
             Surface(
                 shape = CircleShape,
-                color = if (canProceed) buttonBg else buttonBg.copy(alpha = 0.4f),
-                shadowElevation = 6.dp,
+                color = pillBg,
+                shadowElevation = if (canProceed) 6.dp else 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -405,17 +412,17 @@ fun OnboardingScreen(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = if (scheme.isDark) Color(0xFF2B2B28) else Color(0xFF222220),
+                        color = pillFg.copy(alpha = 0.16f),
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .clickable { step-- },
+                            .clickable(onClickLabel = "Back") { step-- },
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White,
+                                tint = pillFg,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -453,11 +460,8 @@ fun OnboardingScreen(
                                 8 -> if (keyVerified) "Next" else "Verify Key"
                                 else -> "Launch AURA"
                             },
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.3).sp,
-                            ),
-                            color = buttonFg,
+                            style = AuraType.headline,
+                            color = pillFg,
                         )
                     }
 
@@ -478,6 +482,8 @@ fun OnboardingAnimationCard(
     modifier: Modifier = Modifier,
     onWebViewCreated: ((WebView) -> Unit)? = null,
 ) {
+    // The pages read `?theme=dark` and switch to Classic dark colours (style block at the top of each file).
+    val dark = LocalAura.current.isDark
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = Color.Transparent,
@@ -502,7 +508,7 @@ fun OnboardingAnimationCard(
                         useWideViewPort = true
                         loadWithOverviewMode = true
                     }
-                    loadUrl("file:///android_asset/onboarding/$assetFileName")
+                    loadUrl("file:///android_asset/onboarding/$assetFileName" + if (dark) "?theme=dark" else "")
                     onWebViewCreated?.invoke(this)
                 }
             },
@@ -562,7 +568,7 @@ private fun PermissionItemRow(
     }
 }
 
-/** Floating Meaningful Reason Card: Black BG + Red Icon + Crisp White Text + Muted Subtitle */
+/** One reason a permission is asked for: an accent icon, a short title and a line under it, on a card. */
 @Composable
 private fun FloatingReasonCard(
     icon: ImageVector,
@@ -570,55 +576,38 @@ private fun FloatingReasonCard(
     subtitle: String,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF141110),
-        border = BorderStroke(1.dp, Color(0xFF2C2825)),
-        shadowElevation = 2.dp,
-        modifier = modifier.fillMaxWidth(),
+    val aura = LocalAura.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .auraCardStrong(AuraShape.Inner)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(aura.accentSoft),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(Color(0xFF261818)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = Color(0xFFD62828), // Crisp Wine/Red
-                    modifier = Modifier.size(14.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        letterSpacing = (-0.2).sp,
-                    ),
-                    color = Color(0xFFFFFDF8),
-                    maxLines = 1,
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 8.5.sp,
-                        lineHeight = 11.sp,
-                    ),
-                    color = Color(0xFFB0AAA0),
-                    maxLines = 2,
-                )
-            }
+            Icon(icon, contentDescription = null, tint = aura.accent, modifier = Modifier.size(16.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = AuraType.caption, color = aura.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = subtitle, style = AuraType.caption.copy(fontWeight = FontWeight.Normal), color = aura.secondary, maxLines = 2)
         }
     }
+}
+
+/** A step's title and the line under it, drawn on the page itself, so in the page's colours (readable on a sky). */
+@Composable
+private fun StepHeader(title: String, subtitle: String) {
+    val aura = LocalAura.current
+    Text(text = title, style = AuraType.largeTitle, color = aura.onSky)
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(text = subtitle, style = AuraType.callout, color = aura.onSkyMuted)
 }
 
 // ── Step 0: Landing Step (Full-screen Cinematic Intro -> Meet AURA with Red Rings & Compact Pill Button)
@@ -637,8 +626,7 @@ private fun LandingStep(onAdvance: () -> Unit) {
         HapticUtils.performOverlayChimeHaptic(context)
     }
 
-    val buttonBg = if (scheme.isDark) Color.White else Mono.Ink
-    val buttonFg = if (scheme.isDark) Mono.Ink else Mono.TextOnInk
+    val aura = LocalAura.current
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -663,7 +651,7 @@ private fun LandingStep(onAdvance: () -> Unit) {
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = buttonBg,
+                    color = aura.accent,
                     shadowElevation = 6.dp,
                     modifier = Modifier
                         .height(48.dp)
@@ -687,11 +675,8 @@ private fun LandingStep(onAdvance: () -> Unit) {
                     ) {
                         Text(
                             text = "Get Started",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.3).sp,
-                            ),
-                            color = buttonFg,
+                            style = AuraType.headline,
+                            color = aura.onAccent,
                         )
                     }
                 }
@@ -734,20 +719,7 @@ private fun HowAuraWorksStep(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Header
-        Text(
-            text = "How AURA Works",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.8).sp,
-            ),
-            color = scheme.textPrimary,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Autonomous execution with on-device safety guard rails.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.textSecondary,
-        )
+        StepHeader("How AURA Works", "Autonomous execution with on-device safety guard rails.")
 
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -867,20 +839,7 @@ private fun UserProfileAndOAuthStep(
             .navigationBarsPadding(),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "Personalize your AURA",
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.6).sp,
-            ),
-            color = scheme.textPrimary,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Sign in with Google to use AURA, and tell it what to call you.",
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.textSecondary,
-        )
+        StepHeader("Personalize your AURA", "Sign in with Google to use AURA, and tell it what to call you.")
         Spacer(modifier = Modifier.height(14.dp))
 
         // Profile Input Card
@@ -945,8 +904,8 @@ private fun UserProfileAndOAuthStep(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = Color.White,
-                        border = BorderStroke(1.dp, Color(0xFFE1E4EA)),
+                        color = LocalAura.current.surfaceStrong,
+                        border = BorderStroke(1.dp, LocalAura.current.hairline),
                         modifier = Modifier.size(34.dp),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -1006,7 +965,7 @@ private fun UserProfileAndOAuthStep(
                         onClick = onSignIn,
                         enabled = !signingIn,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Color(0xFFDADCE0)),
+                        border = BorderStroke(1.dp, LocalAura.current.hairline),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(
@@ -1030,7 +989,7 @@ private fun UserProfileAndOAuthStep(
                     Text(
                         text = error,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Mono.Blood,
+                        color = LocalAura.current.danger,
                     )
                 }
             }
@@ -1051,24 +1010,14 @@ private fun RestrictedSettingsStep() {
             .navigationBarsPadding(),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "One Android security step",
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.6).sp,
-            ),
-            color = scheme.textPrimary,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = if (Build.VERSION.SDK_INT >= 33) {
+        StepHeader(
+            "One Android security step",
+            if (Build.VERSION.SDK_INT >= 33) {
                 "Because AURA isn't installed from the Play Store, Android hides the Accessibility " +
                     "toggle behind an extra confirmation. You only need to do this once."
             } else {
                 "Your Android version doesn't have this extra step — you can continue straight to permissions."
             },
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.textSecondary,
         )
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -1510,20 +1459,7 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
             .navigationBarsPadding(),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "Bring your own Gemini key",
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.6).sp,
-            ),
-            color = scheme.textPrimary,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Required — drives both Agent Brain reasoning and natural Gemini Live voice mode.",
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.textSecondary,
-        )
+        StepHeader("Bring your own Gemini key", "Required — drives both Agent Brain reasoning and natural Gemini Live voice mode.")
         Spacer(modifier = Modifier.height(12.dp))
         // Change together: GEMINI_PRESET_NOTE in ProviderSettingsScreen says the same thing.
         Surface(
@@ -1654,7 +1590,7 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (verifying) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Mono.Ink)
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalAura.current.label)
                         Spacer(Modifier.width(8.dp))
                         Text("Verifying Key...")
                     } else if (verified) {
@@ -1667,7 +1603,7 @@ private fun GeminiKeyStep(onVerifiedChanged: (Boolean) -> Unit) {
                 }
                 error?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = Mono.Blood)
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = LocalAura.current.danger)
                 }
             }
         }
@@ -1765,18 +1701,15 @@ private fun RestrictedAppsStep() {
             }
             Text(
                 text = "Banking & Sensitive Guard",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.6).sp,
-                ),
-                color = scheme.textPrimary,
+                style = AuraType.title,
+                color = LocalAura.current.onSky,
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = "AURA scans installed apps to automatically decline actions in financial and authenticator apps.",
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.textSecondary,
+            style = AuraType.callout,
+            color = LocalAura.current.onSkyMuted,
         )
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -1787,7 +1720,7 @@ private fun RestrictedAppsStep() {
                 Text("Scanning apps...", style = MaterialTheme.typography.bodyMedium, color = scheme.textSecondary)
             }
         } else if (scanError != null) {
-            Text("Couldn't scan: $scanError", style = MaterialTheme.typography.bodySmall, color = Mono.Blood)
+            Text("Couldn't scan: $scanError", style = MaterialTheme.typography.bodySmall, color = LocalAura.current.danger)
         } else {
             when {
                 entries.isEmpty() -> Text(

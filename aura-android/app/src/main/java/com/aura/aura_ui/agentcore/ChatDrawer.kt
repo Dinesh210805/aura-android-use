@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -17,10 +18,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Hub
-import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Cable
+import androidx.compose.material.icons.outlined.EventRepeat
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Lan
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -34,7 +38,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.aura.aura_ui.presentation.components.AuraDivider
 import com.aura.aura_ui.presentation.components.AuraMark
 import com.aura.aura_ui.presentation.navigation.AuraRoutes
 import com.aura.aura_ui.ui.theme.AuraShape
@@ -71,16 +74,15 @@ fun ChatDrawer(
             Text("AURA", Modifier.padding(start = 10.dp).weight(1f), style = AuraType.title, color = aura.label)
         }
         LazyColumn(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-            item { NavRow("On-device agent", null, mark = true) { go(AuraRoutes.AGENT) } }
-            item { NavRow("MCP server", Icons.Outlined.Hub) { go(AuraRoutes.SETTINGS_MCP_CENTER) } }
-            item { NavRow("Run logs", Icons.Outlined.Timeline) { go(AuraRoutes.RUN_LOGS) } }
-            item { NavRow("Scheduled tasks", Icons.Outlined.Schedule) { go(AuraRoutes.SCHEDULES) } }
+            item { NavRow("On-device agent", Icons.Outlined.Psychology) { go(AuraRoutes.AGENT) } }
+            item { NavRow("Connectors", Icons.Outlined.Cable) { go(AuraRoutes.AGENT_CONNECTORS) } }
+            item { NavRow("Voice", Icons.Outlined.GraphicEq) { go(AuraRoutes.AGENT_COMPANION) } }
+            item { NavRow("Scheduled tasks", Icons.Outlined.EventRepeat) { go(AuraRoutes.SCHEDULES) } }
+            item { NavRow("Run logs", Icons.Outlined.History) { go(AuraRoutes.RUN_LOGS) } }
+            item { NavRow("MCP server", Icons.Outlined.Lan) { go(AuraRoutes.SETTINGS_MCP_CENTER) } }
             item { NavRow("Settings", Icons.Outlined.Settings) { go(AuraRoutes.SETTINGS) } }
-            item {
-                Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { AuraDivider() }
-            }
             if (threads.isNotEmpty()) {
-                item { Text("Chats", Modifier.padding(start = 12.dp, top = 4.dp, bottom = 6.dp), style = AuraType.footnote, color = aura.tertiary) }
+                item { SectionLabel("Chats") }
             }
             items(threads.take(RECENT_CHATS), key = { it.id }) { thread ->
                 ChatRow(thread.title, thread.id == current) {
@@ -93,8 +95,8 @@ fun ChatDrawer(
                     Text(
                         "View all",
                         Modifier.fillMaxWidth().clip(AuraShape.Inner).clickable(role = Role.Button) { go(AuraRoutes.CHATS) }
-                            .heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 12.dp),
-                        style = AuraType.callout,
+                            .heightIn(min = 40.dp).padding(horizontal = 12.dp, vertical = 10.dp),
+                        style = AuraType.footnote,
                         color = aura.secondary,
                     )
                 }
@@ -105,31 +107,38 @@ fun ChatDrawer(
                 Modifier.clip(AuraShape.Pill).background(aura.accent).clickable(onClickLabel = "New chat", role = Role.Button) {
                     vm.open(null)
                     close()
-                }.heightIn(min = 48.dp).padding(horizontal = 20.dp),
+                }.heightIn(min = 44.dp).padding(horizontal = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.Edit, contentDescription = null, tint = aura.onAccent, modifier = Modifier.size(19.dp))
-                Text("New chat", Modifier.padding(start = 8.dp), style = AuraType.headline, color = aura.onAccent)
+                Icon(Icons.Rounded.Edit, contentDescription = null, tint = aura.onAccent, modifier = Modifier.size(17.dp))
+                Text("New chat", Modifier.padding(start = 8.dp), style = AuraType.callout, color = aura.onAccent)
             }
             Spacer(Modifier.weight(1f))
-            Avatar(profile, 44) { go(AuraRoutes.SETTINGS) }
+            Avatar(profile, 38) { go(AuraRoutes.SETTINGS) }
         }
     }
 }
 
+/** The small grey heading over the chats, after a hairline that ends the places above. */
 @Composable
-private fun NavRow(label: String, icon: ImageVector?, mark: Boolean = false, onClick: () -> Unit) {
+private fun SectionLabel(text: String) {
+    val aura = LocalAura.current
+    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp).fillMaxWidth().height(1.dp).background(aura.hairline))
+    Text(text, Modifier.padding(start = 12.dp, top = 8.dp, bottom = 4.dp), style = AuraType.footnote, color = aura.tertiary)
+}
+
+/** A place in the app: a plain outline icon and its name, one line. */
+@Composable
+private fun NavRow(label: String, icon: ImageVector, onClick: () -> Unit) {
     val aura = LocalAura.current
     Row(
-        Modifier.fillMaxWidth().clip(AuraShape.Inner).clickable(role = Role.Button, onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().clip(AuraShape.Inner).clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 44.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        when {
-            mark -> AuraMark(size = 20.dp)
-            icon != null -> Icon(icon, contentDescription = null, tint = aura.label, modifier = Modifier.size(21.dp))
-        }
+        Icon(icon, contentDescription = null, tint = aura.secondary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(14.dp))
-        Text(label, style = AuraType.body, color = aura.label)
+        Text(label, style = AuraType.callout, color = aura.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -139,9 +148,9 @@ private fun ChatRow(title: String, selected: Boolean, onOpen: () -> Unit) {
     Text(
         title,
         Modifier.fillMaxWidth().clip(AuraShape.Inner).background(if (selected) aura.well else aura.surfaceStrong)
-            .clickable(onClickLabel = "Open $title", onClick = onOpen).heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 11.dp),
+            .clickable(onClickLabel = "Open $title", onClick = onOpen).heightIn(min = 40.dp).padding(horizontal = 12.dp, vertical = 10.dp),
         style = AuraType.callout,
-        color = aura.label,
+        color = if (selected) aura.label else aura.secondary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )

@@ -367,7 +367,9 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
-            AuraUITheme {
+            // Always Classic, light or dark as the system: the step animations
+            // (assets/onboarding/*.html) have Classic light and dark colours, not the sky.
+            AuraUITheme(styleOverride = StyleChoice.CLASSIC) {
                 OnboardingScreen(
                     onDone = {
                         OnboardingPreferences.completeOnboarding()

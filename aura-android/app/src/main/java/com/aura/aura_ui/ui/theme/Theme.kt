@@ -29,11 +29,14 @@ import androidx.core.view.WindowCompat
 @Composable
 fun AuraUITheme(
     darkTheme: Boolean? = null,
+    /** Overrides the user's style; null follows Appearance. */
+    styleOverride: StyleChoice? = null,
     content: @Composable () -> Unit,
 ) {
     val choice by AppearanceStore.theme.collectAsState()
     val accent by AppearanceStore.accent.collectAsState()
-    val style by AppearanceStore.style.collectAsState()
+    val chosenStyle by AppearanceStore.style.collectAsState()
+    val style = styleOverride ?: chosenStyle
     val system = isSystemInDarkTheme()
     val dark = darkTheme ?: when (choice) {
         ThemeChoice.SYSTEM -> system

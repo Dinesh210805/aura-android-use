@@ -1,6 +1,6 @@
 # agentcore
 
-> **Last reviewed:** 2026-11-18.
+> **Last reviewed:** 2026-11-19.
 >
 > **Keep this file and the KDoc current.** If you change a file listed here, update its header
 > comment and this README in the same commit.
@@ -86,8 +86,8 @@ also pulls the folder.
 | `Learning.kt` | The idle review: each finished run leaves a digest (`digests` table); when the agent is idle and the phone is charging or above 30%, the 15-minute worker has the FAST model read up to three and propose memory changes and a skill draft. A tainted run only stages memory adds; drafts always wait in `skill-drafts/` until the user keeps them. The chat shows "AURA learned N things". |
 | `ToolSearch.kt` | Ranking for `find_tools`. A toolset with more than `ToolHub.BIG_TOOLSET` tools is a count in the menu and is reached with `find_tools` then `load_tools`, which appends just those schemas in load order. |
 | `McpOAuth.kt` | OAuth sign-in for a connector by the MCP authorization spec: protected-resource discovery, dynamic client registration (once per authorization server), Authorization Code with PKCE through `McpOAuthCoordinator` and the `aura://mcp/oauth` redirect in `MainActivity`, refresh a minute before expiry. Tokens are stored encrypted (`ProviderKeyStore`, `oauth_<id>`); a connector with `oauth = true` reads its bearer from here before every request. |
-| `ComposioApps.kt` | The app catalog and per-app sign-in for Composio Connect: turning an app on calls `COMPOSIO_MANAGE_CONNECTIONS` for that one toolkit and opens the link it returns; turning one off puts it in `connector_apps_off_<id>`, and `ConnectorToolSource.call` refuses any call that reaches it. Apps the model signs in from a chat show as on. |
-| `ConnectorsUi.kt` | The Connectors page: "Sign in with Composio" (OAuth, no key), then every app one below the other with a switch and a search that takes any Composio app name; other MCP servers below. |
+| `ComposioApps.kt` | The app catalog and per-app sign-in for Composio Connect: the Connectors page asks `COMPOSIO_MANAGE_CONNECTIONS` with action `list` (no side effects) which apps are connected, one call for every app, so the switches follow Composio across restarts and reinstalls; turning an app on runs `add` (a new pending account and sign-in link, at most 10 per app) only when `list` found no active account, and opens that link; turning one off puts it in `connector_apps_off_<id>`, and `ConnectorToolSource.call` refuses any call that reaches it. `parse` reads only the toolkit's own entry (status, then a link-named key, then a one-toolkit summary), never a link elsewhere in the reply. The signed-in list only grows on a confirmed active check and shrinks only when the user turns an app off. Apps the model signs in from a chat show as on. |
+| `ConnectorsUi.kt` | The Connectors page: "Sign in with Composio" (OAuth, no key), then every app one below the other with a switch and a search that takes any Composio app name; other MCP servers below. A re-check never turns an app off: one Composio wants signed in again says so on its row. A connector whose tools changed since approval shows "updated N tools" with Allow (`ConnectorStore.approveCurrent`). |
 | `ConnectorRisk.kt` | Connector tool risk from MCP annotations; per-call risk for Composio's multi-execute from the app tools it runs. |
 | `DoSteps.kt` | `do_steps`: runs a known step list in one call, finding each target by label on a fresh screen and sending every action through the hub's own gate. |
 | `Btw.kt` | `/btw <question>` in the chat: a side question answered on the FAST model with no tools, from the fenced recent chat, while a task runs. Checked before steering, so it never reaches the running turn; the Q and A are visible items only. |
@@ -99,13 +99,14 @@ also pulls the folder.
 | `RunJournal.kt` | The readable run log: request, each step in plain words (`StepPhrase`), every screen the model got by its history id (`seen`), the screen before each press with the pressed element's box, the answer. Redacted, kept 7 days. The AndroidWorld suite copies it per task (`benchmark/suite/device.py`, `efficiency.py`). |
 | (edit and regenerate) | A foreground turn that changed nothing (every call past the gate was a read; `TurnState.changed`) and ended answered or failed leaves `threads.undo`: the context and taint from before it and its first item. The chat then offers Regenerate on the reply and Edit (Try again after a failure) on the message; both take the turn back (`ThreadStore.undo`) and send again. A turn that sent, tapped or saved anything can never be run twice this way. |
 | `ChatTheme.kt` | The chat's colours (Apple system colours, light and dark), Inter type, the glass surface. |
-| `ChatUi.kt` | The chat screen and its ViewModel: greeting with the app marquee, transcript, glass composer with the model picker. No agent logic. |
+| `ChatUi.kt` | The chat screen and its ViewModel: greeting with the app marquee, transcript, glass composer with the model picker and the `/` menu above it. No agent logic. |
+| `SlashCommands.kt` | The `/` menu's commands and their one-line hints: `/new`, `/find`, `/model`, `/files`, `/stop` run at once (each listed only when it applies); `/goal` and `/btw` are filled in for the user to finish, named from `Goals.PREFIX` and `Btw.PREFIX`. A typed `/new` sent as a message stays a message. |
 | `AttachmentReader.kt` | What the user attached, read for the model: pictures as JPEG at most 1,568 px (same bytes every time, so a replayed picture keeps the prompt cache); document text a 20,000-character window at a time (text, PDF page by page with its text layer or ML Kit OCR of the rendered page, Word, Excel); OCR text of a picture for a model that cannot see. `read_attachment` pages a file attached in the current chat. |
 | `DocText.kt` | Word and Excel files as text (zipped XML, read with a size cap and no DTD); `DocChunk`, one window of a document. Pure. |
 | `ChatAttachments.kt` | Attachments in the chat: image thumbnails and file chips with type icons, in the composer (× removes one) and in the sent bubble; a tap opens the image full screen or the file in its app. Pictures decode off the main thread at display size into a 16 MB cache keyed by URI. |
 | `ChatFind.kt` | Find in chat: the search button in the top bar opens a bar that steps through the user's and AURA's messages holding the words, newest first; the transcript scrolls to and tints the match. |
 | `ChatCards.kt` | Cards: files (grid and rows, tap opens, hold shares), contacts (call, message, WhatsApp; tap to choose), results, plan, the question and Allow/Edit/Deny cards, folded steps. |
-| `ChatDrawer.kt` | The drawer (account, chats by day, panels, switches, appearance) and the panels: run log, schedules, memory, skills, connections. |
+| `ChatDrawer.kt` | The drawer: one-line places with outline icons (on-device agent, connectors, voice, scheduled tasks, run logs, MCP server, settings), a hairline, the recent chats, New chat and the account. Navigation only. |
 | `RunLogUi.kt` | Draws `RunLog`: a timeline per run, screenshots with the pressed element outlined, raw values under Details. |
 
 Tests are in `app/src/test/java/com/aura/aura_ui/agentcore/`. Run them with
@@ -168,7 +169,15 @@ There is one agent and no sub-agents: the phone has one screen, so two agents ca
    about the step. The label comes from the tool server (`labelLookup` in
    `InProcessMcpServer.connect`). In Hands-free mode only orders, deletes, unlabelled commits and
    commits in a turn that read a notification or web page ask.
-5. A connector write asks the user, except in Hands-free mode on a turn that read nothing private.
+5. A connector write follows the same rule as a commit: Confirm sends and Ask often always ask;
+   Hands-free asks only for an order or delete (read from the action name, `GMAIL_TRASH_MESSAGE`;
+   an unreadable Composio call counts as a delete) or after the turn read stranger text: a
+   notification, a web page or connector app data such as an email. Composio's catalog lookups
+   (`ConnectorRisk.isCatalog`) carry no origin, so finding a tool does not count. The card names
+   the action ("Allow Gmail: send email?") and shows the values it carries. It offers "Allow in
+   this chat" for that action (`SafetyGate.chatKey`, in memory), except for orders, deletes and
+   turns that read stranger text. `COMPOSIO_MANAGE_CONNECTIONS` is a read: the user approves the
+   sign-in on the provider's page.
 6. After the turn has read private content (screen, notification, file, connector), the first call
    that sends data off the phone asks once per turn, in every mode. A send-out (`ToolHub.sendOut`)
    is a tool that fetches the web itself (`web_search`, `browser_*`, `web_extract`), or a call
@@ -198,7 +207,7 @@ overlays do not hide it, and after 10 s a notification with its options as butto
 No model is consulted for any of this, so nothing on a screen or a web page can argue its way
 past it. The phone server's own `SensitivePolicy` and `ActionGuard` still run after the gate.
 A connector's tools are pinned to the definitions the user approved when adding it
-(`ConnectorPins`); a tool that changes later is hidden.
+(`ConnectorPins`); a tool that changes later is hidden until the user allows it on the Connectors page.
 
 ## Borrowed from the current agent
 

@@ -128,6 +128,19 @@ object HapticUtils {
     }
     
     /**
+     * The haptic for AURA's own touch on screen: a crisp click for a tap, a softer tick when a
+     * swipe presses down. Needs no view, so the accessibility overlay can use it.
+     */
+    fun performAgentTouchHaptic(context: Context, tap: Boolean) {
+        val vibrator = getVibrator(context) ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            vibrator.vibrate(VibrationEffect.createPredefined(if (tap) VibrationEffect.EFFECT_CLICK else VibrationEffect.EFFECT_TICK))
+        } else {
+            vibrator.vibrate(VibrationEffect.createOneShot(if (tap) 14L else 8L, VibrationEffect.DEFAULT_AMPLITUDE))
+        }
+    }
+
+    /**
      * Perform error haptic pattern (double vibration)
      */
     fun performErrorHaptic(context: Context) {

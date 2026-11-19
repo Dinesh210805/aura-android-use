@@ -303,14 +303,15 @@ object AppearanceStore {
     private val _accent = MutableStateFlow(AccentChoice.DEFAULT)
     val theme: StateFlow<ThemeChoice> = _theme.asStateFlow()
     val accent: StateFlow<AccentChoice> = _accent.asStateFlow()
-    private val _style = MutableStateFlow(StyleChoice.SKY)
+    // Classic until the user picks Sky in Appearance.
+    private val _style = MutableStateFlow(StyleChoice.CLASSIC)
     val style: StateFlow<StyleChoice> = _style.asStateFlow()
 
     fun hydrate(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         _theme.value = prefs.getString(KEY_THEME, null)?.let { name -> ThemeChoice.entries.firstOrNull { it.name == name } } ?: ThemeChoice.SYSTEM
         _accent.value = prefs.getString(KEY_ACCENT, null)?.let { name -> AccentChoice.entries.firstOrNull { it.name == name } } ?: AccentChoice.DEFAULT
-        _style.value = prefs.getString(KEY_STYLE, null)?.let { name -> StyleChoice.entries.firstOrNull { it.name == name } } ?: StyleChoice.SKY
+        _style.value = prefs.getString(KEY_STYLE, null)?.let { name -> StyleChoice.entries.firstOrNull { it.name == name } } ?: StyleChoice.CLASSIC
     }
 
     fun setTheme(context: Context, choice: ThemeChoice) {

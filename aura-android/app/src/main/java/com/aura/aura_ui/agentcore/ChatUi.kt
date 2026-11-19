@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -89,7 +91,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -592,6 +596,22 @@ fun AgentChatScreen(
                         vm = vm,
                         onVoice = onVoice,
                         onModels = { modelsOpen = true },
+                        available = { command ->
+                            when (command.action) {
+                                SlashAction.STOP -> running
+                                SlashAction.FILES -> files.isNotEmpty()
+                                SlashAction.FIND -> items.isNotEmpty()
+                                else -> true
+                            }
+                        },
+                        onCommand = { action ->
+                            when (action) {
+                                SlashAction.NEW -> vm.open(null)
+                                SlashAction.FIND -> finding = ""
+                                SlashAction.FILES -> filesOpen = true
+                                SlashAction.MODEL, SlashAction.STOP -> Unit
+                            }
+                        },
                     )
                 }
             }
@@ -993,9 +1013,28 @@ private fun Composer(
     vm: ChatViewModel,
     onVoice: (() -> Unit)?,
     onModels: () -> Unit,
+    available: (SlashCommand) -> Boolean,
+    onCommand: (SlashAction) -> Unit,
 ) {
     val aura = LocalAura.current
     var attached by remember { mutableStateOf(emptyList<Uri>()) }
+    var field by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
+    val commands = SlashCommands.matching(text, available)
+    // MODEL and STOP reuse what the composer already has: the model chip's sheet and the Stop button.
+    val runCommand = { command: SlashCommand ->
+        if (command.takesText) {
+            onText(command.name + " ")
+        } else {
+            onText("")
+            when (command.action) {
+                SlashAction.MODEL -> onModels()
+                SlashAction.STOP -> vm.stop()
+                null -> Unit
+                else -> onCommand(command.action)
+            }
+        }
+    }
+    SlashMenu(commands, onPick = runCommand)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { attached = attached + it }
     val dictation = rememberDictation { heard -> onText(listOf(text.trimEnd(), heard).filter { it.isNotBlank() }.joinToString(" ")) }
     val canSend = text.isNotBlank() || attached.isNotEmpty()
@@ -1036,8 +1075,12 @@ private fun Composer(
                 )
             }
             BasicTextField(
-                value = text,
-                onValueChange = onText,
+                // Text set from outside (the / menu, dictation, a sent message) puts the cursor at its end.
+                value = if (field.text == text) field else TextFieldValue(text, TextRange(text.length)),
+                onValueChange = {
+                    field = it
+                    onText(it.text)
+                },
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 textStyle = AuraType.body.copy(color = aura.label),
                 cursorBrush = SolidColor(aura.label),
@@ -1059,6 +1102,34 @@ private fun Composer(
                 running && text.isBlank() -> RoundButton(Icons.Rounded.Stop, "Stop", onClick = vm::stop)
                 canSend || onVoice == null -> RoundButton(Icons.Rounded.ArrowUpward, "Send", enabled = canSend, onClick = submit)
                 else -> TalkButton(onVoice)
+            }
+        }
+    }
+}
+
+/**
+ * The `/` menu: the commands matching what is typed, on glass just above the composer.
+ * - Contract: draws nothing when [commands] is empty; six rows show and the rest scroll.
+ */
+@Composable
+private fun SlashMenu(commands: List<SlashCommand>, onPick: (SlashCommand) -> Unit) {
+    if (commands.isEmpty()) return
+    val aura = LocalAura.current
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+            .glass(AuraShape.Card).heightIn(max = (6 * 56).dp)
+            .verticalScroll(rememberScrollState()).padding(vertical = 6.dp),
+    ) {
+        commands.forEach { command ->
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                    .clickable(onClickLabel = command.hint, role = Role.Button) { onPick(command) }
+                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(command.name, style = AuraType.headline, color = aura.label, modifier = Modifier.widthIn(min = 72.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(command.hint, style = AuraType.footnote, color = aura.secondary, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }

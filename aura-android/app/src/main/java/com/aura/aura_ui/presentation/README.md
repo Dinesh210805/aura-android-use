@@ -3,7 +3,7 @@
 > **Keep this file current.** If you add, remove, rename or repurpose anything in this folder,
 > update this README in the same commit. A stale map is worse than no map.
 >
-> **Last reviewed:** 2026-11-15.
+> **Last reviewed:** 2026-11-18.
 
 Everything the user sees in the AURA **app** (Settings, onboarding, the MCP centre, traces, eval),
 plus the **overlay UI** the assistant draws on top of other apps. All of it is Jetpack Compose.
@@ -19,7 +19,7 @@ from this folder. There is no `res/values/colors.xml`; the launcher icon is bitm
 | Surface | Entry point | Hosted by |
 |---|---|---|
 | **The app** (normal Activity UI) | `navigation/AuraAppShell.kt` | `MainActivity.kt` → `AuraAppShell(...)` |
-| **First run** | `screens/onboarding/OnboardingScreen.kt` | `MainActivity.kt`, shown before the shell |
+| **First run** | `screens/onboarding/OnboardingScreen.kt`: always Classic, light or dark with the system (`MainActivity` passes `styleOverride`), drawn with the chat's tokens (`AuraType` titles via `StepHeader`, accent main button); its step animations are `assets/onboarding/*.html`, in the same palette | `MainActivity.kt`, shown before the shell |
 | **The overlay** (floating assistant over other apps) | `screens/VoiceAssistantOverlay.kt`, `overlay/*` | `overlay/AuraOverlayService.kt` (outside this folder) |
 
 ⚠️ **The overlay has no Activity window.** Composables used by the overlay can't assume

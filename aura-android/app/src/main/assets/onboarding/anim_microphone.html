@@ -1,6 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>if(/[?&]theme=dark/.test(location.search))document.documentElement.classList.add("dark")</script>
+<style>
+:root{--a-ink:#0D0D0D;--a-sec:#5D5D5D;--a-ter:#8F8F8F;--a-well:#F0F0F0;--a-line:#E3E3E3;--a-canvas:#F9F9F9;--a-paper:#FFFFFF;}
+html.dark{--a-ink:#FFFFFF;--a-sec:#C2C2C2;--a-ter:#8E8E8E;--a-well:#2A2A2A;--a-line:#333333;--a-canvas:#000000;--a-paper:#1C1C1C;}
+html.dark [fill="#0D0D0D"]{fill:#FFFFFF}
+html.dark [stroke="#0D0D0D"]{stroke:#FFFFFF}
+html.dark [stop-color="#0D0D0D"]{stop-color:#FFFFFF}
+html.dark [fill="#5D5D5D"]{fill:#C2C2C2}
+html.dark [stroke="#5D5D5D"]{stroke:#C2C2C2}
+html.dark [stop-color="#5D5D5D"]{stop-color:#C2C2C2}
+html.dark [fill="#8F8F8F"]{fill:#8E8E8E}
+html.dark [stroke="#8F8F8F"]{stroke:#8E8E8E}
+html.dark [stop-color="#8F8F8F"]{stop-color:#8E8E8E}
+html.dark [fill="#F0F0F0"]{fill:#2A2A2A}
+html.dark [stroke="#F0F0F0"]{stroke:#2A2A2A}
+html.dark [stop-color="#F0F0F0"]{stop-color:#2A2A2A}
+html.dark [fill="#E3E3E3"]{fill:#333333}
+html.dark [stroke="#E3E3E3"]{stroke:#333333}
+html.dark [stop-color="#E3E3E3"]{stop-color:#333333}
+html.dark [fill="#F9F9F9"]{fill:#000000}
+html.dark [stroke="#F9F9F9"]{stroke:#000000}
+html.dark [stop-color="#F9F9F9"]{stop-color:#000000}
+html.dark [fill="#FFFFFF"]{fill:#1C1C1C}
+html.dark [stroke="#FFFFFF"]{stroke:#1C1C1C}
+html.dark [stop-color="#FFFFFF"]{stop-color:#1C1C1C}
+html.dark img[src*="aura_logo_mono"]{filter:invert(1)}
+</style>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <style>
@@ -9,15 +37,15 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 
 /* Premium Realistic Smartphone Chassis */
 .phone-wrapper{position:relative;display:flex;justify-content:center;align-items:center;transform:scale(calc(min(calc(100vh / 520px), calc(100vw / 265px), 1) * 0.88));transform-origin:center center}
-.phone-btn-power{position:absolute;right:-3px;top:110px;width:3px;height:38px;background:#2B2925;border-radius:0 2px 2px 0}
-.phone-btn-vol-up{position:absolute;left:-3px;top:90px;width:3px;height:32px;background:#2B2925;border-radius:2px 0 0 2px}
-.phone-btn-vol-down{position:absolute;left:-3px;top:130px;width:3px;height:32px;background:#2B2925;border-radius:2px 0 0 2px}
+.phone-btn-power{position:absolute;right:-3px;top:110px;width:3px;height:38px;background:var(--a-ink);border-radius:0 2px 2px 0}
+.phone-btn-vol-up{position:absolute;left:-3px;top:90px;width:3px;height:32px;background:var(--a-ink);border-radius:2px 0 0 2px}
+.phone-btn-vol-down{position:absolute;left:-3px;top:130px;width:3px;height:32px;background:var(--a-ink);border-radius:2px 0 0 2px}
 
 .phone{
   position:relative;
   width:248px;
   height:498px;
-  background:#141110;
+  background:var(--a-ink);
   border-radius:40px;
   padding:6px;
   box-shadow:
@@ -30,7 +58,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   position:relative;
   width:100%;
   height:100%;
-  background:linear-gradient(180deg, #E6E2D8 0%, #D8D2C4 100%);
+  background:linear-gradient(180deg, var(--a-line) 0%, var(--a-line) 100%);
   border-radius:34px;
   overflow:hidden;
   display:flex;
@@ -46,7 +74,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   transform:translateX(-50%);
   height:13px;
   width:13px;
-  background:#1C1A17;
+  background:var(--a-ink);
   border-radius:7px;
   display:inline-flex;
   align-items:center;
@@ -67,7 +95,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 .notch-cam{
   width:7px;
   height:7px;
-  background:#090909;
+  background:var(--a-ink);
   border-radius:50%;
   flex-shrink:0;
   border:1px solid rgba(255,255,255,0.12);
@@ -92,7 +120,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 .notch-verb{
   font-size:8.5px;
   font-weight:700;
-  color:#F4F1EA;
+  color:var(--a-well);
   letter-spacing:0.3px;
 }
 
@@ -108,40 +136,40 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   background:transparent;
 }
 .time-group{display:flex;align-items:center;gap:4px}
-.time{font-size:9.5px;font-weight:700;color:#1C1A17;letter-spacing:-0.2px}
-.date-tag{font-size:7.5px;font-weight:600;color:#57534A}
+.time{font-size:9.5px;font-weight:700;color:var(--a-ink);letter-spacing:-0.2px}
+.date-tag{font-size:7.5px;font-weight:600;color:var(--a-sec)}
 .status-icons{display:flex;gap:4px;align-items:center}
-.icon-bar{width:11px;height:7px;background:#1C1A17;opacity:0.85;border-radius:1px}
-.icon-wifi{width:8px;height:7px;background:#1C1A17;opacity:0.85;border-radius:2px}
-.icon-battery{width:13px;height:6px;border:1px solid #1C1A17;border-radius:2px;position:relative}
-.icon-battery::after{content:'';position:absolute;left:1px;top:1px;bottom:1px;width:7px;background:#1C1A17;border-radius:1px}
+.icon-bar{width:11px;height:7px;background:var(--a-ink);opacity:0.85;border-radius:1px}
+.icon-wifi{width:8px;height:7px;background:var(--a-ink);opacity:0.85;border-radius:2px}
+.icon-battery{width:13px;height:6px;border:1px solid var(--a-ink);border-radius:2px;position:relative}
+.icon-battery::after{content:'';position:absolute;left:1px;top:1px;bottom:1px;width:7px;background:var(--a-ink);border-radius:1px}
 
 
 
 /* Android Home Screen Content */
 .home-canvas{flex:1;padding:24px 14px 12px;display:flex;flex-direction:column;justify-content:space-between;position:relative}
 .home-clock-widget{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:14px}
-.widget-time{font-size:32px;font-weight:800;color:#1C1A17;letter-spacing:-1px}
-.widget-date{font-size:9px;font-weight:600;color:#57534A}
+.widget-time{font-size:32px;font-weight:800;color:var(--a-ink);letter-spacing:-1px}
+.widget-date{font-size:9px;font-weight:600;color:var(--a-sec)}
 
 /* App Grid Dock with White BG AURA App Icon at Center */
 .app-dock{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.7);border-radius:22px;border:1px solid rgba(255,255,255,0.85)}
 .app-icon{width:34px;height:34px;border-radius:11px;display:flex;justify-content:center;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,0.06);transition:all 0.15s ease}
-.app-icon.phone-app{background:#34C759;color:#FFFFFF}
+.app-icon.phone-app{background:#34C759;color:var(--a-paper)}
 /* AURA App with White Background */
 .app-icon.aura-app{
   width:40px;
   height:40px;
   border-radius:13px;
-  background:#FFFFFF;
+  background:var(--a-paper);
   display:flex;
   justify-content:center;
   align-items:center;
-  box-shadow:0 4px 12px rgba(28,26,23,0.15);
-  border:1px solid #E2DFD5;
+  box-shadow:0 4px 12px rgba(13,13,13,0.15);
+  border:1px solid var(--a-line);
 }
-.app-icon.msg-app{background:#007AFF;color:#FFFFFF}
-.app-icon.camera-app{background:#57534A;color:#FFFFFF}
+.app-icon.msg-app{background:#007AFF;color:var(--a-paper)}
+.app-icon.camera-app{background:var(--a-sec);color:var(--a-paper)}
 .app-icon.aura-app.press{transform:scale(0.88)}
 .app-svg{width:16px;height:16px}
 .aura-dock-img{width:26px;height:26px;object-fit:contain}
@@ -160,11 +188,11 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 }
 .bubble-user{
   align-self:flex-end;
-  background:#1C1A17;
+  background:var(--a-ink);
   border-radius:12px 12px 2px 12px;
   padding:6px 10px;
   font-size:9px;
-  color:#F4F1EA;
+  color:var(--a-well);
   font-weight:600;
   max-width:85%;
   opacity:0;
@@ -176,12 +204,12 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 
 .bubble-aura{
   align-self:flex-start;
-  background:#FFFFFF;
-  border:1px solid #E2DFD5;
+  background:var(--a-paper);
+  border:1px solid var(--a-line);
   border-radius:12px 12px 12px 2px;
   padding:6px 10px;
   font-size:9px;
-  color:#1C1A17;
+  color:var(--a-ink);
   font-weight:600;
   max-width:90%;
   opacity:0;
@@ -202,7 +230,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   right:8px;
   bottom:10px;
   height:48px;
-  background:#1C1A17;
+  background:var(--a-ink);
   border-radius:24px;
   padding:0 6px 0 10px;
   box-shadow:0 12px 32px rgba(0,0,0,0.35);
@@ -226,7 +254,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   display:flex;
   justify-content:center;
   align-items:center;
-  color:#FFFFFF;
+  color:var(--a-paper);
   flex-shrink:0;
   cursor:pointer;
   transition:background 0.2s;
@@ -246,7 +274,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 .ask-aura-text{
   font-size:10.5px;
   font-weight:600;
-  color:#8A867C;
+  color:var(--a-ter);
   letter-spacing:0.2px;
   position:absolute;
   left:4px;
@@ -267,7 +295,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   transition:opacity 0.25s ease, transform 0.25s ease;
 }
 .wave-container.active{opacity:1;transform:translateY(0)}
-.wave-bar{width:2.5px;height:4px;background:#D62828;border-radius:2px;transition:height 0.08s ease}
+.wave-bar{width:2.5px;height:4px;background:var(--a-sec);border-radius:2px;transition:height 0.08s ease}
 
 /* Right Side: AURA Logo as Mic Button (Always visible) with Tooltip */
 .mic-btn-wrapper{position:relative;flex-shrink:0}
@@ -275,7 +303,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   width:36px;
   height:36px;
   border-radius:18px;
-  background:#FFFFFF;
+  background:var(--a-paper);
   display:flex;
   justify-content:center;
   align-items:center;
@@ -285,7 +313,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 }
 .aura-mic-btn.active-pulse{
   transform:scale(0.92);
-  box-shadow:0 0 0 3px #D62828;
+  box-shadow:0 0 0 3px var(--a-sec);
 }
 .aura-mic-logo{width:22px;height:22px;object-fit:contain}
 
@@ -294,14 +322,14 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   position:absolute;
   bottom:44px;
   right:-4px;
-  background:#D62828;
-  color:#FFFFFF;
+  background:var(--a-sec);
+  color:var(--a-paper);
   font-size:7.5px;
   font-weight:700;
   padding:3px 7px;
   border-radius:6px;
   white-space:nowrap;
-  box-shadow:0 4px 10px rgba(214,40,40,0.35);
+  box-shadow:0 4px 10px rgba(93,93,93,0.35);
   opacity:0;
   transform:translateY(4px);
   transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -319,31 +347,31 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   backdrop-filter:blur(10px);
   margin-top:10px;
 }
-.voice-hero-title{font-size:11px;font-weight:800;color:#1C1A17;letter-spacing:-0.2px}
+.voice-hero-title{font-size:11px;font-weight:800;color:var(--a-ink);letter-spacing:-0.2px}
 .voice-orb-container{position:relative;width:60px;height:60px;display:flex;justify-content:center;align-items:center}
-.voice-orb-ring{position:absolute;border-radius:50%;border:1.5px solid #D62828;opacity:0.3;animation:orbWave 2s infinite ease-out}
+.voice-orb-ring{position:absolute;border-radius:50%;border:1.5px solid var(--a-sec);opacity:0.3;animation:orbWave 2s infinite ease-out}
 .voice-orb-ring:nth-child(2){animation-delay:0.6s}
 .voice-orb-ring:nth-child(3){animation-delay:1.2s}
-.voice-orb-core{width:36px;height:36px;border-radius:50%;background:#D62828;display:flex;justify-content:center;align-items:center;box-shadow:0 4px 12px rgba(214,40,40,0.35);z-index:2}
-.voice-orb-svg{width:18px;height:18px;color:#FFFFFF}
+.voice-orb-core{width:36px;height:36px;border-radius:50%;background:var(--a-sec);display:flex;justify-content:center;align-items:center;box-shadow:0 4px 12px rgba(93,93,93,0.35);z-index:2}
+.voice-orb-svg{width:18px;height:18px;color:var(--a-paper)}
 @keyframes orbWave{0%{width:36px;height:36px;opacity:0.8}100%{width:72px;height:72px;opacity:0}}
 
 /* Live Dialogue Bubbles */
 .dialogue-viewport{width:100%;display:flex;flex-direction:column;gap:6px;overflow:hidden}
 .speech-bubble{padding:7px 10px;border-radius:12px;font-size:9px;font-weight:600;line-height:1.35;max-width:88%;opacity:0;transform:translateY(8px);transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
 .speech-bubble.visible{opacity:1;transform:translateY(0)}
-.speech-bubble.user{align-self:flex-end;background:#1C1A17;color:#FFFFFF;border-bottom-right-radius:2px}
-.speech-bubble.aura{align-self:flex-start;background:#FFFFFF;color:#1C1A17;border:1px solid #E8E5DD;border-bottom-left-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.speech-bubble.user{align-self:flex-end;background:var(--a-ink);color:var(--a-paper);border-bottom-right-radius:2px}
+.speech-bubble.aura{align-self:flex-start;background:var(--a-paper);color:var(--a-ink);border:1px solid var(--a-line);border-bottom-left-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
 
 /* Floating Assistant Bubble Overlay */
-.aura-bubble{position:absolute;top:160px;right:14px;width:38px;height:38px;border-radius:50%;background:#FFFFFF;border:1.5px solid #D62828;box-shadow:0 4px 14px rgba(214,40,40,0.25);display:flex;justify-content:center;align-items:center;z-index:60;transform:scale(0);transition:transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)}
+.aura-bubble{position:absolute;top:160px;right:14px;width:38px;height:38px;border-radius:50%;background:var(--a-paper);border:1.5px solid var(--a-sec);box-shadow:0 4px 14px rgba(93,93,93,0.25);display:flex;justify-content:center;align-items:center;z-index:60;transform:scale(0);transition:transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)}
 .aura-bubble.visible{transform:scale(1)}
 .aura-bubble-logo{width:22px;height:22px;object-fit:contain}
 
 /* Lively Micro-Burst Particles (Kaboom Tap Pop) */
 .burst-effect{position:absolute;pointer-events:none;z-index:60;opacity:0;transform:scale(0);transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1)}
 .burst-effect.active{opacity:1;transform:scale(1.4)}
-.burst-particle{position:absolute;width:4px;height:4px;border-radius:50%;background:#D62828;animation:particleFly 0.5s ease-out forwards}
+.burst-particle{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--a-sec);animation:particleFly 0.5s ease-out forwards}
 
 
 
@@ -359,20 +387,20 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
   line-height:1.1;
   letter-spacing:1px;
   text-transform:uppercase;
-  color:#141110;
-  background:#FFFDF8;
-  border:2px solid #141110;
+  color:var(--a-ink);
+  background:var(--a-paper);
+  border:2px solid var(--a-ink);
   padding:3px 8px;
   border-radius:8px;
-  box-shadow:2.5px 2.5px 0 #D62828, 4px 4px 0 #141110;
+  box-shadow:2.5px 2.5px 0 var(--a-sec), 4px 4px 0 var(--a-ink);
   white-space:nowrap;
   user-select:none;
 }
 .manga-sfx.red-sfx{
-  background:#D62828;
-  color:#FFFDF8;
-  border:2px solid #141110;
-  box-shadow:2.5px 2.5px 0 #FFFDF8, 4px 4px 0 #141110;
+  background:var(--a-sec);
+  color:var(--a-paper);
+  border:2px solid var(--a-ink);
+  box-shadow:2.5px 2.5px 0 var(--a-paper), 4px 4px 0 var(--a-ink);
 }
 .manga-sfx-tr{
   top:-8px;
@@ -469,7 +497,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
 
           <!-- Official AURA App with White Background -->
           <div class="app-icon aura-app" id="auraAppIcon">
-            <img src="aura_logo_color.png" class="aura-dock-img" alt="AURA">
+            <img src="aura_logo_mono.png" class="aura-dock-img" alt="AURA">
           </div>
 
           <div class="app-icon msg-app">
@@ -491,7 +519,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
       <div class="transcript-layer">
         <div class="bubble-user" id="bubbleUser">"Hey AURA, what's my next task?"</div>
         <div class="bubble-aura" id="bubbleAura">
-          <img src="aura_logo_color.png" class="aura-bubble-logo" alt="AURA">
+          <img src="aura_logo_mono.png" class="aura-bubble-logo" alt="AURA">
           <span id="auraSpeechText">You have a team sync at 6:30 PM.</span>
         </div>
       </div>
@@ -519,7 +547,7 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
         <div class="mic-btn-wrapper">
           <div class="mic-tooltip" id="micTooltip">Tap to speak</div>
           <div class="aura-mic-btn" id="auraMicBtn">
-            <img src="aura_logo_color.png" class="aura-mic-logo" alt="Mic">
+            <img src="aura_logo_mono.png" class="aura-mic-logo" alt="Mic">
           </div>
         </div>
 
@@ -531,8 +559,8 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
       <!-- Hand Pointer Cursor -->
       <div class="hand-cursor" id="handCursor">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M7.5 2V12.5H6.25C5.00736 12.5 4 13.5074 4 14.75C4 15.3526 4.23933 15.9298 4.66649 16.3541L7.54571 19.2136C9.17647 20.8335 11.3813 21.75 13.6845 21.75H14.5C18.0899 21.75 21 18.8399 21 15.25V12.5C21 11.2574 19.9926 10.25 18.75 10.25C18.4239 10.25 18.1147 10.3197 17.8358 10.4447C17.5137 9.43128 16.5684 8.75 15.5 8.75C15.2079 8.75 14.9293 8.80629 14.6756 8.90858C14.3312 7.93041 13.3986 7.25 12.25 7.25C11.9579 7.25 11.6793 7.30629 11.4256 7.40858V2C11.4256 0.89543 10.5302 0 9.4256 0C8.32103 0 7.5 0.89543 7.5 2Z" fill="#FFFFFF" stroke="#1C1A17" stroke-width="1.6" stroke-linejoin="round"/>
-          <path d="M7.5 9.5H11.5M11.5 11.5H14.5M14.5 13H17.5" stroke="#1C1A17" stroke-width="1.1" stroke-linecap="round"/>
+          <path d="M7.5 2V12.5H6.25C5.00736 12.5 4 13.5074 4 14.75C4 15.3526 4.23933 15.9298 4.66649 16.3541L7.54571 19.2136C9.17647 20.8335 11.3813 21.75 13.6845 21.75H14.5C18.0899 21.75 21 18.8399 21 15.25V12.5C21 11.2574 19.9926 10.25 18.75 10.25C18.4239 10.25 18.1147 10.3197 17.8358 10.4447C17.5137 9.43128 16.5684 8.75 15.5 8.75C15.2079 8.75 14.9293 8.80629 14.6756 8.90858C14.3312 7.93041 13.3986 7.25 12.25 7.25C11.9579 7.25 11.6793 7.30629 11.4256 7.40858V2C11.4256 0.89543 10.5302 0 9.4256 0C8.32103 0 7.5 0.89543 7.5 2Z" fill="#FFFFFF" stroke="#0D0D0D" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M7.5 9.5H11.5M11.5 11.5H14.5M14.5 13H17.5" stroke="#0D0D0D" stroke-width="1.1" stroke-linecap="round"/>
         </svg>
       </div>
 
@@ -547,28 +575,28 @@ body{display:flex;justify-content:center;align-items:center;min-height:100vh;bac
     <!-- Screentone Halftone Cluster -->
     <div class="manga-tone manga-tone-tr">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <circle cx="4" cy="4" r="1.2" fill="#141110"/>
-        <circle cx="12" cy="4" r="1.5" fill="#141110"/>
-        <circle cx="20" cy="4" r="1.8" fill="#D62828"/>
-        <circle cx="4" cy="12" r="1.5" fill="#141110"/>
-        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
-        <circle cx="20" cy="12" r="2.2" fill="#D62828"/>
-        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
-        <circle cx="12" cy="20" r="2.2" fill="#D62828"/>
-        <circle cx="20" cy="20" r="2.5" fill="#D62828"/>
+        <circle cx="4" cy="4" r="1.2" fill="#0D0D0D"/>
+        <circle cx="12" cy="4" r="1.5" fill="#0D0D0D"/>
+        <circle cx="20" cy="4" r="1.8" fill="#5D5D5D"/>
+        <circle cx="4" cy="12" r="1.5" fill="#0D0D0D"/>
+        <circle cx="12" cy="12" r="1.8" fill="#5D5D5D"/>
+        <circle cx="20" cy="12" r="2.2" fill="#5D5D5D"/>
+        <circle cx="4" cy="20" r="1.8" fill="#5D5D5D"/>
+        <circle cx="12" cy="20" r="2.2" fill="#5D5D5D"/>
+        <circle cx="20" cy="20" r="2.5" fill="#5D5D5D"/>
       </svg>
     </div>
     <div class="manga-tone manga-tone-bl">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <circle cx="4" cy="4" r="2.5" fill="#141110"/>
-        <circle cx="12" cy="4" r="2.2" fill="#141110"/>
-        <circle cx="20" cy="4" r="1.8" fill="#141110"/>
-        <circle cx="4" cy="12" r="2.2" fill="#141110"/>
-        <circle cx="12" cy="12" r="1.8" fill="#D62828"/>
-        <circle cx="20" cy="12" r="1.5" fill="#D62828"/>
-        <circle cx="4" cy="20" r="1.8" fill="#D62828"/>
-        <circle cx="12" cy="20" r="1.5" fill="#D62828"/>
-        <circle cx="20" cy="20" r="1.2" fill="#D62828"/>
+        <circle cx="4" cy="4" r="2.5" fill="#0D0D0D"/>
+        <circle cx="12" cy="4" r="2.2" fill="#0D0D0D"/>
+        <circle cx="20" cy="4" r="1.8" fill="#0D0D0D"/>
+        <circle cx="4" cy="12" r="2.2" fill="#0D0D0D"/>
+        <circle cx="12" cy="12" r="1.8" fill="#5D5D5D"/>
+        <circle cx="20" cy="12" r="1.5" fill="#5D5D5D"/>
+        <circle cx="4" cy="20" r="1.8" fill="#5D5D5D"/>
+        <circle cx="12" cy="20" r="1.5" fill="#5D5D5D"/>
+        <circle cx="20" cy="20" r="1.2" fill="#5D5D5D"/>
       </svg>
     </div>
   </div>
