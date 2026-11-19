@@ -113,7 +113,7 @@ this spec's hunks there.
     And `SafetyGateTest` passes one new case: a `system_intent` naming a denied contact's
     number is refused.
 
-- [ ] **2. Every question reaches the user, and silence is not a no.**
+- [x] **2. Every question reaches the user, and silence is not a no.**
   - **Root cause (reproduced 2026-11-18, eval task 39 on the Part A APK, "About device" page in
     front):** the card's window was added and drawn, but `dumpsys window` showed it with
     `mForceHideNonSystemOverlayWindow=true`, `mPolicyVisibility=false`, `isOnScreen=false`.
@@ -153,6 +153,9 @@ this spec's hunks there.
       and `dumpsys window` lists it as `ty=ACCESSIBILITY_OVERLAY`, `isOnScreen=true`. Left
       unanswered, the notification shows the two options after 10 s; tapping one opens that page.
       (The gate card's Allow path is the same broker and card, and `ToolHubAskTest` covers it.)
+  - **Evidence (2026-11-19):** `ToolHubAskTest` 3/3 pass. On the phone, the task over About device
+    showed the card as `ty=ACCESSIBILITY_OVERLAY`, `isOnScreen=true`; 15 s later no question
+    notification was posted; the user tapped an option on the card and that page opened.
   - **Changed while building:** the notification is posted only when the card may be unseen
     (`QuestionCardOverlay.onTop` is false, or the screen is off or locked). On the phone the
     heads-up appeared behind the card: an accessibility overlay is above every notification layer,
