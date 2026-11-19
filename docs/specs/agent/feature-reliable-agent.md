@@ -18,6 +18,8 @@ The design this builds on is `docs/agent-review/agent-architecture.md`; section 
 
 ## 1. Screen history in the run log
 
+> Moved to `feature-long-tasks.md` (steps 2 and 7), which also stores the agent's note per screen.
+
 The design (§6.5) says every screen a task saw is stored with the run and drawn for people.
 Today `ScreenHistory` keeps it in memory for one turn only, and the automatic screen read after
 each action (`ToolHub.observeScreen`) never reaches the journal. So the run log cannot show what
@@ -67,6 +69,8 @@ the overlay, when `/goal` starts its next turn, and when a run is continued afte
 
 ## 2. Run log privacy
 
+> Moved to `feature-long-tasks.md` step 1.
+
 - [ ] **Keep the run log out of the user's cloud backup.** `files/agentcore/traces/` holds
   screenshots and (after 1.1) screen text, and it is not excluded. Add
   `<exclude domain="file" path="agentcore/traces/" />` to `res/xml/backup_rules.xml` and to both
@@ -97,7 +101,7 @@ each tool's own time comes from `System.nanoTime()`. Three things mislead:
 
 ## 4. Reliability of the agent itself
 
-- [ ] **4.1 Measure it.** No benchmark numbers exist for the new agent: the only on-device
+- [ ] **4.1 Measure it.** Moved to `feature-long-tasks.md` steps 3–5. No benchmark numbers exist for the new agent: the only on-device
   result (`benchmark/results/aura-on-device/ClockStopWatchRunning`, October) was the old agent.
   - agentcore does not write `files/mcp_logs`, so the harness's step reports come out empty.
     Write the run's steps there in the shape the harness reads (see `benchmark/README.md`).

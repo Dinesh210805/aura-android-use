@@ -67,6 +67,11 @@ with no chat history, no private docs and no memory of past sessions can change 
 - **Name exact identifiers** (`devices/{uid}`, `KEY_UPDATE_URL`) rather than describing them.
 - Delete comments that restate the code.
 
+## Specs before code
+Non-trivial work starts with a spec in `docs/specs/<area>/<kind>-<topic>.md`, written after
+interviewing the user and approved before any code. `CLAUDE.md` has the full workflow, naming
+rules and template; other agents follow it too.
+
 ## Before you commit
 - Code that nothing references is dead. Delete it, don't leave it "for later".
 - Don't hardcode an ONNX execution provider: `OnnxYoloRunner` benchmarks and picks per device.
