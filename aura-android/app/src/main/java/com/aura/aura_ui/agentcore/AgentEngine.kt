@@ -289,7 +289,7 @@ class AgentEngine(
                 // A long chat with no tool calls never reaches the loop below, so it compacts here.
                 compactIfOver(budget, turn)
                 tools = hub.visible(turn)
-                ask(turn, stream, main.contextWindow)
+                ask(turn, stream, main)
             }
             noteThinking(turn, reply)
             var steps = 0
@@ -403,7 +403,7 @@ class AgentEngine(
                     } else {
                         compactIfOver(budget, turn)
                         tools = hub.visible(turn)
-                        ask(turn, stream, main.contextWindow)
+                        ask(turn, stream, main)
                     }
                 }
                 noteThinking(turn, reply)
@@ -422,7 +422,7 @@ class AgentEngine(
                     reply = llm.writeSession {
                         appendPrompt { user { text(EMPTY_REPLY) } }
                         tools = hub.visible(turn)
-                        ask(turn, stream, main.contextWindow)
+                        ask(turn, stream, main)
                     }
                     noteThinking(turn, reply)
                     continue
@@ -434,7 +434,7 @@ class AgentEngine(
                     reply = llm.writeSession {
                         appendPrompt { user { text(TEXT_CALL) } }
                         tools = hub.visible(turn)
-                        ask(turn, stream, main.contextWindow)
+                        ask(turn, stream, main)
                     }
                     noteThinking(turn, reply)
                     continue
@@ -451,7 +451,7 @@ class AgentEngine(
                 reply = llm.writeSession {
                     appendPrompt { user { text(told) } }
                     tools = hub.visible(turn)
-                    ask(turn, stream, main.contextWindow)
+                    ask(turn, stream, main)
                 }
                 noteThinking(turn, reply)
             }
@@ -575,15 +575,26 @@ class AgentEngine(
      * One model request. Streamed, the words show as they arrive and the reply is put together from
      * the frames; either way the prompt ends exactly as [requestLLM] leaves it, so everything after
      * (tool calls, the completion check, the stored item) sees the same reply.
-     * - Fails: a stream that breaks is dropped and the request is made again without streaming.
+     * - Fails: a stream that breaks is dropped and the request is made again without streaming,
+     *   and that model is not streamed again ([noStream]).
      */
-    private suspend fun AIAgentLLMWriteSession.ask(turn: TurnState, stream: Boolean, window: Int?): Message.Assistant =
-        streamOrNot(turn, stream).also { reply ->
-            Usage.of(reply.metaInfo, window)?.let { usage -> _usage.update { it + (turn.threadId to usage) } }
+    private suspend fun AIAgentLLMWriteSession.ask(turn: TurnState, stream: Boolean, main: ResolvedModel): Message.Assistant =
+        streamOrNot(turn, stream, main.label).also { reply ->
+            Usage.of(reply.metaInfo, main.contextWindow)?.let { usage -> _usage.update { it + (turn.threadId to usage) } }
         }
 
-    private suspend fun AIAgentLLMWriteSession.streamOrNot(turn: TurnState, stream: Boolean): Message.Assistant {
-        if (!stream) return requestLLM()
+    /**
+     * Models whose stream broke once since the app started; they are asked without streaming.
+     * - Why: a stream that breaks only does so after the whole reply was generated (Gemini's
+     *   OpenAI-compatible endpoint sends tool calls without the `index` the client requires), so
+     *   asking again cost every step a second full request.
+     * - ponytail: by label for the process; such a model's replies no longer type out as they
+     *   arrive until the app restarts.
+     */
+    private val noStream: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    private suspend fun AIAgentLLMWriteSession.streamOrNot(turn: TurnState, stream: Boolean, model: String): Message.Assistant {
+        if (!stream || model in noStream) return requestLLM()
         val before = prompt
         return try {
             val written = StringBuilder()
@@ -601,6 +612,7 @@ class AgentEngine(
             throw e
         } catch (e: Exception) {
             journal?.note(turn.runId, "Streaming failed; asked again without it", e.toString(), ok = false)
+            noStream += model
             rewritePrompt { before }
             turn.emit(AgentEvent.Streaming(""))
             requestLLM()

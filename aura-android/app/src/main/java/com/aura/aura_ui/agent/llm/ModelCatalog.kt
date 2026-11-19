@@ -55,7 +55,17 @@ object ModelCatalog {
     suspend fun fetch(endpoint: LlmEndpoint, apiKey: String): Result<List<ModelInfo>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val builder = Request.Builder().url(endpoint.modelsUrl).get()
+                // Ollama: derive the tags URL from the user-supplied base URL at fetch time,
+                // since the endpoint's modelsUrl is left blank (no universal host).
+                val url = when (endpoint.modelListStyle) {
+                    ModelListStyle.OLLAMA_TAGS -> {
+                        val base = endpoint.baseUrl.trimEnd('/')
+                        if (base.isBlank()) throw ModelFetchError.OllamaNoHost
+                        "$base/api/tags"
+                    }
+                    else -> endpoint.modelsUrl
+                }
+                val builder = Request.Builder().url(url).get()
                 authHeaders(endpoint.authScheme, apiKey).forEach { (name, value) -> builder.header(name, value) }
                 try {
                     http.newCall(builder.build()).execute().use { resp ->
@@ -86,6 +96,8 @@ object ModelCatalog {
         object BadKey : ModelFetchError("Key rejected — check the API key for this provider.")
         object RateLimited : ModelFetchError("Rate limited — wait a moment, then try again.")
         object Network : ModelFetchError("Network problem — check your connection and retry.")
+        /** Ollama built-in selected but the host URL hasn't been entered yet. */
+        object OllamaNoHost : ModelFetchError("Enter your Ollama host URL first (e.g. http://192.168.1.42:11434).")
         class Http(val code: Int) : ModelFetchError("The provider returned an error (HTTP $code).")
     }
 
@@ -110,6 +122,7 @@ object ModelCatalog {
         when (endpoint.modelListStyle) {
             ModelListStyle.OPENAI_DATA -> parseOpenAiShape(endpoint, body)
             ModelListStyle.GEMINI_MODELS -> parseGeminiShape(endpoint, body)
+            ModelListStyle.OLLAMA_TAGS -> parseOllamaShape(endpoint, body)
         }
 
     /** OpenAI-shape providers: `{ "data": [ { "id": ... } ] }`. */
@@ -131,6 +144,33 @@ object ModelCatalog {
                 reasoningCapable = reasoningFor(endpoint, id, m),
                 canDisableThinking = canDisableFor(endpoint, id),
                 isFree = freeFor(id, m),
+            )
+        }
+    }
+
+    /**
+     * Ollama `/api/tags`: `{"models":[{"name":"llava:latest","details":{"family":"…",…}},…]}`.
+     *
+     * - `name` is the full model reference including the tag (`model:tag`). The chat API accepts
+     *   this directly as the model id — Ollama ignores `:latest` gracefully but we keep it for
+     *   exact round-trips.
+     * - Vision is inferred from [genericVision]: `llava`, `moondream`, `minicpm-v`, `-vl`, etc.
+     * - Ollama has no concept of pricing or reasoning flags, so both are always false/null.
+     */
+    internal fun parseOllamaShape(endpoint: LlmEndpoint, body: String): List<ModelInfo> {
+        val models = JSONObject(body).optJSONArray("models") ?: return emptyList()
+        return (0 until models.length()).mapNotNull { i ->
+            val m = models.getJSONObject(i)
+            val id = m.optString("name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            ModelInfo(
+                id = id,
+                visionCapable = visionFor(endpoint, id, null),
+                // Ollama does not expose context-window size in /api/tags; a separate
+                // /api/show call per model would work but adds latency not worth the picker UX.
+                contextWindow = null,
+                reasoningCapable = false,
+                canDisableThinking = false,
+                isFree = null,
             )
         }
     }
@@ -194,7 +234,8 @@ object ModelCatalog {
      */
     private fun genericVision(id: String): Boolean {
         val l = id.lowercase()
-        return "vision" in l || "llava" in l || "-vl" in l || "-vl-" in l || "vl-" in l ||
+        return "vision" in l || "llava" in l || "moondream" in l || "minicpm-v" in l ||
+            "-vl" in l || "-vl-" in l || "vl-" in l ||
             "4o" in l || "gemini" in l || "claude" in l ||
             "pixtral" in l || "glm-4.5v" in l
     }

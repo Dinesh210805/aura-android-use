@@ -1,6 +1,7 @@
 package com.aura.aura_ui.agent.llm
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -27,6 +28,7 @@ class LlmEndpointCatalogTest {
             listOf(
                 "groq", "openrouter", "gemini", "openai", "anthropic",
                 "mistral", "dashscope", "cerebras", "zai", "xai", "together", "moonshot", "deepseek",
+                "ollama",
             ),
             LlmEndpointCatalog.BUILTINS.map { it.id },
         )
@@ -181,5 +183,34 @@ class LlmEndpointCatalogTest {
         // Blank means "no default" so callers prompt, instead of inventing an id that 400s.
         val custom = LlmEndpointCatalog.builtinById("groq")!!.copy(id = "custom", defaultModelId = "")
         assertEquals("", custom.defaultModelId)
+    }
+
+    // ── Ollama ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `ollama built-in ships with no key required, no auth scheme, and plain wire`() {
+        val ollama = LlmEndpointCatalog.builtinById(LlmEndpointCatalog.OLLAMA_ID)!!
+        assertFalse("Ollama needs no API key", ollama.requiresKey)
+        assertEquals("Ollama sends no auth header", AuthScheme.NONE, ollama.authScheme)
+        assertEquals("Ollama uses the OpenAI-compatible wire", ChatWire.OPENAI_COMPAT, ollama.wire)
+    }
+
+    @Test
+    fun `ollama ships with OLLAMA_TAGS model-list style`() {
+        val ollama = LlmEndpointCatalog.builtinById(LlmEndpointCatalog.OLLAMA_ID)!!
+        assertEquals(ModelListStyle.OLLAMA_TAGS, ollama.modelListStyle)
+    }
+
+    @Test
+    fun `ollama does not accept parallel_tool_calls field`() {
+        // Ollama rejects the field, so the shim must be disabled.
+        val ollama = LlmEndpointCatalog.builtinById(LlmEndpointCatalog.OLLAMA_ID)!!
+        assertFalse(ollama.profile.acceptsParallelToolCallsField)
+    }
+
+    @Test
+    fun `ollama base url is blank in the built-in — user fills their LAN host`() {
+        val ollama = LlmEndpointCatalog.builtinById(LlmEndpointCatalog.OLLAMA_ID)!!
+        assertEquals("blank until the user types their LAN host", "", ollama.baseUrl)
     }
 }

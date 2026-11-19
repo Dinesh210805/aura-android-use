@@ -16,6 +16,7 @@ object LlmEndpointCatalog {
     const val GEMINI_ID = "gemini"
     const val OPENAI_ID = "openai"
     const val ANTHROPIC_ID = "anthropic"
+    const val OLLAMA_ID = "ollama"
 
     /**
      * Groq's multimodal Llama 4 Scout. Still the app-wide fallback and the model the
@@ -252,19 +253,59 @@ object LlmEndpointCatalog {
         keyUrl = "https://platform.deepseek.com/api_keys",
     )
 
+    // ── Local / self-hosted presets ───────────────────────────────────────────
+
+    /**
+     * Ollama running on the user's LAN (laptop, desktop, NAS).
+     *
+     * Ollama speaks the OpenAI-compatible `/api/chat` path and lists models at
+     * `/api/tags` — both are confirmed against Ollama 0.3+ (2026-07-20). The base
+     * URL is intentionally blank: Ollama binds to a user-chosen LAN IP, so there is
+     * no universal default. The settings screen detects the blank base URL and shows
+     * a dedicated "Ollama host" input (e.g. `http://192.168.1.42:11434`).
+     *
+     * Wire facts:
+     *  - `requiresKey = false` — Ollama has no authentication by default.
+     *  - `authScheme = AuthScheme.NONE` — the model-listing fetch sends no header.
+     *  - `profile = ProviderProfile()` — plain OpenAI wire, no shims. Ollama does
+     *    not accept `parallel_tool_calls`, so [ProviderProfile.acceptsParallelToolCallsField]
+     *    is false (it defaults to true; override here).
+     *  - `visionInference = VisionInference.GENERIC` — model names declare vision by
+     *    convention (e.g. `llava`, `moondream`).
+     *  - `modelListStyle = ModelListStyle.OLLAMA_TAGS` — Ollama's `/api/tags` returns
+     *    `{models:[{name,details:{…}}]}`, not the OpenAI `{data:[…]}` shape; handled
+     *    in [ModelCatalog].
+     *  - LAN cleartext (http://) is permitted by [McpUrlValidator] when
+     *    `allowPrivateLan=true` and the base URL is an RFC 1918 address.
+     *
+     * Change together: [LlmEndpointCatalogTest] pins the BUILTINS list; add "ollama"
+     * there. [ProviderSettingsScreen] renders the host-input row for this id.
+     * [ModelCatalog] must handle [ModelListStyle.OLLAMA_TAGS].
+     */
+    val OLLAMA = LlmEndpoint(
+        id = OLLAMA_ID,
+        displayName = "Ollama (local)",
+        baseUrl = "",            // user fills their LAN host in the settings screen
+        chatCompletionsPath = "/v1/chat/completions",
+        modelsUrl = "",          // derived at runtime: baseUrl + "/api/tags"
+        authScheme = AuthScheme.NONE,
+        modelListStyle = ModelListStyle.OLLAMA_TAGS,
+        visionInference = VisionInference.GENERIC,
+        profile = ProviderProfile(acceptsParallelToolCallsField = false),
+        isBuiltIn = true,
+        requiresKey = false,
+    )
+
     // Deliberately NOT here:
     //  - Fireworks: its documented path `/inference/v1/chat/completions` answered 404, the same as
     //    the control. That is weak evidence AGAINST, so it waits for someone with a key.
     //  - Bedrock: not OpenAI-wire at all. It needs AWS SigV4 request signing, which is not a header
     //    we can set — the only provider excluded for architectural rather than evidential reasons.
-    //  - Ollama: a built-in pointing at `http://localhost:11434` is a bookmark to the phone itself,
-    //    which is not where anyone runs Ollama, and a LAN address additionally needs a cleartext
-    //    network-security exemption. The custom-endpoint screen already covers it properly, with
-    //    the user's own IP and `requiresKey = false`.
 
     val BUILTINS: List<LlmEndpoint> = listOf(
         GROQ, OPENROUTER, GEMINI, OPENAI, ANTHROPIC,
         MISTRAL, DASHSCOPE, CEREBRAS, ZAI, XAI, TOGETHER, MOONSHOT, DEEPSEEK,
+        OLLAMA,
     )
 
     fun builtinById(id: String): LlmEndpoint? = BUILTINS.firstOrNull { it.id == id }

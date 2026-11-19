@@ -30,7 +30,16 @@ enum class AuthScheme {
 
 /** Response shape of the provider's `/models` listing. */
 @Serializable
-enum class ModelListStyle { OPENAI_DATA, GEMINI_MODELS }
+enum class ModelListStyle {
+    OPENAI_DATA,
+    GEMINI_MODELS,
+    /**
+     * Ollama's listing endpoint (`/api/tags`) returns a different shape from the OpenAI
+     * `/models` wire: `{"models":[{"name":"llava:latest","details":{…}},…]}`. Handled
+     * separately in [ModelCatalog.parseOllamaShape].
+     */
+    OLLAMA_TAGS,
+}
 
 /** How [ModelCatalog] decides a model can read screenshots (providers report modality inconsistently). */
 @Serializable

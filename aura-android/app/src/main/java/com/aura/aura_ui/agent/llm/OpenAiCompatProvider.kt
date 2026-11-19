@@ -131,6 +131,9 @@ object OpenAiCompatProvider {
                 // the run. Injects "stop" so the turn deserializes. Added before the tap so
                 // the trace still records the raw wire body. [SHIM #5]
                 addInterceptor(GeminiFinishReasonRepair.interceptor())
+                // Gemini-direct: streamed tool calls arrive without `index`, which Koog's
+                // OpenAIStreamToolCall requires; numbers them as the stream arrives. [SHIM #5b]
+                addInterceptor(GeminiStreamToolIndexRepair.interceptor())
             }
             if (profile.reasoningResponseStyle == ReasoningResponseStyle.REASONING_DETAILS) {
                 // OpenRouter: reasoning models (Gemini 3, Claude) attach a message-level
@@ -202,6 +205,11 @@ object OpenAiCompatProvider {
                 }
                 val startedAt = System.currentTimeMillis()
                 val resp = chain.proceed(req)
+                if (BuildConfig.DEBUG) {
+                    // Error bodies carry the reason a retry follows (quota, overload); success bodies are not logged.
+                    val why = if (resp.isSuccessful) "" else " " + runCatching { resp.peekBody(600).string() }.getOrDefault("").replace('\n', ' ')
+                    Log.w("AuraAgentHttp", "← ${resp.code} in ${System.currentTimeMillis() - startedAt}ms$why")
+                }
                 if (AgentLlmTap.isActive) {
                     val respBody = runCatching { resp.peekBody(Long.MAX_VALUE).string() }.getOrDefault("")
                     AgentLlmTap.report(req.url.host, reqBody, respBody, System.currentTimeMillis() - startedAt)

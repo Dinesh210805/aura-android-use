@@ -100,21 +100,30 @@ internal object GeminiThoughtSignatureRelay {
 
     /**
      * Maps `toolCallId → extra_content` for every response tool-call that carries one.
-     * Reads OpenAI's non-streaming shape (`choices[].message.tool_calls[]`). Fails open
-     * to an empty map on any parse failure.
+     * Reads OpenAI's non-streaming shape (`choices[].message.tool_calls[]`) and a streamed
+     * body (`data:` lines, `choices[].delta.tool_calls[]`). Fails open to an empty map on any
+     * parse failure.
      */
     fun extractToolCallSignatures(responseBody: String): Map<String, JsonElement> {
-        val root = runCatching { json.parseToJsonElement(responseBody) as? JsonObject }.getOrNull() ?: return emptyMap()
-        val choices = root["choices"] as? JsonArray ?: return emptyMap()
         val out = LinkedHashMap<String, JsonElement>()
-        choices.forEach { choice ->
-            val message = (choice as? JsonObject)?.get("message") as? JsonObject ?: return@forEach
-            val calls = message["tool_calls"] as? JsonArray ?: return@forEach
-            calls.forEach { call ->
-                val c = call as? JsonObject ?: return@forEach
-                val id = (c["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@forEach
-                val extra = c["extra_content"] as? JsonObject ?: return@forEach
-                out[id] = extra
+        val chunks = if (responseBody.trimStart().startsWith("data:")) {
+            responseBody.lineSequence().filter { it.startsWith("data:") }.map { it.removePrefix("data:").trim() }
+        } else {
+            sequenceOf(responseBody)
+        }
+        chunks.forEach { chunk ->
+            val root = runCatching { json.parseToJsonElement(chunk) as? JsonObject }.getOrNull() ?: return@forEach
+            val choices = root["choices"] as? JsonArray ?: return@forEach
+            choices.forEach { choice ->
+                val c = choice as? JsonObject ?: return@forEach
+                val message = (c["message"] ?: c["delta"]) as? JsonObject ?: return@forEach
+                val calls = message["tool_calls"] as? JsonArray ?: return@forEach
+                calls.forEach { call ->
+                    val o = call as? JsonObject ?: return@forEach
+                    val id = (o["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@forEach
+                    val extra = o["extra_content"] as? JsonObject ?: return@forEach
+                    out[id] = extra
+                }
             }
         }
         return out

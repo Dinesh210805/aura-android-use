@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.aura.aura_ui.agent.llm.AuthScheme
 import com.aura.aura_ui.agent.llm.GenerationConfig
 import com.aura.aura_ui.agent.llm.LlmEndpoint
+import com.aura.aura_ui.agent.llm.LlmEndpointCatalog
 import com.aura.aura_ui.agent.llm.ModelCatalog
 import com.aura.aura_ui.agent.llm.ModelInfo
 import com.aura.aura_ui.agent.llm.ModelListStyle
@@ -105,6 +106,22 @@ fun ProviderSettingsScreen(onOpenApiKeys: (endpointId: String) -> Unit) {
     var showEditor by remember { mutableStateOf(false) }
     val monoScheme = rememberMonoScheme()
 
+    // Ollama: the user supplies their LAN host (e.g. http://192.168.1.42:11434).
+    // Stored on the endpoint's baseUrl field; the built-in ships with baseUrl="" so the
+    // field shows empty until the user types. Changes here patch the in-memory endpoint only —
+    // the edited endpoint is upserted into CustomEndpointStore on Save so it survives restarts.
+    val isOllama = endpoint.id == LlmEndpointCatalog.OLLAMA_ID
+    var ollamaHost by remember(endpoint.id) { mutableStateOf(endpoint.baseUrl) }
+
+    // Effective endpoint: for Ollama, reflect the user-typed host into baseUrl so ModelCatalog
+    // can derive the /api/tags URL. For all others the endpoint is used as-is.
+    val effectiveEndpoint by remember(endpoint, ollamaHost) {
+        derivedStateOf {
+            if (isOllama) endpoint.copy(baseUrl = ollamaHost.trim())
+            else endpoint
+        }
+    }
+
     // Generation controls: thinking level + temperature, per endpoint.
     var reasoning by remember { mutableStateOf(keyStore.getGeneration(endpoint.id).reasoning) }
     var temperature by remember { mutableStateOf(keyStore.getGeneration(endpoint.id).temperature) }
@@ -118,14 +135,19 @@ fun ProviderSettingsScreen(onOpenApiKeys: (endpointId: String) -> Unit) {
 
     val key = remember(endpoint.id) { keyStore.getKey(endpoint.id) }
     val keyRequired = endpoint.requiresKey
-    val hasKey = !keyRequired || key != null
+    // Ollama needs a host URL instead of an API key; treat a filled host as "has credentials".
+    val hasKey = when {
+        isOllama -> ollamaHost.isNotBlank()
+        !keyRequired -> true
+        else -> key != null
+    }
 
     fun fetch() {
         if (!hasKey) return
         scope.launch {
             fetching = true
             fetchError = null
-            ModelCatalog.fetch(endpoint, key.orEmpty())
+            ModelCatalog.fetch(effectiveEndpoint, key.orEmpty())
                 .onSuccess { list ->
                     models = list
                     if (list.isEmpty()) {
@@ -161,8 +183,9 @@ fun ProviderSettingsScreen(onOpenApiKeys: (endpointId: String) -> Unit) {
         modelQuery = ""
     }
 
-    // The models list loads by itself whenever a provider with a key is shown.
-    LaunchedEffect(endpoint.id, hasKey) { if (hasKey) fetch() }
+    // The models list loads by itself whenever a provider with a key/host is shown.
+    // For Ollama, also re-fetch when the host URL changes (the user may type it after switching).
+    LaunchedEffect(endpoint.id, hasKey, ollamaHost) { if (hasKey) fetch() }
 
     val selectedModelInfo = models.firstOrNull { it.id == selectedModel }
     val selectedIsNonVision = selectedModelInfo != null && !selectedModelInfo.visionCapable
@@ -192,6 +215,15 @@ fun ProviderSettingsScreen(onOpenApiKeys: (endpointId: String) -> Unit) {
                     onSelect = ::switchEndpoint,
                     onAddCustom = { showEditor = true },
                 )
+                // Ollama: show a host URL input right under the picker instead of the API-key row.
+                // The host is validated on Save; here just capture the text.
+                if (isOllama) {
+                    OllamaHostField(
+                        cs = cs,
+                        host = ollamaHost,
+                        onHost = { ollamaHost = it; savedAt = null },
+                    )
+                }
                 if (!endpoint.isBuiltIn) {
                     AuraButton("Remove this endpoint", {
                         customStore.remove(endpoint.id)
@@ -202,16 +234,20 @@ fun ProviderSettingsScreen(onOpenApiKeys: (endpointId: String) -> Unit) {
                 }
             }
             AuraDivider()
-            AuraRow(
-                "API key",
-                icon = Icons.Filled.Key,
-                value = when {
-                    !keyRequired -> "Not needed"
-                    key != null -> "Saved"
-                    else -> "Add"
-                },
-                onClick = if (keyRequired) ({ onOpenApiKeys(endpoint.id) }) else null,
-            )
+            // Ollama needs no API key — the host URL above is the only credential. For
+            // every other endpoint show the key row as normal.
+            if (!isOllama) {
+                AuraRow(
+                    "API key",
+                    icon = Icons.Filled.Key,
+                    value = when {
+                        !keyRequired -> "Not needed"
+                        key != null -> "Saved"
+                        else -> "Add"
+                    },
+                    onClick = if (keyRequired) ({ onOpenApiKeys(endpoint.id) }) else null,
+                )
+            }
         }
 
         if (hasKey) {
@@ -270,6 +306,14 @@ fun ProviderSettingsScreen(onOpenApiKeys: (endpointId: String) -> Unit) {
 
             Spacer(Modifier.height(16.dp))
             AuraButton(if (savedAt != null) "Saved" else "Save", {
+                // For Ollama, persist the user-typed host by updating the built-in's
+                // baseUrl in the custom store so it survives app restarts. This is the one
+                // built-in that stores user data (the host), so it lives in CustomEndpointStore
+                // rather than in code — the entry is keyed by OLLAMA_ID.
+                if (isOllama && ollamaHost.isNotBlank()) {
+                    customStore.upsert(effectiveEndpoint.copy(isBuiltIn = false))
+                    allEndpoints = customStore.allEndpoints()
+                }
                 keyStore.setSelectedEndpointId(endpoint.id)
                 // The listing is the only moment the model's context window and vision flag are
                 // in hand; null (never fetched) means "unknown", not a stale value.
@@ -309,6 +353,37 @@ private fun capsuleFieldColors(cs: CapsuleScheme) = OutlinedTextFieldDefaults.co
     focusedContainerColor = cs.card,
     unfocusedContainerColor = cs.card,
 )
+
+/**
+ * URL input for the Ollama built-in endpoint. Rendered instead of the API-key row when the
+ * user picks "Ollama (local)" — Ollama needs no key, only the LAN address of the host machine.
+ *
+ * Accepts http:// LAN IPs (192.168.x, 10.x, 172.16-31.x) and https://. The android
+ * network-security-config already permits cleartext in [base-config], so http:// to a private
+ * address works without an extra domain rule. The user is told what format to enter; we do not
+ * validate on every keystroke — only on Save.
+ */
+@Composable
+private fun OllamaHostField(cs: CapsuleScheme, host: String, onHost: (String) -> Unit) {
+    OutlinedTextField(
+        value = host,
+        onValueChange = onHost,
+        label = { Text("Ollama host") },
+        placeholder = { Text("http://192.168.1.42:11434") },
+        singleLine = true,
+        colors = capsuleFieldColors(cs),
+        shape = Capsule.ShapeChipWell,
+        modifier = Modifier.fillMaxWidth(),
+        supportingText = {
+            Text(
+                "IP of the machine running \u2018ollama serve\u2019 on your local network.",
+                fontSize = 11.sp,
+                color = cs.sub,
+            )
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+    )
+}
 
 /** Small uppercase eyebrow above a control, matching the Capsule section labels. */
 @Composable
@@ -519,9 +594,11 @@ private fun CustomEndpointEditor(
                     if (name.isBlank() || baseUrl.isBlank() || modelsUrl.isBlank()) {
                         error = "Name, base URL, and models URL are required."; return@TextButton
                     }
-                    // https-only, with the localhost carve-out for local endpoints (Ollama/LM Studio).
-                    val baseOk = McpUrlValidator.validate(baseUrl.trim(), allowLocalhostDebug = true)
-                    val modelsOk = McpUrlValidator.validate(modelsUrl.trim(), allowLocalhostDebug = true)
+                    // https-only, with a localhost carve-out for local endpoints, and a LAN IP
+                    // carve-out when "Local endpoint (no API key)" is ticked — that toggle is the
+                    // user's explicit acknowledgement that the traffic is on their own network.
+                    val baseOk = McpUrlValidator.validate(baseUrl.trim(), allowLocalhostDebug = true, allowPrivateLan = localNoAuth)
+                    val modelsOk = McpUrlValidator.validate(modelsUrl.trim(), allowLocalhostDebug = true, allowPrivateLan = localNoAuth)
                     val failure = baseOk.exceptionOrNull() ?: modelsOk.exceptionOrNull()
                     if (failure != null) { error = failure.message ?: "Invalid URL"; return@TextButton }
                     onSave(

@@ -113,4 +113,16 @@ class GeminiThoughtSignatureRelayTest {
         requireNotNull(out) { "captured signature must be replayed on the next request" }
         assertTrue(out.contains("SIG_XYZ"))
     }
+
+    @Test
+    fun `a streamed reply's tool-call signature is captured from the delta`() {
+        val stream = """
+            data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_s1","type":"function","function":{"name":"find_tools","arguments":"{}"},"extra_content":{"google":{"thought_signature":"SIG_STREAM"}}}]},"index":0}]}
+
+            data: [DONE]
+        """.trimIndent()
+        val sigs = GeminiThoughtSignatureRelay.extractToolCallSignatures(stream)
+        assertEquals(setOf("call_s1"), sigs.keys)
+        assertTrue(sigs.getValue("call_s1").toString().contains("SIG_STREAM"))
+    }
 }

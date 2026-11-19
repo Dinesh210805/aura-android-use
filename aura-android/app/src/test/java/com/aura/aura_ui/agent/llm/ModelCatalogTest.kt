@@ -215,4 +215,41 @@ class ModelCatalogTest {
         assertEquals(true, ModelCatalog.freeFor("tencent/hy3:free", null))
         assertEquals(null, ModelCatalog.freeFor("openai/gpt-4o", null))
     }
+
+    // ── Ollama /api/tags parser ───────────────────────────────────────────────
+
+    private val ollamaEndpoint = LlmEndpointCatalog.builtinById(LlmEndpointCatalog.OLLAMA_ID)!!
+
+    @Test
+    fun `parseOllamaShape parses the standard tags response`() {
+        val body = """
+            {
+              "models": [
+                {"name": "llava:latest", "details": {"family": "llava"}},
+                {"name": "llama3.2:3b", "details": {"family": "llama"}},
+                {"name": "moondream:latest", "details": {}}
+              ]
+            }
+        """.trimIndent()
+        val result = ModelCatalog.parseOllamaShape(ollamaEndpoint, body)
+        assertEquals(3, result.size)
+        assertEquals("llava:latest", result[0].id)
+        assertTrue("llava is vision-capable", result[0].visionCapable)
+        assertEquals("llama3.2:3b", result[1].id)
+        assertFalse("llama3.2 is not vision-capable", result[1].visionCapable)
+        assertTrue("moondream is vision-capable", result.first { it.id == "moondream:latest" }.visionCapable)
+    }
+
+    @Test
+    fun `parseOllamaShape returns empty list on empty models array`() {
+        assertEquals(emptyList<ModelInfo>(), ModelCatalog.parseOllamaShape(ollamaEndpoint, """{"models":[]}"""))
+    }
+
+    @Test
+    fun `parseOllamaShape skips models with blank names`() {
+        val body = """{"models":[{"name":""},{"name":"llava:latest"}]}"""
+        val result = ModelCatalog.parseOllamaShape(ollamaEndpoint, body)
+        assertEquals(1, result.size)
+        assertEquals("llava:latest", result[0].id)
+    }
 }
