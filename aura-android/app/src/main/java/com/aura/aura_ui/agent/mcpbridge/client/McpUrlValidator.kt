@@ -12,11 +12,15 @@ import java.net.URI
  */
 object McpUrlValidator {
     private val LOCALHOSTS = setOf("localhost", "127.0.0.1", "::1")
+    private val IPV4_LABEL = Regex("0|[1-9][0-9]{0,2}")
 
     /** True when [host] is an RFC 1918 private LAN address (not loopback). */
     fun isPrivateLan(host: String): Boolean {
-        val parts = host.split('.').mapNotNull { it.toIntOrNull() }
-        if (parts.size != 4) return false
+        // Every label must be a plain 0–255 number: "192.168.1.5.evil.com" is a public DNS name.
+        val labels = host.split('.')
+        if (labels.size != 4 || labels.any { !IPV4_LABEL.matches(it) }) return false
+        val parts = labels.map { it.toInt() }
+        if (parts.any { it > 255 }) return false
         return when (parts[0]) {
             10 -> true
             172 -> parts[1] in 16..31

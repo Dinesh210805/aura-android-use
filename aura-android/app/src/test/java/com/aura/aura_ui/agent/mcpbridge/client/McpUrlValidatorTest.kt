@@ -52,5 +52,9 @@ class McpUrlValidatorTest {
         assertFalse(McpUrlValidator.isPrivateLan("172.15.0.1"))   // just outside 16-31
         assertFalse(McpUrlValidator.isPrivateLan("172.32.0.1"))   // just outside 16-31
         assertFalse(McpUrlValidator.isPrivateLan("8.8.8.8"))
+        // A DNS name whose leading labels look like a LAN IP is public.
+        assertFalse(McpUrlValidator.isPrivateLan("192.168.1.5.evil.com"))
+        assertFalse(McpUrlValidator.isPrivateLan("10.0.0.evil"))
+        assertFalse(McpUrlValidator.isPrivateLan("10.0.0.300"))
     }
 }
