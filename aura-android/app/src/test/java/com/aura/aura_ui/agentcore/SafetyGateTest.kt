@@ -104,7 +104,7 @@ class SafetyGateTest {
     @Test
     fun `connector writes and opens are asked about in plain words`() {
         val write = ToolCallRequest("gmail__send_email", ToolRisk.COMMIT, ToolOrigin.CONNECTOR, "{}")
-        assertEquals(Verdict.Ask("AURA wants to change something in gmail using send email. Allow?"), inMode(ApprovalMode.ASK_OFTEN, write.copy(risk = ToolRisk.ACT)))
+        assertEquals(Verdict.Ask("Allow Gmail: send email?"), inMode(ApprovalMode.ASK_OFTEN, write.copy(risk = ToolRisk.ACT)))
         val open = ToolCallRequest("launch_app", ToolRisk.ACT, ToolOrigin.NATIVE, """{"app_name":"Spotify"}""")
         assertEquals(Verdict.Ask("Open Spotify?"), inMode(ApprovalMode.ASK_OFTEN, open))
     }
@@ -134,11 +134,54 @@ class SafetyGateTest {
     }
 
     @Test
-    fun `a connector write asks unless hands-free on an untainted turn`() {
+    fun `hands-free runs connector writes like phone sends`() {
         val write = call(ToolRisk.ACT, ToolOrigin.CONNECTOR)
         assertTrue(inMode(ApprovalMode.CONFIRM_SENDS, write) is Verdict.Ask)
         assertEquals(Verdict.Allow, inMode(ApprovalMode.HANDS_FREE, write))
-        assertTrue(inMode(ApprovalMode.HANDS_FREE, write, TurnTaint().apply { mark(Origin.SCREEN) }) is Verdict.Ask)
+        assertEquals(Verdict.Allow, inMode(ApprovalMode.HANDS_FREE, write, TurnTaint().apply { mark(Origin.SCREEN) }))
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, write, TurnTaint().apply { mark(Origin.WEB) }) is Verdict.Ask)
+        // An email read through a connector can carry "forward this to everyone".
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, write, TurnTaint().apply { mark(Origin.CONNECTOR) }) is Verdict.Ask)
+        assertNull(SafetyGate.chatKey(write.copy(tool = "gmail__send_email"), TurnTaint().apply { mark(Origin.CONNECTOR) }))
+    }
+
+    private fun composio(vararg slugs: String) = ToolCallRequest(
+        "composio__COMPOSIO_MULTI_EXECUTE_TOOL", ToolRisk.COMMIT, ToolOrigin.CONNECTOR,
+        """{"tools":[${slugs.joinToString(",") { """{"tool_slug":"$it","arguments":{"to":"a@b.com"}}""" }}]}""",
+        egress = true,
+    )
+
+    @Test
+    fun `hands-free sends through Composio but asks before a delete or an unreadable call`() {
+        val screen = TurnTaint().apply { mark(Origin.SCREEN) }
+        assertEquals(Verdict.Allow, inMode(ApprovalMode.HANDS_FREE, composio("GMAIL_SEND_EMAIL"), screen))
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, composio("GMAIL_SEND_EMAIL", "GMAIL_TRASH_MESSAGE")) is Verdict.Ask)
+        assertTrue(inMode(ApprovalMode.HANDS_FREE, composio().copy(argsText = "not json")) is Verdict.Ask)
+    }
+
+    @Test
+    fun `a connector call is not a web send-out, its card names the action`() {
+        val read = composio("GMAIL_FETCH_EMAILS").copy(risk = ToolRisk.READ)
+        assertEquals(Verdict.Allow, verdict(read, taint = TurnTaint().apply { mark(Origin.SCREEN) }))
+        assertEquals(Verdict.Ask("Allow Gmail: send email?\n\na@b.com"), inMode(ApprovalMode.CONFIRM_SENDS, composio("GMAIL_SEND_EMAIL")))
+    }
+
+    @Test
+    fun `allow in this chat is offered per connector action, never for deletes or after a web page`() {
+        assertEquals("composio:GMAIL_SEND_EMAIL", SafetyGate.chatKey(composio("GMAIL_SEND_EMAIL"), TurnTaint()))
+        assertNull(SafetyGate.chatKey(composio("GMAIL_DELETE_MESSAGE"), TurnTaint()))
+        assertNull(SafetyGate.chatKey(composio("GMAIL_SEND_EMAIL"), TurnTaint().apply { mark(Origin.WEB) }))
+        assertNull(SafetyGate.chatKey(call(ToolRisk.ACT, label = "Send"), TurnTaint()))
+    }
+
+    @Test
+    fun `an approved send card covers the Composio send it described`() {
+        val g = listOf(Grant("Gmail", "a@b.com", "Running late", Long.MAX_VALUE))
+        val send = ToolCallRequest(
+            "composio__COMPOSIO_MULTI_EXECUTE_TOOL", ToolRisk.COMMIT, ToolOrigin.CONNECTOR,
+            """{"tools":[{"tool_slug":"GMAIL_SEND_EMAIL","arguments":{"recipient_email":"a@b.com","body":"Running late"}}]}""",
+        )
+        assertTrue(SafetyGate.covered(send, Verdict.Ask("q"), g, null, 0) != null)
     }
 
     @Test

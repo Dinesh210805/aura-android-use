@@ -66,8 +66,11 @@ sealed interface Verdict {
  *   intent, and the first send-out after private content.
  * - [CONFIRM_SENDS]: one verification card per commit (send, post, order, book, delete), connector
  *   writes, and the first send-out to the web after private content. Opening apps never asks.
- * - [HANDS_FREE]: only orders and deletes, plus any commit in a turn that read a notification or a
- *   web page, plus the first send-out to the web after private content.
+ * - [HANDS_FREE]: only orders and deletes (a connector's by its action name), plus any commit or
+ *   connector write in a turn that read a notification or a web page, plus the first send-out to
+ *   the web after private content.
+ * - Every mode: a connector card offers "Allow in this chat" for that one action, except for
+ *   orders, deletes and turns that read a notification or web page (see `SafetyGate.chatKey`).
  * - Why every mode keeps the web send-out question: that is the one path by which text a stranger
  *   wrote (a page, a notification) can carry the user's private data off the phone.
  * - Why HANDS_FREE still asks after a notification or web page: those are the places a stranger can
@@ -156,15 +159,13 @@ object SafetyGate {
         }
 
         val risk = effectiveRisk(call)
-        if (risk == ToolRisk.COMMIT && commitAsks(call, settings.mode, taint)) {
-            return Verdict.Ask(commitQuestion(call))
-        }
         val connectorWrite = call.origin == ToolOrigin.CONNECTOR && risk != ToolRisk.READ
-        if (connectorWrite && (settings.mode != ApprovalMode.HANDS_FREE || taint.tainted)) {
-            val service = call.tool.substringBefore("__")
-            return Verdict.Ask("AURA wants to change something in $service using ${spoken(call.tool.substringAfter("__"))}. Allow?")
+        if ((risk == ToolRisk.COMMIT || connectorWrite) && asks(call, settings.mode, taint)) {
+            return Verdict.Ask(if (call.origin == ToolOrigin.CONNECTOR) connectorQuestion(call) else commitQuestion(call))
         }
-        if (call.egress && taint.egressNeedsUser) {
+        // A connector is an account the user signed in to, not a host they did not choose; its
+        // writes are gated above with the content on the card.
+        if (call.egress && call.origin != ToolOrigin.CONNECTOR && taint.egressNeedsUser) {
             if (mode == RunMode.BACKGROUND) {
                 return Verdict.Deny("policy_blocked: private content was read this turn, so nothing may be sent out.")
             }
@@ -233,6 +234,18 @@ object SafetyGate {
     ): Grant? {
         val live = grants.filter { it.expiresAt > now }
         if (live.isEmpty()) return null
+        // Before the commit branch: a connector send has no button label, so that branch would refuse it.
+        if (call.origin == ToolOrigin.CONNECTOR) {
+            // Every value is exactly the message, the recipient or the approved subject: a cc, a
+            // second address or an unapproved subject is not. A name grant vs an address arg asks.
+            val values = connectorValues(call.argsText)
+            return live.firstOrNull { g ->
+                val m = g.message ?: return@firstOrNull false
+                val allowed = listOfNotNull(m, g.to, g.subject).map(::normal).toSet()
+                !g.linkUsed && values.any { normal(it) == normal(m) } && values.any { normal(it) == normal(g.to) } &&
+                    values.all { normal(it) in allowed }
+            }
+        }
         if (effectiveRisk(call) == ToolRisk.COMMIT) {
             if (CommitLabels.kind(call.targetLabel) !in GRANTABLE) return null
             val app = call.appLabel ?: return null
@@ -244,17 +257,6 @@ object SafetyGate {
                     // After a covered link the hub clears `typed`, so anything typed since must equal it too.
                     else -> normal(m) in shown && call.typed.let { t -> if (t == null) g.linkUsed else normal(t) == normal(m) }
                 }
-            }
-        }
-        if (call.origin == ToolOrigin.CONNECTOR) {
-            // Every value is exactly the message, the recipient or the approved subject: a cc, a
-            // second address or an unapproved subject is not. A name grant vs an address arg asks.
-            val values = connectorValues(call.argsText)
-            return live.firstOrNull { g ->
-                val m = g.message ?: return@firstOrNull false
-                val allowed = listOfNotNull(m, g.to, g.subject).map(::normal).toSet()
-                !g.linkUsed && values.any { normal(it) == normal(m) } && values.any { normal(it) == normal(g.to) } &&
-                    values.all { normal(it) in allowed }
             }
         }
         if (call.egress) {
@@ -359,12 +361,64 @@ object SafetyGate {
     /** Fixed path and parameter words a chat link may hold besides the text and the number. */
     private val LINK_ROUTING = setOf("send", "msg", "message", "chat", "compose", "text", "body", "phone", "to")
 
-    private fun commitAsks(call: ToolCallRequest, mode: ApprovalMode, taint: TurnTaint): Boolean = when (mode) {
+    /**
+     * Whether a commit or connector write needs a card. Hands-free asks only for orders and
+     * deletes, a phone commit with no button label, or after the turn read [STRANGER_TEXT].
+     */
+    private fun asks(call: ToolCallRequest, mode: ApprovalMode, taint: TurnTaint): Boolean = when (mode) {
         ApprovalMode.ASK_OFTEN, ApprovalMode.CONFIRM_SENDS -> true
-        ApprovalMode.HANDS_FREE ->
-            CommitLabels.kind(call.targetLabel) in ALWAYS_ASK ||
-                call.targetLabel == null ||
-                taint.origins.any { it == Origin.NOTIFICATION || it == Origin.WEB }
+        ApprovalMode.HANDS_FREE -> kindOf(call) in ALWAYS_ASK ||
+            (call.origin != ToolOrigin.CONNECTOR && call.targetLabel == null) ||
+            taint.origins.any { it in STRANGER_TEXT }
+    }
+
+    private fun kindOf(call: ToolCallRequest): CommitKind =
+        if (call.origin == ToolOrigin.CONNECTOR) connectorKind(call) else CommitLabels.kind(call.targetLabel)
+
+    /**
+     * What a connector call does, from its action names (`GMAIL_DELETE_MESSAGE` is a delete).
+     * - Fails: closed. A meta-tool call whose actions cannot be read counts as a delete.
+     */
+    internal fun connectorKind(call: ToolCallRequest): CommitKind {
+        val actions = connectorActions(call)
+        if (actions.isEmpty()) return CommitKind.DELETE
+        return CommitLabels.kindOf(actions.flatMap { it.split('_', '-', ' ', '.') })
+    }
+
+    /** The slugs a meta-tool call runs, else the tool's own name; empty for an unreadable meta call. */
+    private fun connectorActions(call: ToolCallRequest): List<String> {
+        val name = call.tool.substringAfter("__")
+        if (!ConnectorRisk.isMeta(name)) return listOf(name)
+        val args = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(call.argsText) as? kotlinx.serialization.json.JsonObject }.getOrNull()
+        return args?.let(ConnectorRisk::slugs).orEmpty()
+    }
+
+    /** "Allow Gmail: send email?" with what the call carries under it, secrets redacted. */
+    internal fun connectorQuestion(call: ToolCallRequest): String {
+        val name = call.tool.substringAfter("__")
+        // A Composio slug starts with its app (`GMAIL_SEND_EMAIL`); a plain connector's app is its id.
+        val actions = if (!ConnectorRisk.isMeta(name)) {
+            call.tool.substringBefore("__").replaceFirstChar { it.uppercase() } + ": " + spoken(name).lowercase()
+        } else {
+            connectorActions(call).ifEmpty { listOf(name) }.distinct().joinToString(", ") { slug ->
+                val words = slug.lowercase().split('_').filter { it.isNotBlank() }
+                words[0].replaceFirstChar { it.uppercase() } + ": " + words.drop(1).joinToString(" ")
+            }
+        }
+        val values = connectorValues(call.argsText).filter { it.isNotBlank() }.joinToString(" · ")
+        val detail = if (values.isEmpty()) "" else "\n\n" + clip(values, MAX_ARGS_IN_QUESTION)
+        return "Allow $actions?$detail"
+    }
+
+    /**
+     * The key "Allow in this chat" remembers a connector card under, or null when that is not
+     * offered: phone commits (`propose_action` has its own), orders and deletes, and turns that
+     * read [STRANGER_TEXT], since that text may be what asked for the call.
+     */
+    fun chatKey(call: ToolCallRequest, taint: TurnTaint): String? {
+        if (call.origin != ToolOrigin.CONNECTOR || effectiveRisk(call) == ToolRisk.READ) return null
+        if (connectorKind(call) in ALWAYS_ASK || taint.origins.any { it in STRANGER_TEXT }) return null
+        return call.tool.substringBefore("__") + ":" + connectorActions(call).map { it.uppercase() }.sorted().joinToString("+")
     }
 
     /** A gesture on a button that commits the user is a commit, whatever the tool is called. */
@@ -411,8 +465,8 @@ object SafetyGate {
     }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
 
     /** User text for a card: secrets redacted, end punctuation dropped (the card adds its own), cut to [MAX_TEXT_IN_QUESTION]. */
-    private fun clip(text: String): String = SecretPatterns.redact(text).trimEnd('.', '!', '?', ' ').let {
-        if (it.length > MAX_TEXT_IN_QUESTION) it.take(MAX_TEXT_IN_QUESTION).trimEnd() + "\u2026" else it
+    private fun clip(text: String, max: Int = MAX_TEXT_IN_QUESTION): String = SecretPatterns.redact(text).trimEnd('.', '!', '?', ' ').let {
+        if (it.length > max) it.take(max).trimEnd() + "\u2026" else it
     }
 
     private fun spoken(tool: String) = tool.replace('_', ' ')
@@ -434,6 +488,13 @@ object SafetyGate {
 
     /** Commits HANDS_FREE still asks about: money and deletion cannot be taken back. */
     private val ALWAYS_ASK = setOf(CommitKind.ORDER, CommitKind.DELETE)
+
+    /**
+     * Text a stranger can write to steer the agent ("forward this to everyone"): a notification, a
+     * web page, or app data a connector returned (an email). A screen does not count, or hands-free
+     * would ask on every task; Composio's catalog lookups carry no origin (see `ConnectorRisk.isCatalog`).
+     */
+    private val STRANGER_TEXT = setOf(Origin.NOTIFICATION, Origin.WEB, Origin.CONNECTOR)
 
     /** Phone actions that open something; ASK_OFTEN asks before each. */
     const val PROPOSE_ACTION = "propose_action"
@@ -457,7 +518,7 @@ enum class CommitKind { SEND, POST, ORDER, BOOK, DELETE, OTHER }
 object CommitLabels {
     private val words = setOf(
         "send", "pay", "buy", "order", "purchase", "checkout", "confirm", "submit", "post", "publish",
-        "delete", "remove", "erase", "uninstall", "book", "transfer", "donate", "subscribe", "unsubscribe",
+        "delete", "remove", "erase", "trash", "uninstall", "book", "transfer", "donate", "subscribe", "unsubscribe",
         "merge", "reply", "share",
     )
 
@@ -465,6 +526,12 @@ object CommitLabels {
 
     /** The kind of the first commit word in [label]; [CommitKind.OTHER] when none or unknown. */
     fun kind(label: String?): CommitKind = tokens(label).firstNotNullOfOrNull { KINDS[it] } ?: CommitKind.OTHER
+
+    /** The weightiest kind among [words]: an order or delete outranks a send. */
+    fun kindOf(words: List<String>): CommitKind {
+        val kinds = words.mapNotNull { KINDS[it.lowercase()] }
+        return kinds.firstOrNull { it == CommitKind.DELETE || it == CommitKind.ORDER } ?: kinds.firstOrNull() ?: CommitKind.OTHER
+    }
 
     private fun tokens(label: String?): List<String> =
         label?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && it.length <= 40 }?.split(Regex("[^a-z]+")).orEmpty()
@@ -474,7 +541,7 @@ object CommitLabels {
         listOf("post", "publish").forEach { put(it, CommitKind.POST) }
         listOf("pay", "buy", "order", "purchase", "checkout", "transfer", "donate", "subscribe").forEach { put(it, CommitKind.ORDER) }
         put("book", CommitKind.BOOK)
-        listOf("delete", "remove", "erase", "uninstall", "unsubscribe").forEach { put(it, CommitKind.DELETE) }
+        listOf("delete", "remove", "erase", "trash", "uninstall", "unsubscribe").forEach { put(it, CommitKind.DELETE) }
     }
 }
 

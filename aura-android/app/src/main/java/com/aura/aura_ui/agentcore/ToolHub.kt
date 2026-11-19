@@ -392,6 +392,9 @@ class ToolHub(
 
     private fun grantsOf(threadId: String): List<Grant> = grants[threadId].orEmpty()
 
+    /** Connector actions the user allowed for the rest of a chat, by [SafetyGate.chatKey]; in memory only. */
+    private val chatAllowed = java.util.concurrent.ConcurrentHashMap<String, Set<String>>()
+
     private fun grant(threadId: String, vararg add: Grant) {
         grants.merge(threadId, add.toList()) { old, new -> old + new }
     }
@@ -815,6 +818,7 @@ class ToolHub(
                 )
             }
             val verdict = SafetyGate.evaluate(request, turn.mode, turn.taint, settings())
+            val chatKey = (verdict as? Verdict.Ask)?.takeIf { !it.unlocksEgress }?.let { SafetyGate.chatKey(request, turn.taint) }
             if (verdict !is Verdict.Deny && SafetyGate.effectiveRisk(request) != ToolRisk.READ) turn.changed = true
             if (verdict !is Verdict.Allow) journal?.note(turn.runId, gateTitle(verdict), gateDetail(request, verdict, turn.taint.origins), ok = verdict !is Verdict.Deny)
             val outcome = when (verdict) {
@@ -828,6 +832,9 @@ class ToolHub(
                     // The box now holds the link's text; anything typed after must match it again.
                     if (SafetyGate.effectiveRisk(request) != ToolRisk.COMMIT) turn.lastTyped = null
                     dispatch(args)
+                } ?: chatKey?.takeIf { it in chatAllowed[turn.threadId].orEmpty() }?.let {
+                    journal?.note(turn.runId, "Allowed earlier in this chat: ${spec.name}", ok = true)
+                    dispatch(args)
                 } ?: run {
                     // The card: the gate's title ("Send in WhatsApp?"), then the model's own line
                     // saying who it goes to and what, which the system prompt tells it to write.
@@ -835,9 +842,11 @@ class ToolHub(
                         ?.let { "\n\n" + SecretPatterns.redact(it).take(MAX_SAID_IN_QUESTION) }.orEmpty()
                     val card = verdict.question + said
                     journal?.ask(turn.runId, card)
+                    val options = listOfNotNull(UserBroker.ALLOW, ALLOW_IN_CHAT.takeIf { chatKey != null }, UserBroker.DENY)
                     // Null is silence (timeout, cancel), not a no: the model must not take it as a decline.
-                    val answer = broker.ask(turn, card, listOf(UserBroker.ALLOW, UserBroker.DENY))?.trim()
-                    val allowed = answer?.let(UserBroker.YES::matches) == true
+                    val answer = broker.ask(turn, card, options)?.trim()
+                    if (answer == ALLOW_IN_CHAT && chatKey != null) chatAllowed.merge(turn.threadId, setOf(chatKey)) { a, b -> a + b }
+                    val allowed = answer == ALLOW_IN_CHAT || answer?.let(UserBroker.YES::matches) == true
                     val note = when {
                         allowed -> "You allowed ${spec.name}"
                         answer == null -> "You did not answer within 2 minutes"
@@ -1035,6 +1044,7 @@ class ToolHub(
         private const val SEND = "Send"
         private const val SEND_IN_CHAT = "Send, don't ask again in this chat"
         private const val CANCEL = "Cancel"
+        private const val ALLOW_IN_CHAT = "Allow in this chat"
         private const val PROPOSE_DESCRIPTION = """Ask the user to approve a message or email before it goes out, by screen or connected service. Call once, when app, recipient and final text are settled. app: e.g. "WhatsApp", "Gmail". to: the exact address or number you will send to; the name only if you have neither. message: the exact final text. subject: an email's exact subject. Result: approved, cancelled, or edited with the user's new text. The send must then carry exactly the approved recipient, subject and text, with no cc or bcc, or the user is asked again."""
         private val RECIPIENT_NAMES = setOf("phone", "to")
 
