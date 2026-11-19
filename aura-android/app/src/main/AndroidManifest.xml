@@ -43,6 +43,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- In-app update (remote/AppUpdater.kt): hands a downloaded release APK to PackageInstaller. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
@@ -295,6 +297,11 @@
                 android:resource="@xml/file_paths" />
         </provider>
         
+        <!-- Installer results for the in-app update (remote/UpdateInstallReceiver.kt). -->
+        <receiver
+            android:name=".remote.UpdateInstallReceiver"
+            android:exported="false" />
+
         <!-- Boot Receiver for auto-starting wake word detection -->
         <!-- Rings stored reminders at their due time (agent/memory/Reminders.kt). -->
         <receiver

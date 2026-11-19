@@ -195,12 +195,21 @@ fun AuraAppShell(
 
     val gateViewModel: RemoteGateViewModel = hiltViewModel()
     val gateState by gateViewModel.gateState.collectAsState()
+    val updateProgress by gateViewModel.updateProgress.collectAsState()
 
     when (val state = gateState) {
         is GateState.KillSwitchBlocked ->
             BlockScreen(title = "AURA is turned off", message = state.message, updateUrl = null)
         is GateState.VersionBlocked ->
-            BlockScreen(title = "Update required", message = state.message, updateUrl = state.updateUrl)
+            BlockScreen(
+                title = "Update required",
+                message = state.message,
+                updateUrl = state.updateUrl,
+                apkUrl = state.apkUrl,
+                progress = updateProgress,
+                onUpdate = gateViewModel::startUpdate,
+                onCancel = gateViewModel::cancelUpdate,
+            )
         else -> {
             // Allowed or UpdateAvailable: render the app; overlay a dismissible
             // update banner above the nav content when an update is available.
@@ -342,8 +351,17 @@ fun AuraAppShell(
                 McpLogRetentionScreen(onNavigateBack = { navController.navigateUp() })
             }
         }
-            if (state is GateState.UpdateAvailable && state.updateUrl.isNotBlank() && !updateDismissed) {
-                UpdateDialog(state, onDismiss = { updateDismissed = true })
+            if (state is GateState.UpdateAvailable && (state.updateUrl.isNotBlank() || state.apkUrl.isNotBlank()) && !updateDismissed) {
+                UpdateDialog(
+                    state,
+                    progress = updateProgress,
+                    onUpdate = gateViewModel::startUpdate,
+                    onCancel = gateViewModel::cancelUpdate,
+                    onDismiss = {
+                        gateViewModel.cancelUpdate()
+                        updateDismissed = true
+                    },
+                )
             }
     }
     }

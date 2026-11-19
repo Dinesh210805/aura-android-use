@@ -63,6 +63,17 @@ class GateStateTest {
         assertEquals("https://x/release", (state as GateState.UpdateAvailable).updateUrl)
     }
 
+    @Test fun `update available carries apk url`() {
+        val inputs = GateInputs(latestVersionCode = 200L, updateUrl = "u", apkUrl = "https://x/aura-1.0.200.apk")
+        val state = evaluateGate(inputs, notBlocked, currentVersionCode = 100L)
+        assertEquals("https://x/aura-1.0.200.apk", (state as GateState.UpdateAvailable).apkUrl)
+    }
+
+    @Test fun `version block carries apk url`() {
+        val inputs = GateInputs(minSupportedVersionCode = 200L, versionGateMessage = "m", updateUrl = "u", apkUrl = "a")
+        assertEquals(GateState.VersionBlocked("m", "u", "a"), evaluateGate(inputs, notBlocked, currentVersionCode = 100L))
+    }
+
     @Test fun `latest version code equal to current is Allowed, not a nudge`() {
         val state = baseline(currentVersionCode = 100L, latestVersionCode = 100L)
         assertEquals(GateState.Allowed, state)

@@ -10,9 +10,15 @@ package com.aura.aura_ui.remote
 sealed interface GateState {
     data object Allowed : GateState
     data class KillSwitchBlocked(val message: String) : GateState
-    data class VersionBlocked(val message: String, val updateUrl: String) : GateState
-    /** [versionName] and [notes] are blank when the owner has not set them. */
-    data class UpdateAvailable(val updateUrl: String, val versionName: String = "", val notes: String = "") : GateState
+    /** [apkUrl] is the direct APK link for the in-app install; blank means use [updateUrl]. */
+    data class VersionBlocked(val message: String, val updateUrl: String, val apkUrl: String = "") : GateState
+    /** [versionName], [notes] and [apkUrl] are blank when the owner has not set them. */
+    data class UpdateAvailable(
+        val updateUrl: String,
+        val versionName: String = "",
+        val notes: String = "",
+        val apkUrl: String = "",
+    ) : GateState
 }
 
 /**
@@ -32,11 +38,12 @@ fun evaluateGate(
     updateUrl: String,
     latestVersionName: String = "",
     releaseNotes: String = "",
+    apkUrl: String = "",
 ): GateState = when {
     killSwitchEnabled -> GateState.KillSwitchBlocked(killSwitchMessage)
     minSupportedVersionCode > 0L && currentVersionCode < minSupportedVersionCode ->
-        GateState.VersionBlocked(versionGateMessage, updateUrl)
-    latestVersionCode > currentVersionCode -> GateState.UpdateAvailable(updateUrl, latestVersionName, releaseNotes)
+        GateState.VersionBlocked(versionGateMessage, updateUrl, apkUrl)
+    latestVersionCode > currentVersionCode -> GateState.UpdateAvailable(updateUrl, latestVersionName, releaseNotes, apkUrl)
     else -> GateState.Allowed
 }
 
@@ -67,6 +74,7 @@ data class GateInputs(
     val updateUrl: String = "",
     val latestVersionName: String = "",
     val releaseNotes: String = "",
+    val apkUrl: String = "",
 )
 
 /**
@@ -87,4 +95,5 @@ fun evaluateGate(inputs: GateInputs, block: Blocklist.Verdict, currentVersionCod
         updateUrl = inputs.updateUrl,
         latestVersionName = inputs.latestVersionName,
         releaseNotes = inputs.releaseNotes,
+        apkUrl = inputs.apkUrl,
     )

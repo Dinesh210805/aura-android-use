@@ -18,7 +18,8 @@ import javax.inject.Singleton
  * per-device blocks.
  *
  * - Reads, combined in [refresh]:
- *   1. Remote Config keys `KEY_*` (below): kill switch, version floor, latest version, update URL.
+ *   1. Remote Config keys `KEY_*` (below): kill switch, version floor, latest version, update and
+ *      APK URLs.
  *      Free and unlimited, so this is where every global control lives.
  *   2. [Blocklist]: `blocklist/{hash}` and this install's `devices/{uid}.blocked` in Firestore,
  *      at most once a day.
@@ -60,6 +61,7 @@ class RemoteGateManager @Inject constructor(
                 KEY_UPDATE_URL to "",
                 KEY_LATEST_VERSION_NAME to "",
                 KEY_RELEASE_NOTES to "",
+                KEY_APK_URL to "",
             ),
         )
     }
@@ -91,6 +93,7 @@ class RemoteGateManager @Inject constructor(
             updateUrl = remoteConfig.getString(KEY_UPDATE_URL),
             latestVersionName = remoteConfig.getString(KEY_LATEST_VERSION_NAME),
             releaseNotes = remoteConfig.getString(KEY_RELEASE_NOTES),
+            apkUrl = remoteConfig.getString(KEY_APK_URL),
         )
         saveInputs(context, inputs)
 
@@ -148,6 +151,7 @@ class RemoteGateManager @Inject constructor(
                 updateUrl = p.getString(KEY_UPDATE_URL, null).orEmpty(),
                 latestVersionName = p.getString(KEY_LATEST_VERSION_NAME, null).orEmpty(),
                 releaseNotes = p.getString(KEY_RELEASE_NOTES, null).orEmpty(),
+                apkUrl = p.getString(KEY_APK_URL, null).orEmpty(),
             )
             publish(evaluateGate(inputs, Blocklist.cached(context), BuildConfig.VERSION_CODE.toLong()))
         }
@@ -162,6 +166,7 @@ class RemoteGateManager @Inject constructor(
                 .putString(KEY_UPDATE_URL, i.updateUrl)
                 .putString(KEY_LATEST_VERSION_NAME, i.latestVersionName)
                 .putString(KEY_RELEASE_NOTES, i.releaseNotes)
+                .putString(KEY_APK_URL, i.apkUrl)
                 .apply()
         }
 
@@ -180,5 +185,12 @@ class RemoteGateManager @Inject constructor(
         /** Shown in the update pop-up; blank hides it. Set with `KEY_LATEST_VERSION_CODE` on each release. */
         const val KEY_LATEST_VERSION_NAME = "latest_version_name"
         const val KEY_RELEASE_NOTES = "release_notes"
+
+        /**
+         * The release's APK file itself, for the in-app install (`AppUpdater`). Blank means the
+         * update buttons fall back to `KEY_UPDATE_URL` in the browser.
+         * - Change together: `release-app.sh` sets it to the asset it just proved downloadable.
+         */
+        const val KEY_APK_URL = "apk_url"
     }
 }
