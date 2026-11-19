@@ -15,8 +15,9 @@ import com.aura.aura_ui.agent.hitl.PendingQuestion
  * - Contract: [show] replaces any earlier question's notification; [cancel] is idempotent. A button
  *   starts `AuraOverlayService` with [AuraOverlayService.ACTION_ANSWER_QUESTION], which answers
  *   `AskUserBroker.shared`; a stale answer (the question already ended) is ignored there.
- * - Why: the fallback for a question card the user cannot see. A notification is never hidden by
- *   the app in front, and it reaches a locked or covered screen.
+ * - Why: the fallback for a question card the user cannot see: the card fell back to an app
+ *   overlay, or the screen is off or locked. Not posted while the card is on the top layer, where
+ *   it would cover this notification's heads-up.
  * - Fails: silently without the notification permission; the card and the 120 s timeout remain.
  * - Security: `AskUserBroker.answer` refuses while the phone is locked, so nobody holding a locked
  *   phone can approve a step from a button; the lock screen shows no question text.

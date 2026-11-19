@@ -153,6 +153,11 @@ this spec's hunks there.
       and `dumpsys window` lists it as `ty=ACCESSIBILITY_OVERLAY`, `isOnScreen=true`. Left
       unanswered, the notification shows the two options after 10 s; tapping one opens that page.
       (The gate card's Allow path is the same broker and card, and `ToolHubAskTest` covers it.)
+  - **Changed while building:** the notification is posted only when the card may be unseen
+    (`QuestionCardOverlay.onTop` is false, or the screen is off or locked). On the phone the
+    heads-up appeared behind the card: an accessibility overlay is above every notification layer,
+    so the notification there only duplicated the card. The user chose this over hiding the card
+    for the shade.
   - **Changed while building:** the spoken fallback was dropped. `VoiceLoop.reply` is a no-op
     without an open voice conversation, and an accessibility-overlay card can fail only when the
     accessibility service is off, when AURA cannot act at all.

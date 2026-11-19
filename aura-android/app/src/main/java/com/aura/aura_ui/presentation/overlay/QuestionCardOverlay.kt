@@ -75,6 +75,13 @@ class QuestionCardOverlay(
     private var windowManager: WindowManager? = null
     private var view: ComposeView? = null
 
+    /**
+     * True while the card is up as an accessibility overlay, the top window layer: nothing the app
+     * in front or the system draws can cover it.
+     */
+    var onTop: Boolean = false
+        private set
+
     fun show(question: PendingQuestion) {
         hide()
         val a11y = com.aura.aura_ui.accessibility.AuraAccessibilityService.instance
@@ -90,7 +97,7 @@ class QuestionCardOverlay(
             setContent { QuestionCard(question, onType, onSpeak) }
         }
         runCatching { wm.addView(compose, layoutParams(trusted = a11y != null)) }
-            .onSuccess { view = compose; windowManager = wm }
+            .onSuccess { view = compose; windowManager = wm; onTop = a11y != null }
             .onFailure { Log.e(TAG, "Question card rejected by WindowManager: ${it.message}") }
     }
 
@@ -98,6 +105,7 @@ class QuestionCardOverlay(
         view?.let { v -> runCatching { windowManager?.removeView(v) } }
         view = null
         windowManager = null
+        onTop = false
     }
 
     /** Off the glass while AURA screenshots, like the strip and the controls. */

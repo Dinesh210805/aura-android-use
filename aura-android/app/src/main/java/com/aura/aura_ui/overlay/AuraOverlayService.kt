@@ -2394,15 +2394,25 @@ class AuraOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 questionCard.show(pending)
                 speakQuestion(pending)
                 // The fallback for a card the user cannot see; later, so it does not cover a quick answer.
+                // A card on the top layer covers the heads-up, so the notification would only hide
+                // behind it: post it only when the card may be unseen (app-overlay fallback, screen
+                // off or locked).
                 notifyJob?.cancel()
                 notifyJob = launch {
                     delay(QUESTION_NOTIFY_DELAY_MS)
-                    if (AskUserBroker.shared.pending.value?.id == pending.id) {
+                    if (AskUserBroker.shared.pending.value?.id == pending.id && questionMayBeUnseen()) {
                         QuestionNotification.show(this@AuraOverlayService, pending)
                     }
                 }
             }
         }
+    }
+
+    /** Whether the user may not see the question card: it is not on the top layer, or the screen is off or locked. */
+    private fun questionMayBeUnseen(): Boolean {
+        val screenOn = getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: false
+        val locked = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked ?: true
+        return !questionCard.onTop || !screenOn || locked
     }
 
     /** "Type" on the question card: bring the prompt box up with the keyboard open. */
