@@ -28,6 +28,13 @@ object ToolStatus {
     @Volatile
     var sink: (tool: String, status: String?, args: JsonObject?) -> Unit = { _, _, _ -> }
 
+    /**
+     * Told the name of every READ tool as it starts (screen reads, waits, searches), so the host can
+     * say what the agent is doing between actions. Same rules as [sink]; reads carry no status.
+     */
+    @Volatile
+    var readSink: (tool: String) -> Unit = { }
+
     /** [schema] with the optional [ARG] property added; unchanged when the tool already declares one. */
     fun withStatus(schema: ToolSchema): ToolSchema {
         val props = schema.properties ?: JsonObject(emptyMap())

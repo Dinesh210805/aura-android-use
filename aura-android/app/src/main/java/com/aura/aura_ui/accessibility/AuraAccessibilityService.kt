@@ -271,6 +271,7 @@ class AuraAccessibilityService : AccessibilityService() {
 
         // Every action, from AURA's agent or a remote MCP client, names its purpose under the cursor.
         com.aura.mcp.server.ToolStatus.sink = com.aura.aura_ui.services.StepPill::onTool
+        com.aura.mcp.server.ToolStatus.readSink = com.aura.aura_ui.services.StepPill::onRead
         agentCursor.start()
 
         uiTreeExtractor = UITreeExtractor(this)
@@ -622,6 +623,7 @@ class AuraAccessibilityService : AccessibilityService() {
         ControlLockStore.shared.touchWatchActive = false
         agentCursor.release()
         com.aura.mcp.server.ToolStatus.sink = { _, _, _ -> }
+        com.aura.mcp.server.ToolStatus.readSink = { }
         // Accessibility and the UI overlay have independent lifecycles. If the service is
         // disabled outside RestrictedAppAccessibilityGate, do not leave a full-screen overlay
         // alive above the next app.
@@ -782,7 +784,9 @@ class AuraAccessibilityService : AccessibilityService() {
             endTarget = endTarget,
             options = options,
         )
-        flashGestureTarget(target, endTarget, options)
+        // The arrow glides to the target first and the touch lands as it arrives, as a hand would.
+        val lead = flashGestureTarget(target, endTarget, options)
+        if (lead > 0) kotlinx.coroutines.delay(lead)
         // AURA's run controls are a TOUCHABLE window. `dispatchGesture` injects real
         // MotionEvents, so they are delivered to the TOPMOST window at those coordinates —
         // meaning a target sitting under the bottom-centre Pause button would have had its
@@ -1013,7 +1017,9 @@ class AuraAccessibilityService : AccessibilityService() {
             ) == OverlayEvasion.Decision.HIDE,
         ) {
             strokes.all {
-                agentCursor.trace(it.map { (x, y) -> x.toFloat() to y.toFloat() }, durationMs, holdMs)
+                // The arrow glides to the stroke's start first; the finger goes down when it gets there.
+                val lead = agentCursor.trace(it.map { (x, y) -> x.toFloat() to y.toFloat() }, durationMs, holdMs)
+                if (lead > 0) kotlinx.coroutines.delay(lead)
                 gestureInjector.executeStroke(it, durationMs, holdMs)
             }
         }
@@ -1042,16 +1048,16 @@ class AuraAccessibilityService : AccessibilityService() {
      * so som_id-resolved taps flash too. Coordinates targets only; directional
      * scrolls have no meaningful point to mark.
      */
+    /** @return ms until the arrow reaches the touch point; an awaiting caller holds the gesture that long. */
     private fun flashGestureTarget(
         target: GestureTarget,
         endTarget: GestureTarget.Coordinates?,
         options: GestureOptions,
-    ) {
-        val coords = target as? GestureTarget.Coordinates ?: return
-        if (coords.normalized) return // 0..1 space — not screen pixels; skip rather than mis-draw
+    ): Long {
+        val coords = target as? GestureTarget.Coordinates ?: return 0L
+        if (coords.normalized) return 0L // 0..1 space — not screen pixels; skip rather than mis-draw
         val end = endTarget?.takeIf { !it.normalized }
-        tapFlash.flash(coords.x, coords.y, end?.x, end?.y)
-        if (end == null) {
+        return if (end == null) {
             if (com.aura.aura_ui.services.StepPill.wantsTarget) com.aura.aura_ui.services.StepPill.onTarget(labelAt(coords.x.toInt(), coords.y.toInt()))
             agentCursor.pointAt(coords.x, coords.y)
         } else {
@@ -1086,7 +1092,6 @@ class AuraAccessibilityService : AccessibilityService() {
         best?.lineSequence()?.firstOrNull()
     }.getOrNull()
 
-    private val tapFlash by lazy { TapFlashOverlay(this) }
 
     private val agentCursor by lazy { AgentCursorOverlay(this) }
 

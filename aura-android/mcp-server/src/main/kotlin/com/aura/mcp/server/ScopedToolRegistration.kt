@@ -285,6 +285,8 @@ internal fun Server.scopedTool(
         sinks.phase.onPhase(name, required, ToolPhaseSink.Phase.STARTED)
         if (required == McpScope.WRITE) {
             runCatching { ToolStatus.sink(name, ToolStatus.of(request.arguments), request.arguments) }
+        } else {
+            runCatching { ToolStatus.readSink(name) }
         }
         sinks.session.onToolStart(
             toolName = name,

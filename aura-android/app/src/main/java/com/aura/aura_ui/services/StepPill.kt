@@ -16,10 +16,38 @@ import kotlinx.serialization.json.contentOrNull
  *   finger once the tap point is known. Thread-safe; readers observe [line].
  * - Why present tense, before the action: the words should say where the cursor is going, not
  *   report where it has been.
+ * - Between actions [onRead] says what the agent is reading or waiting for; that never goes into
+ *   the report's [trail].
  */
 object StepPill {
     private val _line = MutableStateFlow("")
     val line: StateFlow<String> = _line.asStateFlow()
+
+    /** A READ tool started: show what is being read or waited for. Tools not listed leave the line alone. */
+    fun onRead(tool: String) {
+        val text = READ_LINES[tool] ?: return
+        pending = null
+        _line.value = text
+    }
+
+    private val READ_LINES = mapOf(
+        "read_screen" to "Looking at the screen",
+        "perceive_screen" to "Looking at the screen",
+        "get_screenshot" to "Looking at the screen",
+        "verify_action" to "Checking it worked",
+        "wait_for" to "Waiting for the app",
+        "ask_user" to "Waiting for your answer",
+        "web_search" to "Searching the web",
+        "lookup_app" to "Finding the app",
+        "list_app_deeplinks" to "Finding a shortcut",
+        "resolve_deeplink" to "Finding a shortcut",
+        "read_notifications" to "Reading notifications",
+        "resolve_contact" to "Finding the contact",
+        "find_files" to "Looking for files",
+        "browser_read" to "Reading the page",
+        "browser_extract" to "Reading the page",
+        "browser_screenshot" to "Reading the page",
+    )
 
     /** Set while the line is our own fallback, so a target label may still improve it. */
     @Volatile

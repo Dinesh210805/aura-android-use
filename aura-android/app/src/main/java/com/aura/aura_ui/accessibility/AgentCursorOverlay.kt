@@ -2,6 +2,7 @@ package com.aura.aura_ui.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.animation.Animator
+import android.animation.TimeInterpolator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.graphics.Canvas
@@ -21,7 +22,9 @@ import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
+import android.view.animation.OvershootInterpolator
 import android.view.animation.PathInterpolator
+import com.aura.aura_ui.presentation.utils.HapticUtils
 import com.aura.aura_ui.services.ControlLockStore
 import com.aura.aura_ui.services.RemoteRun
 import com.aura.aura_ui.services.StepPill
@@ -36,8 +39,9 @@ import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
- * AURA's hands on screen: a small white arrow (cua-driver's default arrow shape) that glides to each
- * touch, with a one-line pill under it saying what the step is for ([StepPill.line]).
+ * AURA's hands on screen: a small white arrow (cua-driver's default arrow shape) that glides on an
+ * arc to each touch, taps with a squish, a ring and a click haptic, presses and drags for a swipe,
+ * and carries a pill under it saying what the step is for ([StepPill.line]).
  *
  * - Contract: every public call is safe from any thread and never throws; feedback must never break
  *   the gesture it announces. [start] begins following the run: the cursor stays on screen for the
@@ -60,6 +64,7 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
     private var motion: ValueAnimator? = null
     private var trailFade: ValueAnimator? = null
     private var squish: ValueAnimator? = null
+    private var ripple: ValueAnimator? = null
     private val detachRunnable = Runnable { if (!runActive) detach() }
 
     /** True while a run owns the cursor and the user has not paused it. */
@@ -90,7 +95,11 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
             handler.removeCallbacks(detachRunnable)
             val fresh = view == null
             val v = attach() ?: return
-            if (fresh) v.parkAtCentre()
+            if (fresh) {
+                v.parkAtCentre()
+                aimX = v.cx
+                aimY = v.cy
+            }
             v.setLine(StepPill.line.value)
             v.visibility = View.VISIBLE
         } else {
@@ -98,22 +107,89 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
         }
     }
 
-    /** Glide the arrow so its tip lands on ([x], [y]), then squish once: a tap. */
-    fun pointAt(x: Float, y: Float): Unit = onMain {
-        val fresh = view == null
-        val v = attach() ?: return@onMain
-        val d = service.resources.displayMetrics.density
-        val from = if (fresh) (x - ENTRY_DX_DP * d) to (y - ENTRY_DY_DP * d) else v.cx to v.cy
-        run(v, listOf(from, x to y), GLIDE_MS, 0L, trail = false, tapAtEnd = true)
+    /**
+     * Glide the arrow on a curve so its tip lands on ([x], [y]), then tap: squish, ring, click haptic.
+     *
+     * - Contract: returns the glide's length in ms, computed on the calling thread. A caller that
+     *   waits that long before injecting the tap makes the touch land as the arrow arrives.
+     */
+    fun pointAt(x: Float, y: Float): Long {
+        val ms = glideMs(x, y)
+        onMain {
+            val v = attach() ?: return@onMain
+            run(v, glidePath(v, x, y), ms, 0L, trail = false, onArrive = { tap(v, x, y) })
+        }
+        return ms
     }
 
-    /** Ride [points] (screen pixels) over [durationMs], after [delayMs] parked on the first point. */
-    fun trace(points: List<Pair<Float, Float>>, durationMs: Long, delayMs: Long = 0L): Unit = onMain {
-        if (points.isEmpty()) return@onMain
-        val v = attach() ?: return@onMain
-        v.cx = points[0].first
-        v.cy = points[0].second
-        run(v, points, durationMs.coerceAtLeast(1L), delayMs.coerceAtLeast(0L), trail = true, tapAtEnd = false)
+    /**
+     * Glide to the first of [points], press down (ring, tick haptic), stay [delayMs] there, ride
+     * [points] over [durationMs] with a trail, then lift.
+     *
+     * - Contract: returns the glide's length in ms; the drag starts after it, so a caller that
+     *   waits that long before injecting keeps finger and arrow together.
+     */
+    fun trace(points: List<Pair<Float, Float>>, durationMs: Long, delayMs: Long = 0L): Long {
+        if (points.isEmpty()) return 0L
+        val (sx, sy) = points[0]
+        val ms = glideMs(sx, sy)
+        onMain {
+            val v = attach() ?: return@onMain
+            val drag = {
+                press(v, sx, sy)
+                run(v, points, durationMs.coerceAtLeast(1L), delayMs.coerceAtLeast(0L), trail = true, onArrive = { lift(v) })
+            }
+            if (ms == 0L) drag() else run(v, glidePath(v, sx, sy), ms, 0L, trail = false, onArrive = drag)
+        }
+        return ms
+    }
+
+    /** Where the arrow is heading, so the next glide's length is known off the main thread. */
+    @Volatile
+    private var aimX = Float.NaN
+
+    @Volatile
+    private var aimY = Float.NaN
+
+    /** Longer for longer trips, as a hand moves; 0 when the arrow is already there. */
+    private fun glideMs(x: Float, y: Float): Long {
+        val d = service.resources.displayMetrics.density
+        val fromX = if (aimX.isNaN()) x - ENTRY_DX_DP * d else aimX
+        val fromY = if (aimY.isNaN()) y - ENTRY_DY_DP * d else aimY
+        aimX = x
+        aimY = y
+        val dp = hypot(x - fromX, y - fromY) / d
+        if (dp < 4f) return 0L
+        return (GLIDE_MIN_MS + dp * GLIDE_MS_PER_DP).toLong().coerceAtMost(GLIDE_MAX_MS)
+    }
+
+    /** A gentle arc from the arrow to ([x], [y]): a quadratic curve bowed upward, sampled. */
+    private fun glidePath(v: CursorView, x: Float, y: Float): List<Pair<Float, Float>> {
+        val d = service.resources.displayMetrics.density
+        if (!v.placed) {
+            v.cx = x - ENTRY_DX_DP * d
+            v.cy = y - ENTRY_DY_DP * d
+            v.placed = true
+        }
+        val fx = v.cx
+        val fy = v.cy
+        val len = hypot(x - fx, y - fy)
+        if (len < 1f) return listOf(x to y)
+        val bend = (len * ARC_BEND).coerceAtMost(ARC_MAX_DP * d)
+        // Perpendicular to the trip, always bowed upward so every arc reads the same way.
+        var px = -(y - fy) / len
+        var py = (x - fx) / len
+        if (py > 0f) {
+            px = -px
+            py = -py
+        }
+        val qx = (fx + x) / 2 + px * bend
+        val qy = (fy + y) / 2 + py * bend
+        return (0..ARC_SAMPLES).map { i ->
+            val t = i / ARC_SAMPLES.toFloat()
+            val u = 1 - t
+            (u * u * fx + 2 * u * t * qx + t * t * x) to (u * u * fy + 2 * u * t * qy + t * t * y)
+        }
     }
 
     /** Main thread only. Hides the arrow and its pill; returns false when there was nothing to hide. */
@@ -134,6 +210,9 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
         motion?.cancel()
         trailFade?.cancel()
         squish?.cancel()
+        ripple?.cancel()
+        aimX = Float.NaN
+        aimY = Float.NaN
         val v = view ?: return@onMain
         view = null
         isShowing = false
@@ -153,12 +232,16 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
         durationMs: Long,
         delayMs: Long,
         trail: Boolean,
-        tapAtEnd: Boolean,
+        onArrive: () -> Unit = {},
     ) {
         motion?.cancel()
         trailFade?.cancel()
         handler.removeCallbacks(detachRunnable)
         v.trail = if (trail) Path().apply { moveTo(points[0].first, points[0].second) } else null
+        if (trail) {
+            v.cx = points[0].first
+            v.cy = points[0].second
+        }
         v.trailAlpha = 1f
         v.moving = true
         motion = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -176,7 +259,7 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
                 override fun onAnimationEnd(animation: Animator) {
                     v.moving = false
                     if (v.trail != null) fadeTrail(v)
-                    if (tapAtEnd) squish(v)
+                    runCatching(onArrive)
                     if (!runActive) handler.postDelayed(detachRunnable, IDLE_MS)
                 }
             })
@@ -184,17 +267,74 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
         }
     }
 
-    private fun squish(v: CursorView) {
+    /** A tap: the arrow squishes and springs back, a ring spreads from the tip, a click haptic. */
+    private fun tap(v: CursorView, x: Float, y: Float) {
+        HapticUtils.performAgentTouchHaptic(service, tap = true)
+        ripple(v, x, y, RIPPLE_TAP_DP)
+        scaleTo(v, SQUISH_MIN, SQUISH_DOWN_MS) { scaleTo(v, 1f, SQUISH_UP_MS, OVERSHOOT) }
+    }
+
+    /** A swipe presses down: a small ring, a tick haptic, and the arrow stays pressed while it drags. */
+    private fun press(v: CursorView, x: Float, y: Float) {
+        HapticUtils.performAgentTouchHaptic(service, tap = false)
+        ripple(v, x, y, RIPPLE_PRESS_DP)
+        scaleTo(v, PRESSED, SQUISH_DOWN_MS)
+    }
+
+    /** The swipe lifts: the arrow springs back to full size. */
+    private fun lift(v: CursorView) = scaleTo(v, 1f, SQUISH_UP_MS, OVERSHOOT)
+
+    private fun scaleTo(
+        v: CursorView,
+        target: Float,
+        ms: Long,
+        ease: TimeInterpolator = DecelerateInterpolator(),
+        then: () -> Unit = {},
+    ) {
         squish?.cancel()
-        squish = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = SQUISH_MS
-            interpolator = DecelerateInterpolator()
+        squish = ValueAnimator.ofFloat(v.scale, target).apply {
+            duration = ms
+            interpolator = ease
             addUpdateListener {
-                val f = it.animatedValue as Float
-                // Down to SQUISH_MIN in the first third, back to full size after.
-                v.scale = if (f < 0.33f) 1f - (1f - SQUISH_MIN) * (f / 0.33f) else SQUISH_MIN + (1f - SQUISH_MIN) * ((f - 0.33f) / 0.67f)
+                v.scale = it.animatedValue as Float
                 v.invalidate()
             }
+            addListener(object : AnimatorListenerAdapter() {
+                private var cancelled = false
+
+                override fun onAnimationCancel(animation: Animator) {
+                    cancelled = true
+                }
+
+                override fun onAnimationEnd(animation: Animator) {
+                    if (!cancelled) then()
+                }
+            })
+            start()
+        }
+    }
+
+    /** A white ring that spreads from ([x], [y]) to [radiusDp] and fades. */
+    private fun ripple(v: CursorView, x: Float, y: Float, radiusDp: Float) {
+        ripple?.cancel()
+        val maxR = radiusDp * service.resources.displayMetrics.density
+        v.rippleX = x
+        v.rippleY = y
+        ripple = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = RIPPLE_MS
+            interpolator = DecelerateInterpolator(1.6f)
+            addUpdateListener {
+                val f = it.animatedValue as Float
+                v.rippleR = maxR * f
+                v.rippleAlpha = 1f - f
+                v.invalidate()
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    v.rippleAlpha = 0f
+                    v.invalidate()
+                }
+            })
             start()
         }
     }
@@ -245,6 +385,19 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
         var scale = 1f
         var moving = false
 
+        /** False until the arrow has a position; the first glide then enters from up-left of its target. */
+        var placed = false
+        var rippleX = 0f
+        var rippleY = 0f
+        var rippleR = 0f
+        var rippleAlpha = 0f
+        private val ripplePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2f * resources.displayMetrics.density
+            color = Color.WHITE
+            setShadowLayer(2f * resources.displayMetrics.density, 0f, 0f, 0x55000000)
+        }
+
         private val density = resources.displayMetrics.density
         private val arrow = CursorShape.path()
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -294,6 +447,7 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
             val m = resources.displayMetrics
             cx = m.widthPixels * 0.5f
             cy = m.heightPixels * 0.42f
+            placed = true
         }
 
         fun setLine(text: String) {
@@ -335,6 +489,10 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
         }
 
         override fun onDraw(canvas: Canvas) {
+            if (rippleAlpha > 0f) {
+                ripplePaint.alpha = (RIPPLE_MAX_ALPHA * rippleAlpha).toInt()
+                canvas.drawCircle(rippleX, rippleY, rippleR, ripplePaint)
+            }
             trail?.let {
                 trailPaint.alpha = (TRAIL_MAX_ALPHA * trailAlpha).toInt()
                 canvas.drawPath(it, trailPaint)
@@ -388,12 +546,24 @@ internal class AgentCursorOverlay(private val service: AccessibilityService) {
 
     private companion object {
         const val TAG = "AgentCursor"
-        const val GLIDE_MS = 240L
+        const val GLIDE_MIN_MS = 180L
+        const val GLIDE_MS_PER_DP = 0.55f
+        const val GLIDE_MAX_MS = 520L
+        const val ARC_BEND = 0.18f
+        const val ARC_MAX_DP = 70f
+        const val ARC_SAMPLES = 24
         const val IDLE_MS = 3_000L
         const val TRAIL_FADE_MS = 450L
         const val TRAIL_MAX_ALPHA = 200
-        const val SQUISH_MS = 260L
-        const val SQUISH_MIN = 0.82f
+        const val SQUISH_DOWN_MS = 90L
+        const val SQUISH_UP_MS = 260L
+        const val SQUISH_MIN = 0.78f
+        const val PRESSED = 0.86f
+        const val RIPPLE_MS = 420L
+        const val RIPPLE_TAP_DP = 26f
+        const val RIPPLE_PRESS_DP = 18f
+        const val RIPPLE_MAX_ALPHA = 230
+        val OVERSHOOT = OvershootInterpolator(2.2f)
         const val LINE_FADE_MS = 160L
         const val FLOAT_MS = 4_000L
         const val FLOAT_SWAY_DP = 1.1f

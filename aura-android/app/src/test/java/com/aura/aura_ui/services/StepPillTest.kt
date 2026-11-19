@@ -59,4 +59,20 @@ class StepPillTest {
         StepPill.clear()
         assertEquals(2, StepPill.trail().size)
     }
+
+    @Test
+    fun `a screen read shows on the pill but not in the trail`() {
+        StepPill.resetTrail()
+        StepPill.onTool("tap", "Opening the cart", null)
+        StepPill.onRead("read_screen")
+        assertEquals("Looking at the screen", StepPill.line.value)
+        assertEquals(listOf("Opening the cart"), StepPill.trail())
+    }
+
+    @Test
+    fun `an unlisted read leaves the line alone`() {
+        StepPill.onTool("tap", "Opening the cart", null)
+        StepPill.onRead("get_device_status")
+        assertEquals("Opening the cart", StepPill.line.value)
+    }
 }
