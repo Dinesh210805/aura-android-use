@@ -35,7 +35,7 @@ docs, chat, notes, tasks, issues) over driving that app's screen.
   slip new instructions to the agent; the user approves it instead.
 
 ## Steps
-- [ ] **1. `parse` reads only the toolkit's own entry.**
+- [x] **1. `parse` reads only the toolkit's own entry.** (2026-11-19: `ComposioAppsTest` 18/18 pass, the three named cases included.)
   - **What changes:** `agentcore/ComposioApps.kt` (`parse`, `statusOf`, `linkIn`, `summaryOf` (new)).
   - **Logic:** JSON reply: the entry's status at any depth (`status`, `connection_status`,
     `state`) decides active/failed; else a link under a link-named key of the entry (not logo,
