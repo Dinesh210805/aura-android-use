@@ -62,6 +62,9 @@ val COMPOSIO_APPS = listOf(
 /** Where one app's sign-in stands, as `COMPOSIO_MANAGE_CONNECTIONS` reported it. */
 sealed interface ComposioLink {
     data object Active : ComposioLink
+
+    /** Composio has no active account for the app, and no sign-in was started. */
+    data object NotConnected : ComposioLink
     data class SignIn(val url: String) : ComposioLink
     data class Failed(val reason: String) : ComposioLink
 }
@@ -69,14 +72,16 @@ sealed interface ComposioLink {
 /**
  * Signs single apps in to the user's Composio Connect account, outside any chat turn.
  *
- * - Contract: [check] calls `COMPOSIO_MANAGE_CONNECTIONS` for one toolkit. Composio answers
- *   with the live connection when it is active, otherwise it starts a sign-in and returns its
- *   link (a fresh one each call; old ones expire). The user opens the link; nothing here waits.
+ * - Contract: [sync] and [check] only read: they run the tool's `list` action, which has no side
+ *   effects. Only [turnOn] runs `add`, and only when `list` found no active account, because
+ *   every `add` creates a new pending account and a fresh sign-in link (Composio caps a toolkit at
+ *   10 accounts). The user opens the link; nothing here waits.
  * - Why: that tool is the only way an AURA account starts an app's sign-in (Composio's REST API
  *   needs a developer project key), and the user turning the app on is the approval, so the call
- *   does not go through the safety gate.
+ *   does not go through the safety gate. Composio is the source of truth for what is connected,
+ *   so the switches survive an app restart or reinstall; only "turned off" is AURA's own state.
  * - Fails: an unreachable server or a refused key comes back as [ComposioLink.Failed].
- * - Reads/Writes: network host of [COMPOSIO_MCP_URL]; the signed-in list via [ConnectorStore].
+ * - Reads/Writes: network host of [COMPOSIO_MCP_URL]; the signed-in and off lists via [ConnectorStore].
  */
 class ComposioAccounts(private val store: ConnectorStore) {
 
@@ -87,10 +92,17 @@ class ComposioAccounts(private val store: ConnectorStore) {
     /** Apps the user turned off; AURA refuses their calls (`ConnectorToolSource.call`). */
     fun turnedOff(): Set<String> = connector()?.let { store.offApps(it.id) }.orEmpty()
 
-    /** Turns [slug] on and asks Composio about it, as [check]. */
+    /**
+     * Turns [slug] on: already connected at Composio turns on at once; otherwise starts one
+     * sign-in and returns its link.
+     */
     suspend fun turnOn(slug: String): ComposioLink {
-        connector()?.let { store.setOffApps(it.id, store.offApps(it.id) - slug) }
-        return check(slug)
+        val connector = connector() ?: return ComposioLink.Failed("Sign in to Composio first.")
+        val app = normalizeSlug(slug) ?: return ComposioLink.Failed("That is not an app name Composio knows.")
+        store.setOffApps(connector.id, store.offApps(connector.id) - app)
+        val now = check(app)
+        if (now != ComposioLink.NotConnected) return now
+        return call(connector, addArgs(app)) { parse(it, app) } ?: ComposioLink.Failed("Composio sent nothing back.")
     }
 
     /** Turns [slug] off: AURA stops using it. Its sign-in stays at Composio until revoked there. */
@@ -101,23 +113,40 @@ class ComposioAccounts(private val store: ConnectorStore) {
     }
 
     suspend fun check(slug: String): ComposioLink {
-        val connector = connector() ?: return ComposioLink.Failed("Sign in to Composio first.")
         val app = normalizeSlug(slug) ?: return ComposioLink.Failed("That is not an app name Composio knows.")
-        val link = try {
-            val result = store.callDirect(connector.id, MANAGE, manageArgs(app))
-            if (result.isError) ComposioLink.Failed(result.text.take(200).ifBlank { "Composio refused." }) else parse(result.text, app)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            ComposioLink.Failed(e.message ?: "Could not reach Composio.")
+        return sync(setOf(app))[app] ?: ComposioLink.Failed("Sign in to Composio first.")
+    }
+
+    /**
+     * Asks Composio about every app in [slugs] in one `list` call. An active app the user has
+     * not turned off joins the signed-in list.
+     *
+     * - Contract: never removes an app from the signed-in list; only the user's switch does
+     *   ([turnOff]). A reply misread once must not switch the user's app off.
+     * - Fails: every app maps to the same [ComposioLink.Failed]; empty when signed out of Composio.
+     */
+    suspend fun sync(slugs: Set<String>): Map<String, ComposioLink> {
+        val connector = connector() ?: return emptyMap()
+        val apps = slugs.mapNotNull(::normalizeSlug).toSet().ifEmpty { return emptyMap() }
+        val links = mutableMapOf<String, ComposioLink>()
+        val failed = call(connector, listArgs(apps)) { text ->
+            apps.forEach { links[it] = parse(text, it) }
+            null
         }
-        val apps = store.signedInApps(connector.id)
-        when (link) {
-            ComposioLink.Active -> store.setSignedInApps(connector.id, apps + app)
-            is ComposioLink.SignIn -> store.setSignedInApps(connector.id, apps - app)
-            is ComposioLink.Failed -> Unit
-        }
-        return link
+        if (failed != null) return apps.associateWith { failed }
+        val active = links.filterValues { it == ComposioLink.Active }.keys - store.offApps(connector.id)
+        if (active.isNotEmpty()) store.setSignedInApps(connector.id, store.signedInApps(connector.id) + active)
+        return links
+    }
+
+    /** Runs the manage tool with [args]; [read] turns a non-error reply into the result. */
+    private suspend fun call(connector: ConnectorConfig, args: JsonObject, read: (String) -> ComposioLink?): ComposioLink? = try {
+        val result = store.callDirect(connector.id, MANAGE, args)
+        if (result.isError) ComposioLink.Failed(result.text.take(200).ifBlank { "Composio refused." }) else read(result.text)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        ComposioLink.Failed(e.message ?: "Could not reach Composio.")
     }
 
     companion object {
@@ -134,7 +163,7 @@ class ComposioAccounts(private val store: ConnectorStore) {
          * of each tool slug (`GMAIL_SEND_EMAIL` → `gmail`) of an execute call. Pure.
          */
         fun appsIn(tool: String, args: JsonObject): Set<String> = when (tool) {
-            MANAGE -> (args["toolkits"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.lowercase() }.toSet()
+            MANAGE -> (args["toolkits"] as? JsonArray).orEmpty().mapNotNull { toolkitName(it)?.lowercase() }.toSet()
             else -> ConnectorRisk.slugs(args).map { it.substringBefore('_').lowercase() }.filter { it.isNotEmpty() }.toSet()
         }
 
@@ -150,9 +179,12 @@ class ComposioAccounts(private val store: ConnectorStore) {
             if (off.isEmpty()) return null
             val names = (ConnectorRisk.slugs(args) + tool + toolkitArgs(args)).map { it.lowercase() }
             off.firstOrNull { app -> names.any { it == app || it.startsWith(app + "_") } }?.let { return it }
-            val executes = tool in setOf("COMPOSIO_MULTI_EXECUTE_TOOL", "COMPOSIO_EXECUTE_TOOL")
-            return if (executes && ConnectorRisk.slugs(args).isEmpty()) off.first() else null
+            return if (unnamedExecute(tool, args)) off.first() else null
         }
+
+        /** An execute call that names no `tool_slug`, so the app it reaches is unknown. */
+        fun unnamedExecute(tool: String, args: JsonObject): Boolean =
+            tool in setOf("COMPOSIO_MULTI_EXECUTE_TOOL", "COMPOSIO_EXECUTE_TOOL") && ConnectorRisk.slugs(args).isEmpty()
 
         private fun toolkitArgs(args: JsonObject): List<String> {
             val out = mutableListOf<String>()
@@ -162,7 +194,7 @@ class ComposioAccounts(private val store: ConnectorStore) {
                         if (k == "toolkit" || k == "toolkits" || k == "toolkit_slug") {
                             when (v) {
                                 is JsonPrimitive -> v.contentOrNull?.let(out::add)
-                                is JsonArray -> v.mapNotNullTo(out) { (it as? JsonPrimitive)?.contentOrNull }
+                                is JsonArray -> v.mapNotNullTo(out, ::toolkitName)
                                 else -> walk(v)
                             }
                         } else {
@@ -177,33 +209,62 @@ class ComposioAccounts(private val store: ConnectorStore) {
             return out
         }
 
-        fun manageArgs(slug: String): JsonObject = buildJsonObject {
-            putJsonArray("toolkits") { add(JsonPrimitive(slug)) }
-            put("reinitiate_all", false)
+        /**
+         * The manage tool's `list` action for [slugs]: reads each app's accounts, no side effects.
+         * - Change together: [addArgs], [toolkitName]; the tool's schema takes `toolkits` as
+         *   objects (`name`, `action` = add | rename | list | remove), and `action` defaults to `add`.
+         */
+        fun listArgs(slugs: Set<String>): JsonObject = buildJsonObject {
+            putJsonArray("toolkits") { slugs.forEach { slug -> add(buildJsonObject { put("name", slug); put("action", "list") }) } }
         }
+
+        /** The manage tool's `add` action for [slug]: a new pending account and its sign-in link. */
+        fun addArgs(slug: String): JsonObject = buildJsonObject {
+            putJsonArray("toolkits") { add(buildJsonObject { put("name", slug); put("action", "add") }) }
+        }
+
+        /** A `toolkits` item's app: a plain slug, or the `name` of an item object. */
+        private fun toolkitName(item: JsonElement): String? =
+            (item as? JsonPrimitive)?.contentOrNull ?: ((item as? JsonObject)?.get("name") as? JsonPrimitive)?.contentOrNull
 
         /**
          * Reads one toolkit's state from the tool's reply.
          *
-         * - Contract: pure. Looks for the toolkit's entry under `data.results` (keyed by slug or a
-         *   list item naming it); an `active` status wins, then any https link in the entry, then
-         *   any https link in the whole reply. Anything else is [ComposioLink.Failed].
-         * - Why so lenient: Composio documents `results` only as "per-toolkit object", and the
-         *   reply may come as JSON or as text.
+         * - Contract: pure. A JSON reply is decided by the toolkit's own entry under `data.results`
+         *   (keyed by slug or a list item naming it): its status (`active`, `initiated`, `failed`,
+         *   found at any depth of the entry), else a sign-in link under a link-named key of the
+         *   entry, else `data.summary` when the reply covers one toolkit. Links anywhere else in
+         *   the reply (`message`, `session.instructions`, logos) never count. An entry with none
+         *   of these (a `list` of an app with no account) is [ComposioLink.NotConnected]. A
+         *   plain-text reply is a sign-in when it has a link. Anything else is [ComposioLink.Failed].
+         * - Why: Composio documents `results` only as "per-toolkit object". Reading any link in the
+         *   reply as a sign-in turned connected apps off on every re-check.
          */
         fun parse(text: String, slug: String): ComposioLink {
             val root = runCatching { Json.parseToJsonElement(text) }.getOrNull()
+                ?: return URL.find(text)?.value?.let { ComposioLink.SignIn(it) }
+                    ?: if (text.contains("active", ignoreCase = true)) ComposioLink.Active else ComposioLink.Failed(text.take(200).ifBlank { "Composio sent nothing back." })
             if (root is JsonObject && root["successful"]?.primitiveText() == "false") {
                 return ComposioLink.Failed(root["error"]?.primitiveText()?.takeIf { it.isNotBlank() } ?: "Composio refused.")
             }
-            val entry = root?.let { entryFor(it, slug) }
-            if (entry != null) {
-                if (statusOf(entry)?.equals("active", ignoreCase = true) == true) return ComposioLink.Active
-                linkIn(entry)?.let { return ComposioLink.SignIn(it) }
+            val entry = entryFor(root, slug)
+            when (entry?.let(::statusOf)?.lowercase()) {
+                "active" -> return ComposioLink.Active
+                "failed" -> return ComposioLink.Failed(
+                    ((entry as? JsonObject)?.get("error_message")?.primitiveText())?.takeIf { it.isNotBlank() } ?: "Composio could not connect $slug.",
+                )
             }
-            URL.find(text)?.value?.let { return ComposioLink.SignIn(it) }
-            if (entry == null && root == null && text.contains("active", ignoreCase = true)) return ComposioLink.Active
+            entry?.let(::linkIn)?.let { return ComposioLink.SignIn(it) }
+            summaryOf(root)?.let { (total, active) -> if (total == 1 && active == 1) return ComposioLink.Active }
+            if (entry != null) return ComposioLink.NotConnected
             return ComposioLink.Failed(text.take(200).ifBlank { "Composio sent nothing back." })
+        }
+
+        /** `data.summary` as (total toolkits, active connections), or null. */
+        private fun summaryOf(root: JsonElement): Pair<Int, Int>? {
+            val summary = ((root as? JsonObject)?.get("data") as? JsonObject)?.get("summary") as? JsonObject ?: return null
+            fun count(key: String) = summary[key]?.primitiveText()?.toIntOrNull()
+            return (count("total_toolkits") ?: return null) to (count("active_connections") ?: return null)
         }
 
         private fun entryFor(root: JsonElement, slug: String): JsonElement? {
@@ -219,15 +280,31 @@ class ComposioAccounts(private val store: ConnectorStore) {
             }
         }
 
-        private fun statusOf(entry: JsonElement): String? =
-            (entry as? JsonObject)?.let { it["status"]?.primitiveText() ?: it["connection_status"]?.primitiveText() }
+        /** The first `status`/`connection_status`/`state` value in [entry], searching nested objects too. */
+        private fun statusOf(entry: JsonElement): String? = when (entry) {
+            is JsonObject -> STATUS_KEYS.firstNotNullOfOrNull { entry[it]?.primitiveText() }
+                ?: entry.values.firstNotNullOfOrNull { statusOf(it) }
+            is JsonArray -> entry.firstNotNullOfOrNull { statusOf(it) }
+            is JsonPrimitive -> null
+        }
 
+        /** A sign-in link: a link-named key's value (redirect, auth link, url), never a logo or docs link. */
         private fun linkIn(entry: JsonElement): String? = when (entry) {
-            is JsonPrimitive -> entry.contentOrNull?.let { URL.find(it)?.value }
-            is JsonObject -> entry.entries.sortedByDescending { it.key.contains("redirect") || it.key.contains("link") }
-                .firstNotNullOfOrNull { linkIn(it.value) }
+            is JsonPrimitive -> null
+            is JsonObject -> entry.entries.firstNotNullOfOrNull { (key, value) ->
+                val k = key.lowercase()
+                if (LINK_KEY.containsMatchIn(k) && !NOT_LINK_KEY.containsMatchIn(k)) {
+                    value.primitiveText()?.let { URL.find(it)?.value } ?: linkIn(value)
+                } else {
+                    (value as? JsonObject)?.let(::linkIn)
+                }
+            }
             is JsonArray -> entry.firstNotNullOfOrNull { linkIn(it) }
         }
+
+        private val STATUS_KEYS = listOf("status", "connection_status", "state")
+        private val LINK_KEY = Regex("redirect|link|url")
+        private val NOT_LINK_KEY = Regex("logo|icon|image|doc")
 
         private fun JsonElement.primitiveText(): String? = (this as? JsonPrimitive)?.contentOrNull
     }

@@ -28,14 +28,16 @@ object ConnectorRisk {
     /** Tools that run other tools named in their arguments. */
     private val META_EXECUTE = setOf("COMPOSIO_MULTI_EXECUTE_TOOL", "COMPOSIO_EXECUTE_TOOL")
 
-    /** Composio tools that only look things up. `MANAGE_CONNECTIONS` starts a sign-in: an act. */
-    private val META_READ = setOf("COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_WAIT_FOR_CONNECTIONS")
+    /**
+     * Composio tools that change nothing in the user's accounts. `MANAGE_CONNECTIONS` only returns
+     * a sign-in link: the user approves on the provider's own page, so a card before it is noise.
+     */
+    private val META_READ = setOf("COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_WAIT_FOR_CONNECTIONS", "COMPOSIO_MANAGE_CONNECTIONS")
 
     private val READ_VERBS = setOf("GET", "LIST", "SEARCH", "FETCH", "FIND", "READ", "DESCRIBE", "QUERY", "LOOKUP", "VIEW", "CHECK")
 
     fun of(tool: Tool): ToolRisk {
         if (tool.name in META_READ) return ToolRisk.READ
-        if (tool.name == "COMPOSIO_MANAGE_CONNECTIONS") return ToolRisk.ACT
         if (tool.name in META_EXECUTE) return ToolRisk.COMMIT
         val a = tool.annotations
         return when {
@@ -46,6 +48,12 @@ object ConnectorRisk {
             else -> ToolRisk.COMMIT
         }
     }
+
+    /** True for a Composio tool that returns only its own catalog or a sign-in link, never app data. */
+    fun isCatalog(tool: String): Boolean = tool in META_READ
+
+    /** True for a tool that runs the app tools named in its arguments. */
+    fun isMeta(tool: String): Boolean = tool in META_EXECUTE
 
     /** The per-call risk for a tool that runs others, or null when [tool] has a fixed risk. */
     fun forCall(tool: String): ((JsonObject) -> ToolRisk)? = if (tool !in META_EXECUTE) null else { args ->

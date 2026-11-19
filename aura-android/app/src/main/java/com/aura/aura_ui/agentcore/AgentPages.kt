@@ -243,27 +243,48 @@ class AgentPagesViewModel(app: Application) : AndroidViewModel(app) {
         val state = when (val link = composio.turnOn(app)) {
             ComposioLink.Active -> AppState.Connected
             is ComposioLink.SignIn -> AppState.Waiting(link.url).also { open(link.url) }
+            ComposioLink.NotConnected -> AppState.Failed("Composio did not start a sign-in. Try again.")
             is ComposioLink.Failed -> AppState.Failed(link.reason)
         }
         apps.value = apps.value + (app to state)
     }
 
     /**
-     * Called when the page comes back to the front: picks up apps the agent signed in from a
-     * chat, and re-checks apps the user went to sign in to and connected ones. A connected app
-     * Composio now wants signed in again shows off.
+     * Called when the page comes back to the front: asks Composio in one `list` call which of the
+     * listed apps, and any app on this page, are connected, and counts each connector's changed
+     * tools.
+     *
+     * - Contract: Composio decides what is on, so the switches hold across restarts and
+     *   reinstalls; an app the user turned off stays off. A check never turns an app off and
+     *   never starts a sign-in: a connected app Composio no longer has shows "Sign in again", a
+     *   row still waiting for its sign-in keeps waiting, and an unreachable Composio leaves every
+     *   row as it was. Only the user's switch turns an app off.
      */
     fun recheck() = viewModelScope.launch {
         connectors.value = core.connectors.configs()
         apps.value = composio.signedIn().associateWith { AppState.Connected as AppState } + apps.value
-        apps.value.filterValues { it is AppState.Waiting || it == AppState.Connected }.forEach { (app, before) ->
-            val state = when (val link = composio.check(app)) {
+        val links = composio.sync(COMPOSIO_APPS.map { it.slug }.toSet() + apps.value.keys - composio.turnedOff())
+        apps.value = apps.value + links.mapNotNull { (app, link) ->
+            val before = apps.value[app]
+            val after = when (link) {
                 ComposioLink.Active -> AppState.Connected
-                is ComposioLink.SignIn -> if (before == AppState.Connected) null else AppState.Waiting(link.url)
-                is ComposioLink.Failed -> if (before == AppState.Connected) before else AppState.Failed(link.reason)
+                ComposioLink.NotConnected -> if (before == AppState.Connected) AppState.Waiting(null, again = true) else null
+                is ComposioLink.Failed -> if (before is AppState.Waiting) AppState.Failed(link.reason) else null
+                is ComposioLink.SignIn -> null
             }
-            apps.value = if (state == null) apps.value - app else apps.value + (app to state)
+            after?.takeIf { before != AppState.Working }?.let { app to it }
         }
+        changedTools.value = connectors.value.associate { it.id to core.connectors.changedTools(it.id) }.filterValues { it > 0 }
+    }
+
+    /** Per connector id, how many of its tools changed since the user approved them; they stay hidden until allowed. */
+    val changedTools = MutableStateFlow<Map<String, Int>>(emptyMap())
+
+    /** The user allows the connector's tools as they are now. */
+    fun allowChangedTools(id: String) = viewModelScope.launch {
+        core.connectors.approveCurrent(id)
+        changedTools.value = changedTools.value - id
+        connectors.value = core.connectors.configs()
     }
 }
 
@@ -272,8 +293,12 @@ sealed interface AppState {
     data object Working : AppState
     data object Connected : AppState
 
-    /** The user was sent to [url] to sign in; re-checked when AURA comes back to the front. */
-    data class Waiting(val url: String) : AppState
+    /**
+     * The user was sent to [url] to sign in; re-checked when AURA comes back to the front.
+     * [again]: the app was connected and Composio no longer has it; [url] is null until the
+     * user taps the row, which starts a new sign-in.
+     */
+    data class Waiting(val url: String?, val again: Boolean = false) : AppState
     data class Failed(val reason: String) : AppState
 }
 

@@ -79,6 +79,7 @@ fun ConnectorsPage(vm: AgentPagesViewModel = viewModel()) {
     val status by vm.connectorStatus.collectAsState()
     val oauthStatus by vm.oauthStatus.collectAsState()
     val apps by vm.apps.collectAsState()
+    val changed by vm.changedTools.collectAsState()
     val uri = LocalUriHandler.current
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
@@ -93,6 +94,7 @@ fun ConnectorsPage(vm: AgentPagesViewModel = viewModel()) {
         if (composio == null) {
             ComposioSignIn(oauthStatus) { vm.signInComposio(open) }
         } else {
+            changed[composio.id]?.let { n -> ChangedTools(n) { vm.allowChangedTools(composio.id) } }
             AppList(apps, { slug, on -> vm.toggleApp(slug, on, open) }, open)
             AuraSection(footer = "Turning an app off stops AURA using it. To remove its access completely, use Manage. What AURA sends an app and reads back passes through Composio, and AURA treats what comes back as untrusted.") {
                 AuraRow("Manage at Composio", onClick = { open(COMPOSIO_DASHBOARD_URL) })
@@ -100,8 +102,33 @@ fun ConnectorsPage(vm: AgentPagesViewModel = viewModel()) {
                 AuraRow("Sign out of Composio", destructive = true, onClick = { vm.removeConnector(composio.id) })
             }
         }
+        connectors.filterNot { it.url == COMPOSIO_MCP_URL }.forEach { server ->
+            changed[server.id]?.let { n -> ChangedTools(n, server.displayName) { vm.allowChangedTools(server.id) } }
+        }
         OtherServers(connectors.filterNot { it.url == COMPOSIO_MCP_URL }, status, vm)
     }
+}
+
+/**
+ * [count] of a connector's tools changed since the user approved them, so AURA hides them; Allow
+ * approves them as they are now.
+ * - Why it asks: a connector changing what its tools say is how a server could slip new
+ *   instructions to the agent, so the change waits for the user.
+ */
+@Composable
+private fun ChangedTools(count: Int, name: String = "Composio", onAllow: () -> Unit) {
+    val aura = LocalAura.current
+    AuraSection {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("$name updated ${if (count == 1) "a tool" else "$count tools"}", style = AuraType.headline, color = aura.label)
+                Text("AURA can't use ${if (count == 1) "it" else "them"} until you allow the new version.", style = AuraType.footnote, color = aura.secondary)
+            }
+            Spacer(Modifier.width(12.dp))
+            AuraButton("Allow", onAllow, primary = false)
+        }
+    }
+    Spacer(Modifier.height(14.dp))
 }
 
 /** Before sign-in: what Composio gives, and one button. */
@@ -161,7 +188,7 @@ private fun AppList(apps: Map<String, AppState>, toggle: (String, Boolean) -> Un
 private fun AppRow(app: ComposioApp, state: AppState?, toggle: (String, Boolean) -> Unit, open: (String) -> Unit) {
     val aura = LocalAura.current
     val detail = when (state) {
-        is AppState.Waiting -> "Finish signing in, then come back. Tap to open it again."
+        is AppState.Waiting -> if (state.again) "Composio asks you to sign in again. Tap to do it." else "Finish signing in, then come back. Tap to open it again."
         is AppState.Failed -> state.reason
         AppState.Connected -> "On"
         AppState.Working -> "Checking with Composio"
@@ -175,7 +202,12 @@ private fun AppRow(app: ComposioApp, state: AppState?, toggle: (String, Boolean)
     val on = state == AppState.Connected || state is AppState.Waiting
     Row(
         Modifier.fillMaxWidth()
-            .clickable(role = Role.Switch) { if (state is AppState.Waiting) open(state.url) else if (state != AppState.Working) toggle(app.slug, !on) }
+            .clickable(role = Role.Switch) {
+                when {
+                    state is AppState.Waiting -> state.url?.let(open) ?: toggle(app.slug, true)
+                    state != AppState.Working -> toggle(app.slug, !on)
+                }
+            }
             .heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

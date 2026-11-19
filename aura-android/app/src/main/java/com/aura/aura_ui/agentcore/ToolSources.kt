@@ -392,7 +392,9 @@ class ConnectorToolSource(
                 risk = ConnectorRisk.of(tool),
                 origin = ToolOrigin.CONNECTOR,
                 toolset = config.id,
-                resultOrigin = Origin.CONNECTOR,
+                // Catalog lookups return tool schemas and sign-in links, like the tool descriptions
+                // already in the prompt; app data (an email, an event) is stranger text.
+                resultOrigin = if (ConnectorRisk.isCatalog(tool.name)) null else Origin.CONNECTOR,
                 egress = true,
                 riskFor = ConnectorRisk.forCall(tool.name),
             )
@@ -403,7 +405,12 @@ class ConnectorToolSource(
         val tool = name.removePrefix("${config.id}__")
         val apps = ComposioAccounts.appsIn(tool, args)
         ComposioAccounts.blockedApp(tool, args, turnedOff())?.let { app ->
-            return SourceResult("The user turned $app off for AURA on the Connectors page. Tell them; it can be turned back on there.", isError = true)
+            val why = if (ComposioAccounts.unnamedExecute(tool, args)) {
+                "Each tool in this call needs its tool_slug (from COMPOSIO_SEARCH_TOOLS), so AURA can check it against the apps the user turned off. Call again with the slugs."
+            } else {
+                "The user turned $app off for AURA on the Connectors page. Tell them; it can be turned back on there."
+            }
+            return SourceResult(why, isError = true)
         }
         val result = callDirect(tool, args)
         if (tool == ComposioAccounts.MANAGE && !result.isError) {
@@ -533,6 +540,41 @@ class ConnectorStore(
         throw e
     } catch (e: Exception) {
         Result.failure(e)
+    }
+
+    /**
+     * How many of connector [id]'s tools are new or changed since the user approved them; 0 when it
+     * cannot be reached.
+     */
+    suspend fun changedTools(id: String): Int {
+        val config = configs().firstOrNull { it.id == id } ?: return 0
+        return try {
+            ConnectorPins.needsReview(fingerprintsOf(config), config.approvedTools).size
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    /**
+     * Approves connector [id]'s tools exactly as the server lists them now, the same approval as
+     * adding it again. The live source is rebuilt, so the agent sees them from its next turn.
+     */
+    suspend fun approveCurrent(id: String) {
+        val config = configs().firstOrNull { it.id == id } ?: return
+        val pins = fingerprintsOf(config)
+        if (pins.isEmpty()) return
+        save(configs().map { if (it.id == id) it.copy(approvedTools = pins) else it })
+    }
+
+    private suspend fun fingerprintsOf(config: ConnectorConfig): Map<String, String> {
+        val probe = source(config)
+        return try {
+            probe.fingerprints()
+        } finally {
+            probe.close()
+        }
     }
 
     suspend fun remove(id: String) {
