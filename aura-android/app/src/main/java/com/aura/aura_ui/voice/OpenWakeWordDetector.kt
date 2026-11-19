@@ -1,6 +1,7 @@
 package com.aura.aura_ui.voice
 
 import ai.onnxruntime.OnnxTensor
+import com.aura.aura_ui.agent.voice.vad.SileroVadScorer
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
@@ -58,6 +59,9 @@ class OpenWakeWordDetector(
     private val wakeSession: OrtSession
     private val wakeInput: String
     private val featureFrames: Int
+    /** Silero VAD; a hit with no speech in the last ~1.5 s is fan or room noise. See [RecentSpeech]. */
+    private val vad = SileroVadScorer(context)
+    private val speech = RecentSpeech(vad)
 
     private val _isListening = MutableStateFlow(false)
     override val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
@@ -126,6 +130,7 @@ class OpenWakeWordDetector(
             return
         }
         val features = OwwFeatures(::mel, ::embed, featureFrames)
+        speech.reset()
         val buf = ShortArray(OwwFeatures.CHUNK)
         var hit = false
         try {
@@ -137,11 +142,16 @@ class OpenWakeWordDetector(
                     Log.e(TAG, "AudioRecord read error: $n")
                     return
                 }
+                speech.accept(buf, n)
                 features.accept(buf, n) { window ->
                     val score = classify(window)
-                    if (score >= threshold) {
+                    if (score >= threshold && !speech.heard) {
+                        Log.i(TAG, "Blocked, score %.2f but no speech heard".format(score))
+                    } else if (score >= threshold) {
                         Log.i(TAG, "Wake word hit, score %.2f".format(score))
                         hit = true
+                    } else if (score >= NEAR_MISS) {
+                        Log.d(TAG, "Near miss, score %.2f".format(score))
                     }
                 }
             }
@@ -212,6 +222,7 @@ class OpenWakeWordDetector(
             val finished = loop == null || withTimeoutOrNull(RELEASE_WAIT_MS) { loop.join() } != null
             if (finished) {
                 listOf(melSession, embedSession, wakeSession).forEach { runCatching { it.close() } }
+                vad.close()
             } else {
                 Log.w(TAG, "Loop still running after ${RELEASE_WAIT_MS} ms; leaking sessions instead of crashing")
             }
@@ -227,5 +238,7 @@ class OpenWakeWordDetector(
         private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
         private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
         private const val RELEASE_WAIT_MS = 2_000L
+        /** Scores from here up to the threshold are logged (debug), so tuning uses real numbers. */
+        private const val NEAR_MISS = 0.2f
     }
 }
