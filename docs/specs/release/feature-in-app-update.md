@@ -3,10 +3,10 @@
 # One-tap in-app update
 
 **Where it stands (2026-11-23):**
-- Done and proven: steps 1–4 (unit tests, and step 4's phone test; evidence under each step).
-- Code done, check not yet run: step 5 (needs a rehearsal on a clean tree).
+- Done and proven: steps 1–5 (unit tests, step 4's phone test, step 5's rehearsal; evidence
+  under each step).
 - Not started: step 6 (needs two real releases).
-- Next, in order: step 5's rehearsal on the next release → step 6.
+- Next: step 6, starting with the 1.0.711 release.
 
 ## Goal
 AURA is sideloaded from GitHub Releases. When a new version ships, Firebase Remote Config
@@ -179,7 +179,7 @@ network, a bad file, they decline), the dialog says why in one line and offers *
       **Download in browser**. With the network back, **Try again** installed it: `dumpsys`
       printed `versionName=1.0.592`, `installerPackageName=com.aura.aura_ui.feature`.
 
-- [ ] **5. The release script sets the link, version name and notes**
+- [x] **5. The release script sets the link, version name and notes**
   - **What changes:** `release-app.sh` at the repo root. It is git-ignored (`.gitignore:42`) and
     maintainer-only, so **this edit is not committed**. It lives only on the maintainer's machine,
     like the rest of the script. `.claude/skills/releasing-aura-apk/SKILL.md` (also git-ignored
@@ -203,8 +203,11 @@ network, a bad file, they decline), the dialog says why in one line and offers *
   - **Progress:** both edits are in the local `release-app.sh` and `SKILL.md`. Checked on their
     own: the extraction on `_private/release-notes.md` prints exactly its 4 bullets, a notes file
     with no bullets aborts, and the `node` block on a sample template sets all five keys and
-    creates the missing ones. **Not yet run:** the full rehearsal, which refuses a dirty tree;
-    run it as the first part of the next release.
+    creates the missing ones.
+  - **Evidence (2026-11-23):** on a clean tree, `./release-app.sh _private/release-notes.md`
+    built and verified `aura-1.0.711.apk` (release key, versionCode 711) and printed
+    `dialog notes:` followed by exactly the notes' 6 "What's new" bullets as `• ` lines, with no
+    `**` and no `SHA-256` line. The Remote Config keys are set by the `--publish` run in step 6.
 
 - [ ] **6. First real release**
   - **What changes:** nothing in code. Publish the first release that contains this feature,
