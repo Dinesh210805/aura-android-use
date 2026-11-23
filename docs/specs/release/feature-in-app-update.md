@@ -2,13 +2,11 @@
 
 # One-tap in-app update
 
-**Where it stands (2026-11-19):** all code is written; nothing is committed yet.
-- Done and proven: steps 1–3 (unit tests pass, evidence under each step).
-- Code done, check not yet run: step 4 (needs the phone test), step 5 (needs a rehearsal on a
-  clean tree).
+**Where it stands (2026-11-23):**
+- Done and proven: steps 1–4 (unit tests, and step 4's phone test; evidence under each step).
+- Code done, check not yet run: step 5 (needs a rehearsal on a clean tree).
 - Not started: step 6 (needs two real releases).
-- Next, in order: commit the tracked files → set `apk_url` in the Firebase console → step 4's
-  phone test → step 5's rehearsal on the next release → step 6.
+- Next, in order: step 5's rehearsal on the next release → step 6.
 
 ## Goal
 AURA is sideloaded from GitHub Releases. When a new version ships, Firebase Remote Config
@@ -92,7 +90,7 @@ network, a bad file, they decline), the dialog says why in one line and offers *
   - **Evidence:** `ApkDownloadTest` 4 tests, 0 failures; the stalled-read cancel ends in 0.54 s.
     All 54 tests in `com.aura.aura_ui.remote` pass.
 
-- [ ] **4. Install it from the update dialog and the "Update required" screen**
+- [x] **4. Install it from the update dialog and the "Update required" screen**
   - **What changes:**
     - `remote/AppUpdater.kt` (new, `@Singleton`): `progress: StateFlow<UpdateProgress>` and
       `suspend fun install(apkUrl: String)`. `sealed interface UpdateProgress { Idle,
@@ -169,11 +167,17 @@ network, a bad file, they decline), the dialog says why in one line and offers *
        "Update required" screen appears instead. Turn on airplane mode and tap Update. You see
        "Download failed. Check your connection.", and **Download in browser** opens the release
        page. Turn airplane mode off and tap **Try again**. It installs N as in step 3.
-  - **Progress:** every file above is written. `:app:assembleDebug` builds and the 54 `remote`
-    tests pass. **Not yet run:** the phone test. As of 2026-11-19, F = 534 and N = 592, so in
-    step 1 `apk_url` =
-    `https://github.com/Dinesh210805/aura-android-use/releases/download/v1.0.592/aura-1.0.592.apk`,
-    and in step 2 B = 535 − `git rev-list --count HEAD`.
+  - **Evidence (2026-11-23, OnePlus CPH2661):** F = 534, N = 592, `apk_url` =
+    `https://github.com/Dinesh210805/aura-android-use/releases/download/v1.0.592/aura-1.0.592.apk`
+    (Remote Config v22).
+    - Step 2–3: `aapt2 dump badging` showed `versionCode='535'`. The "Update available" dialog
+      showed 1.0.592; Update → Allow → Update downloaded to 100% and Android's update screen
+      installed it. `dumpsys` printed `versionCode=592`, `versionName=1.0.592`,
+      `installerPackageName=com.aura.aura_ui.feature`.
+    - Step 4: `-Paura.versionBase=0` gave `versionCode='176'`. "Update required" showed with no
+      **Not now**. In airplane mode, Update failed with the connection message and offered
+      **Download in browser**. With the network back, **Try again** installed it: `dumpsys`
+      printed `versionName=1.0.592`, `installerPackageName=com.aura.aura_ui.feature`.
 
 - [ ] **5. The release script sets the link, version name and notes**
   - **What changes:** `release-app.sh` at the repo root. It is git-ignored (`.gitignore:42`) and
