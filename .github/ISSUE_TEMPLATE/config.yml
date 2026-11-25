@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/Dinesh210805/aura-android-use/security/advisories/new
+    about: Report it privately, not as an issue.
+  - name: Questions and chat
+    url: https://discord.com/invite/H66ws9zMPF
+    about: Ask on Discord.

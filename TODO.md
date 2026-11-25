@@ -47,7 +47,8 @@ docs/
 - [x] Public-safe `AGENTS.md`: build commands, module layout, doc rules (2026-09-26)
 - [ ] A folder README (with the "keep current" banner and a Last reviewed date) for each major
       folder as we clean it
-- [ ] `CONTRIBUTING.md`, `SECURITY.md`, `PRIVACY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`
+- [x] `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md` (2026-11-25)
+- [ ] `PRIVACY.md`
 
 ### Old doc links to fix
 - [x] Root `README.md` links into the old `docs/` and `TODO.md`
