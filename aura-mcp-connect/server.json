@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Dinesh210805/aura-mcp-connect",
+  "title": "AURA",
+  "description": "Let any MCP client operate your Android phone: taps, typing, screen reading. Local, E2E encrypted.",
+  "repository": { "url": "https://github.com/Dinesh210805/aura-android-use", "source": "github", "subfolder": "aura-mcp-connect" },
+  "websiteUrl": "https://aura-android-use.vercel.app",
+  "version": "0.11.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "aura-mcp-connect",
+      "version": "0.11.1",
+      "transport": { "type": "stdio" }
+    }
+  ]
+}
